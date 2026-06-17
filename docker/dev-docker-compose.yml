@@ -1,0 +1,127 @@
+version: '3.8'
+
+services:
+  # 1. Secured Apache Kafka Broker (KRaft + SCRAM-SHA-512)
+  kafka:
+    image: confluentinc/cp-kafka:8.2.0
+    container_name: eco_kafka
+    command:
+      - bash
+      - -c
+      - |
+        cat <<EOF > /tmp/kraft.properties
+        process.roles=broker,controller
+        node.id=1
+        controller.quorum.voters=1@kafka:19093
+        controller.listener.names=CONTROLLER
+        listeners=PLAINTEXT://:9092,CONTROLLER://:19093
+        advertised.listeners=PLAINTEXT://localhost:9092
+        log.dirs=/var/lib/kafka/data
+        EOF
+
+        echo "Formatting storage with SCRAM users from host environment..."
+        kafka-storage format --ignore-formatted \
+          --cluster-id "$${CLUSTER_ID}" \
+          --config /tmp/kraft.properties \
+          --add-scram "SCRAM-SHA-512=[name=$${KAFKA_ADMIN},password=$${KAFKA_ADMIN_PASSWORD}]" \
+          --add-scram "SCRAM-SHA-512=[name=$${KAFKA_USER},password=$${KAFKA_PASSWORD}]"
+        
+        exec /etc/confluent/docker/run
+    ports:
+      - "9092:9092"
+    networks:
+      - eco-net
+    secrets:
+      - kafka_server_jaas
+    environment:
+      KAFKA_ADMIN: 'admin'
+      KAFKA_ADMIN_PASSWORD: 'admin-password'
+      KAFKA_USER: 'vector'
+      KAFKA_PASSWORD: 'vector-password'
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:19093'
+      KAFKA_LISTENERS: 'INTERNAL://:9093,CLIENT://:9092,CONTROLLER://:19093'
+      KAFKA_ADVERTISED_LISTENERS: 'INTERNAL://kafka:9093,CLIENT://localhost:9092'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'INTERNAL:SASL_PLAINTEXT,CLIENT:SASL_PLAINTEXT,CONTROLLER:PLAINTEXT'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'INTERNAL'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_OPTS: "-Djava.security.auth.login.config=/run/secrets/kafka_server_jaas"
+      KAFKA_SASL_ENABLED_MECHANISMS: SCRAM-SHA-512
+      KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL: SCRAM-SHA-512
+      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
+
+  # 2. Confluent Schema Registry (Linked with SCRAM authentication)
+  schema-registry:
+    image: confluentinc/cp-schema-registry:8.2.0
+    container_name: eco_schema_registry
+    ports:
+      - "8085:8081"
+    networks:
+      - eco-net
+    depends_on:
+      - kafka
+    secrets:
+      - schema_registry_jaas
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'kafka:9093'
+      SCHEMA_REGISTRY_LISTENERS: "http://0.0.0.0:8081"
+      SCHEMA_REGISTRY_KAFKASTORE_SECURITY_PROTOCOL: SASL_PLAINTEXT
+      SCHEMA_REGISTRY_KAFKASTORE_SASL_MECHANISM: SCRAM-SHA-512
+      KAFKA_OPTS: "-Djava.security.auth.login.config=/run/secrets/schema_registry_jaas"
+      SCHEMA_REGISTRY_OPTS: "-Djava.security.auth.login.config=/run/secrets/schema_registry_jaas"
+
+  # 3. HashiCorp Consul: Universal Registry and Dynamic Configuration Core
+  consul-server:
+    image: hashicorp/consul:2.0.0
+    container_name: eco_consul
+    ports:
+      - "8500:8500"       # UI Dashboard & REST API
+      - "8600:8600/udp"   # Internal DNS
+    networks:
+      - eco-net
+    command: "agent -server -bootstrap-expect=1 -ui -node=control-plane-one -client=0.0.0.0"
+
+  # 4. Jaeger Tracing: Distributed OpenTelemetry Open-Source Engine
+  jaeger-tracing:
+    image: jaegertracing/all-in-one:1.76.0
+    container_name: eco_jaeger
+    ports:
+      - "16686:16686"     # User UI Trace Analytics Panel
+      - "4317:4317"       # gRPC OTLP Context Ingestion
+      - "4318:4318"       # HTTP OTLP Ingestion channel
+    networks:
+      - eco-net
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+
+  # 5. Redis: Transient In-Memory Anomaly Sliding-Window Cache
+  redis-cache:
+    image: redis:8.8.0-alpine
+    container_name: eco_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - eco-net
+    secrets:
+      - redis_password
+    command: >
+      sh -c "redis-server --requirepass \"$$(cat /run/secrets/redis_password)\" --appendonly yes"
+
+secrets:
+  kafka_server_jaas:
+    file: secrets/scram/kafka_server_jaas.conf
+  schema_registry_jaas:
+    file: secrets/scram/schema_registry_jaas.conf
+  redis_password:
+    file: secrets/redis/redis_password.txt
+
+networks:
+  eco-net:
+    driver: bridge

@@ -1,0 +1,16 @@
+{
+  "type": "record",
+  "name": "WeatherArchiveRecord",
+  "namespace": "me.neobliz1.ecomonitoring.platform.shared.contracts.avro",
+  "doc": "Schema for long-term analytical cold storage of environmental telemetry.",
+  "fields": [
+    { "name": "stationId", "type": "string" },
+    { "name": "processedTimestamp", "type": "long" },
+    { "name": "latitude", "type": "double" },
+    { "name": "longitude", "type": "double" },
+    {
+      "name": "metrics",
+      "type": { "type": "map", "values": "float" }
+    }
+  ]
+}

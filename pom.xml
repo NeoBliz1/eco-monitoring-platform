@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>me.neobliz1.ecomonitoring.platform</groupId>
+    <artifactId>eco-monitoring-platform</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <properties>
+        <!-- 1. Core Language & Runtime Baseline -->
+        <java.version>21</java.version>
+
+        <!-- 2. Primary Ecosystem Frameworks -->
+        <spring-boot.version>4.0.5</spring-boot.version>
+        <spring-cloud.version>2025.1.2</spring-cloud.version>
+
+        <!-- 3. Serialization Protocol Engines & Libraries -->
+        <protobuf.version>4.26.1</protobuf.version>
+
+        <!-- 4. System & Build Compilation Lifecycle Plugins -->
+        <avro-plugin.version>1.12.1</avro-plugin.version>
+        <maven-plugin.version>3.1.2</maven-plugin.version>
+        <os-maven-plugin.version>1.7.1</os-maven-plugin.version>
+        <protobuf-plugin.version>0.6.1</protobuf-plugin.version>
+    </properties>
+
+    <modules>
+        <!-- Tier 1: Shared Core Specifications (Zero internal dependencies) -->
+        <module>shared-contracts</module>
+        <module>shared-security-lib</module>
+
+        <!-- Tier 2: Security Perimeter & Traffic Routing Edge -->
+        <module>security-service</module>
+
+        <!-- Tier 3: High-Performance Data Ingestion Entrypoint -->
+        <module>ingestion-service</module>
+
+        <!-- Tier 4: Asynchronous Stream Workers & Saga Orchestration -->
+        <module>analysis-service</module>
+        <module>raw-storage-service</module>
+        <module>history-service</module>
+        <module>notification-service</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.google.protobuf</groupId>
+                <artifactId>protobuf-java</artifactId>
+                <version>${protobuf.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.protobuf</groupId>
+                <artifactId>protobuf-java-util</artifactId>
+                <version>${protobuf.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.avro</groupId>
+                <artifactId>avro</artifactId>
+                <version>${avro-plugin.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.xolstice.maven.plugins</groupId>
+                    <artifactId>protobuf-maven-plugin</artifactId>
+                    <version>${protobuf-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.avro</groupId>
+                    <artifactId>avro-maven-plugin</artifactId>
+                    <version>${avro-plugin.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-install-plugin</artifactId>
+                    <version>${maven-plugin.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
+        <extensions>
+            <!-- Global Operating System Classifier Enabler for Protobuf native binaries -->
+            <extension>
+                <groupId>kr.motd.maven</groupId>
+                <artifactId>os-maven-plugin</artifactId>
+                <version>${os-maven-plugin.version}</version>
+            </extension>
+        </extensions>
+    </build>
+</project>
