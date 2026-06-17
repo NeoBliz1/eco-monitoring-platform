@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package me.neobliz1.ecomonitoring.platform.shared.contracts.proto;
+option java_package = "me.neobliz1.ecomonitoring.platform.shared.contracts.proto";
+option java_multiple_files = true;
+
+service VectorIngestService {
+  rpc StreamTelemetry (VectorPayload) returns (VectorResponse);
+}
+
+message VectorPayload {
+  bytes raw_protobuf_packet = 1;
+}
+
+message VectorResponse {
+  bool accepted = 1;
+}

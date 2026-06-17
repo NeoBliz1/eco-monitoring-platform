@@ -9,35 +9,25 @@
     <packaging>pom</packaging>
 
     <properties>
-        <!-- 1. Core Language & Runtime Baseline -->
         <java.version>21</java.version>
-
-        <!-- 2. Primary Ecosystem Frameworks -->
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
         <spring-boot.version>4.0.5</spring-boot.version>
         <spring-cloud.version>2025.1.2</spring-cloud.version>
-
-        <!-- 3. Serialization Protocol Engines & Libraries -->
+        <lombok.version>1.18.46</lombok.version>
         <protobuf.version>4.26.1</protobuf.version>
-
-        <!-- 4. System & Build Compilation Lifecycle Plugins -->
         <avro-plugin.version>1.12.1</avro-plugin.version>
         <maven-plugin.version>3.1.2</maven-plugin.version>
         <os-maven-plugin.version>1.7.1</os-maven-plugin.version>
         <protobuf-plugin.version>0.6.1</protobuf-plugin.version>
+        <grpc.version>1.82.0</grpc.version>
     </properties>
 
     <modules>
-        <!-- Tier 1: Shared Core Specifications (Zero internal dependencies) -->
-        <module>shared-contracts</module>
-        <module>shared-security-lib</module>
-
-        <!-- Tier 2: Security Perimeter & Traffic Routing Edge -->
+        <module>platform-common-contracts</module>
+        <module>platform-common-core</module>
         <module>security-service</module>
-
-        <!-- Tier 3: High-Performance Data Ingestion Entrypoint -->
         <module>ingestion-service</module>
-
-        <!-- Tier 4: Asynchronous Stream Workers & Saga Orchestration -->
         <module>analysis-service</module>
         <module>raw-storage-service</module>
         <module>history-service</module>
@@ -60,6 +50,12 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+
+            <dependency>
+                <groupId>org.projectlombok</groupId>
+                <artifactId>lombok</artifactId>
+                <version>${lombok.version}</version>
+            </dependency>
             <dependency>
                 <groupId>com.google.protobuf</groupId>
                 <artifactId>protobuf-java</artifactId>
@@ -74,6 +70,32 @@
                 <groupId>org.apache.avro</groupId>
                 <artifactId>avro</artifactId>
                 <version>${avro-plugin.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-netty-shaded</artifactId>
+                <version>${grpc.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-protobuf</artifactId>
+                <version>${grpc.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-stub</artifactId>
+                <version>${grpc.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-api</artifactId>
+                <version>${grpc.version}</version>
+                <scope>compile</scope>
+            </dependency>
+            <dependency>
+                <groupId>me.neobliz1.ecomonitoring.platform</groupId>
+                <artifactId>platform-common-contracts</artifactId>
+                <version>${project.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -100,7 +122,6 @@
         </pluginManagement>
 
         <extensions>
-            <!-- Global Operating System Classifier Enabler for Protobuf native binaries -->
             <extension>
                 <groupId>kr.motd.maven</groupId>
                 <artifactId>os-maven-plugin</artifactId>
