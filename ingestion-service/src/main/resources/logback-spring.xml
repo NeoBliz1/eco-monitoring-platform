@@ -1,0 +1,3 @@
+<configuration>
+    <include resource="logback-platform-base.xml"/>
+</configuration>

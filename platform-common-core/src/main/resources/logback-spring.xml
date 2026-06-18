@@ -1,0 +1,35 @@
+<configuration>
+    <springProfile name="dev">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <!-- Includes bold colors, short thread identifiers, and clear trace IDs -->
+                <pattern>%d{HH:mm:ss.SSS} [%boldYellow(%thread)] %boldGreen(%-5level) %cyan(%logger{15}) - %msg%n</pattern>
+            </encoder>
+        </appender>
+
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+        <logger name="me.neobliz1.ecomonitoring" level="DEBUG"/>
+    </springProfile>
+    <springProfile name="prod">
+        <appender name="STRUCTURED_JSON" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+                <providers>
+                    <timestamp/>
+                    <version/>
+                    <logLevel/>
+                    <threadName/>
+                    <loggerName/>
+                    <message/>
+                    <mdc/> <!-- Automatically captures OpenTelemetry Trace IDs and Span IDs! -->
+                    <stackTrace/>
+                </providers>
+            </encoder>
+        </appender>
+        <root level="WARN">
+            <appender-ref ref="STRUCTURED_JSON"/>
+        </root>
+        <logger name="me.neobliz1.ecomonitoring" level="INFO"/>
+    </springProfile>
+</configuration>

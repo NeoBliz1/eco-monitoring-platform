@@ -1,0 +1,25 @@
+spring:
+    application:
+        name: ingestion-service
+    cloud:
+        consul:
+            port: 8500
+server:
+    port: 8081
+---
+spring:
+    config:
+        activate:
+            on-profile: dev
+    cloud:
+        consul:
+            host: localhost
+
+---
+spring:
+    config:
+        activate:
+            on-profile: prod
+    cloud:
+        consul:
+            host: consul-mesh-dns.internal

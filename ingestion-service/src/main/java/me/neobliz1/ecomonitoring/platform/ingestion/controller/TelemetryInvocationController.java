@@ -5,6 +5,7 @@ import me.neobliz1.ecomonitoring.platform.ingestion.service.TelemetryIngestionSe
 import me.neobliz1.ecomonitoring.platform.model.exception.PipelineTimeoutException;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,7 +23,7 @@ public class TelemetryInvocationController {
 
     private final TelemetryIngestionService telemetryIngestionService;
 
-    @PostMapping(consumes = "application/x-protobuf")
+    @PostMapping(consumes = MediaType.APPLICATION_PROTOBUF_VALUE)
     public Mono<ResponseEntity<Void>> receivedSensorStationData(WeatherPacket packet) {
         return telemetryIngestionService.processTelemetryPacket(packet)
                 .timeout(Duration.ofMillis(200))
@@ -36,7 +37,7 @@ public class TelemetryInvocationController {
                 })
                 .onErrorMap(ex -> {
                     if(ex instanceof TimeoutException) {
-                        return new PipelineTimeoutException("Vector sidecar deadline exceeded");
+                        return new PipelineTimeoutException();
                     } else {
                         return ex;
                     }

@@ -1,8 +1,10 @@
 package me.neobliz1.ecomonitoring.platform.model.exception;
 
-public class PipelineTimeoutException extends RuntimeException {
+import static me.neobliz1.ecomonitoring.platform.model.exception.ErrorCode.PIPELINE_TIMEOUT;
 
-    public PipelineTimeoutException(String message) {
-        super(message);
+public class PipelineTimeoutException extends BasePlatformException {
+
+    public PipelineTimeoutException() {
+        super(PIPELINE_TIMEOUT);
     }
 }
