@@ -1,0 +1,24 @@
+sources:
+  grpc_sensor_in:
+    type: "vector"
+    address: "0.0.0.0:6000"
+
+sinks:
+  kafka_out:
+    type: "kafka"
+    inputs: ["grpc_sensor_in"]
+    bootstrap_servers: "kafka:9093"
+    topic: "weather-raw"
+    encoding:
+      codec: "raw_message"
+
+    sasl:
+      enabled: true
+      mechanism: "SCRAM-SHA-512"
+      username: ${KAFKA_USER}
+      password: ${KAFKA_PASSWORD}
+
+    buffer:
+      type: "disk"
+      max_size: 5368709120
+      when_full: "block"

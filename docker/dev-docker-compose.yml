@@ -23,8 +23,8 @@ services:
         kafka-storage format --ignore-formatted \
           --cluster-id "$${CLUSTER_ID}" \
           --config /tmp/kraft.properties \
-          --add-scram "SCRAM-SHA-512=[name=$${KAFKA_ADMIN},password=$${KAFKA_ADMIN_PASSWORD}]" \
-          --add-scram "SCRAM-SHA-512=[name=$${KAFKA_USER},password=$${KAFKA_PASSWORD}]"
+          --add-scram "SCRAM-SHA-512=[name=${KAFKA_ADMIN},password=${KAFKA_ADMIN_PASSWORD}]" \
+          --add-scram "SCRAM-SHA-512=[name=${KAFKA_USER},password=${KAFKA_PASSWORD}]"
         
         exec /etc/confluent/docker/run
     ports:
@@ -34,10 +34,6 @@ services:
     secrets:
       - kafka_server_jaas
     environment:
-      KAFKA_ADMIN: 'admin'
-      KAFKA_ADMIN_PASSWORD: 'admin-password'
-      KAFKA_USER: 'vector'
-      KAFKA_PASSWORD: 'vector-password'
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: 'broker,controller'
       KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:19093'
@@ -113,6 +109,27 @@ services:
       - redis_password
     command: >
       sh -c "redis-server --requirepass \"$$(cat /run/secrets/redis_password)\" --appendonly yes"
+
+  # 6. Vector: Zero loss sidecar for the ingestion service
+  vector-sidecar:
+    image: timberio/vector:latest-alpine
+    container_name: eco_vector_sidecar
+    ports:
+      - "6000:6000"
+    volumes:
+      - ./vector.yaml:/etc/vector/vector.yaml:ro
+      - vector_disk_buffer:/var/lib/vector/buffer
+    networks:
+      - eco-net
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_USER: ${KAFKA_USER}
+      KAFKA_PASSWORD: ${KAFKA_PASSWORD}
+
+volumes:
+  vector_disk_buffer:
+    driver: local
 
 secrets:
   kafka_server_jaas:
