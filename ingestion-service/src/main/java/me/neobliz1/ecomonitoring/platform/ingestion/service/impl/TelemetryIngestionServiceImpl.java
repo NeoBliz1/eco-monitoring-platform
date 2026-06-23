@@ -13,9 +13,11 @@ import reactor.core.publisher.Mono;
 public class TelemetryIngestionServiceImpl implements TelemetryIngestionService {
 
     private final VectorIngestServiceGrpc.VectorIngestServiceStub asyncStub;
+    private final VectorIngestServiceGrpc.VectorIngestServiceBlockingStub blockingStub;
 
     public TelemetryIngestionServiceImpl(ManagedChannel channel) {
         this.asyncStub = VectorIngestServiceGrpc.newStub(channel);
+        this.blockingStub = VectorIngestServiceGrpc.newBlockingStub(channel);
     }
 
     @Override
@@ -42,5 +44,14 @@ public class TelemetryIngestionServiceImpl implements TelemetryIngestionService 
                         }
                 )
         );
+    }
+
+    @Override
+    public boolean processTelemetryPacketVirtual(WeatherPacket packet) {
+        VectorPayload vectorPayload = VectorPayload.newBuilder()
+                .setRawProtobufPacket(ByteString.copyFrom(packet.toByteArray()))
+                .build();
+        var response = blockingStub.streamTelemetry(vectorPayload);
+        return response.getAccepted();
     }
 }

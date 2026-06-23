@@ -23,8 +23,8 @@ public class TelemetryInvocationController {
 
     private final TelemetryIngestionService telemetryIngestionService;
 
-    @PostMapping(consumes = MediaType.APPLICATION_PROTOBUF_VALUE)
-    public Mono<ResponseEntity<Void>> receivedSensorStationData(WeatherPacket packet) {
+    @PostMapping(value = "/mono", consumes = MediaType.APPLICATION_PROTOBUF_VALUE)
+    public Mono<ResponseEntity<Void>> receivedReactiveSensorStationData(WeatherPacket packet) {
         return telemetryIngestionService.processTelemetryPacket(packet)
                 .timeout(Duration.ofMillis(200))
                 .publishOn(Schedulers.parallel())
@@ -42,5 +42,22 @@ public class TelemetryInvocationController {
                         return ex;
                     }
                 });
+    }
+
+    @PostMapping(value = "/virtual", consumes = MediaType.APPLICATION_PROTOBUF_VALUE)
+    public ResponseEntity<Void> receivedSensorStationDataVirtual(WeatherPacket packet) {
+        try {
+            boolean isAccepted = telemetryIngestionService.processTelemetryPacketVirtual(packet);
+            if(isAccepted) {
+                return ResponseEntity.status(HttpStatus.ACCEPTED).build();
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+        } catch(Exception e) {
+            if(e.getMessage()!=null && e.getMessage().contains("timeout")) {
+                throw new PipelineTimeoutException();
+            }
+            throw e;
+        }
     }
 }

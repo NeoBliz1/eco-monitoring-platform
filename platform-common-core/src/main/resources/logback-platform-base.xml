@@ -1,4 +1,4 @@
-<configuration>
+<included>
     <springProfile name="dev">
         <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
             <encoder>
@@ -32,4 +32,4 @@
         </root>
         <logger name="me.neobliz1.ecomonitoring" level="INFO"/>
     </springProfile>
-</configuration>
+</included>

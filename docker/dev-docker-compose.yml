@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # 1. Secured Apache Kafka Broker (KRaft + SCRAM-SHA-512)
   kafka:
@@ -12,11 +10,15 @@ services:
         cat <<EOF > /tmp/kraft.properties
         process.roles=broker,controller
         node.id=1
+        log.dirs=/var/lib/kafka/data
         controller.quorum.voters=1@kafka:19093
         controller.listener.names=CONTROLLER
-        listeners=PLAINTEXT://:9092,CONTROLLER://:19093
-        advertised.listeners=PLAINTEXT://localhost:9092
-        log.dirs=/var/lib/kafka/data
+        listener.security.protocol.map=INTERNAL:SASL_PLAINTEXT,CLIENT:SASL_PLAINTEXT,CONTROLLER:SASL_PLAINTEXT
+        listeners=INTERNAL://:9093,CLIENT://:9092,CONTROLLER://:19093
+        advertised.listeners=INTERNAL://kafka:9093,CLIENT://kafka:9092
+        sasl.enabled.mechanisms=SCRAM-SHA-512
+        inter.broker.listener.name=INTERNAL
+        sasl.mechanism.inter.broker.protocol=SCRAM-SHA-512
         EOF
 
         echo "Formatting storage with SCRAM users from host environment..."
@@ -24,7 +26,11 @@ services:
           --cluster-id "$${CLUSTER_ID}" \
           --config /tmp/kraft.properties \
           --add-scram "SCRAM-SHA-512=[name=${KAFKA_ADMIN},password=${KAFKA_ADMIN_PASSWORD}]" \
-          --add-scram "SCRAM-SHA-512=[name=${KAFKA_USER},password=${KAFKA_PASSWORD}]"
+          --add-scram "SCRAM-SHA-512=[name=${KAFKA_REGISTRY},password=${KAFKA_REGISTRY_PASSWORD}]" \
+          --add-scram "SCRAM-SHA-512=[name=${KAFKA_VECTOR},password=${KAFKA_VECTOR_PASSWORD}]" \
+          --add-scram "SCRAM-SHA-512=[name=${KAFKA_CLIENT},password=${KAFKA_CLIENT_PASSWORD}]" \
+          && echo "✅ SUCCESS: SCRAM Users [${KAFKA_ADMIN}], [${KAFKA_REGISTRY}], [${KAFKA_VECTOR}] and [${KAFKA_CLIENT}] injected successfully into KRaft metadata!" \
+          || echo "❌ ERROR: Kafka storage formatting failed!"
         
         exec /etc/confluent/docker/run
     ports:
@@ -33,17 +39,25 @@ services:
       - eco-net
     secrets:
       - kafka_server_jaas
+    healthcheck:
+      # Uses native Bash to open a raw TCP connection socket directly against the controller port
+      test: [ "CMD", "bash", "-c", "cat < /dev/null > /dev/tcp/127.0.0.1/19093 || exit 1" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: 'broker,controller'
       KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:19093'
       KAFKA_LISTENERS: 'INTERNAL://:9093,CLIENT://:9092,CONTROLLER://:19093'
-      KAFKA_ADVERTISED_LISTENERS: 'INTERNAL://kafka:9093,CLIENT://localhost:9092'
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'INTERNAL:SASL_PLAINTEXT,CLIENT:SASL_PLAINTEXT,CONTROLLER:PLAINTEXT'
+      KAFKA_ADVERTISED_LISTENERS: 'INTERNAL://kafka:9093,CLIENT://kafka:9092'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'INTERNAL:SASL_PLAINTEXT,CLIENT:SASL_PLAINTEXT,CONTROLLER:SASL_PLAINTEXT'
       KAFKA_INTER_BROKER_LISTENER_NAME: 'INTERNAL'
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
       KAFKA_OPTS: "-Djava.security.auth.login.config=/run/secrets/kafka_server_jaas"
       KAFKA_SASL_ENABLED_MECHANISMS: SCRAM-SHA-512
+      KAFKA_SASL_MECHANISM_CONTROLLER_PROTOCOL: SCRAM-SHA-512
       KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL: SCRAM-SHA-512
       CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
@@ -51,6 +65,80 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
+
+  kafka-init-topics:
+    image: confluentinc/cp-kafka:8.2.0
+    container_name: eco_kafka_init_topics
+    depends_on:
+      kafka:
+        condition: service_healthy
+      consul-server:
+        condition: service_started
+    networks:
+      - eco-net
+    entrypoint: [ "bash", "-c" ]
+    command:
+      - |
+        echo "Creating runtime properties for cluster admin authentication..."
+        cat <<EOF > /tmp/admin.properties
+        security.protocol=SASL_PLAINTEXT
+        sasl.mechanism=SCRAM-SHA-512
+        sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_ADMIN}" password="${KAFKA_ADMIN_PASSWORD}";
+        EOF
+
+        echo "Validating broker connection and provisioning custom topics..."
+        # 1. FIXED: Changed from kafka:19093 to kafka:9092 to hit the data broker API layer
+        kafka-topics --create --if-not-exists \
+          --bootstrap-server kafka:9092 \
+          --command-config /tmp/admin.properties \
+          --topic environment.weather.telemetry.live \
+          --partitions 6 \
+          --replication-factor 1 \
+          --config cleanup.policy=delete \
+          --config retention.ms=604800000
+
+        echo "🔍 VERIFICATION: Fetching live cluster structure for confirmation..."
+        # 2. ADDED: Directly executes the verification check in the initialization pipeline
+        kafka-topics --bootstrap-server kafka:9092 \
+          --command-config /tmp/admin.properties \
+          --describe \
+          --topic environment.weather.telemetry.live
+
+        echo "📡 Announcing secure Apache Kafka Broker to Consul Discovery catalog..."
+        curl --request PUT \
+          --url http://eco_consul:8500/v1/agent/service/register \
+          --header 'Content-Type: application/json' \
+          --data '{
+            "ID": "kafka-broker-1",
+            "Name": "kafka",
+            "Tags": ["secure", "message-broker", "kraft"],
+            "Address": "kafka",
+            "Port": 9092,
+            "Check": {
+              "TCP": "kafka:9092",
+              "Interval": "10s",
+              "Timeout": "5s"
+            }
+          }'
+
+        echo "📡 Announcing Confluent Schema Registry to Consul Discovery catalog..."
+        curl --request PUT \
+          --url http://eco_consul:8500/v1/agent/service/register \
+          --header 'Content-Type: application/json' \
+          --data '{
+            "ID": "schema-registry-1",
+            "Name": "schema-registry",
+            "Tags": ["avro", "serialization-core"],
+            "Address": "eco_schema_registry",
+            "Port": 8081,
+            "Check": {
+              "HTTP": "http://eco_schema_registry:8081/",
+              "Interval": "10s",
+              "Timeout": "5s"
+            }
+          }'
+
+        echo "✅ Infrastructure discovery sync sequence complete."
 
   # 2. Confluent Schema Registry (Linked with SCRAM authentication)
   schema-registry:
@@ -66,7 +154,7 @@ services:
       - schema_registry_jaas
     environment:
       SCHEMA_REGISTRY_HOST_NAME: schema-registry
-      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'kafka:9093'
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'kafka:9092'
       SCHEMA_REGISTRY_LISTENERS: "http://0.0.0.0:8081"
       SCHEMA_REGISTRY_KAFKASTORE_SECURITY_PROTOCOL: SASL_PLAINTEXT
       SCHEMA_REGISTRY_KAFKASTORE_SASL_MECHANISM: SCRAM-SHA-512
@@ -122,10 +210,12 @@ services:
     networks:
       - eco-net
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
+    restart: on-failure
     environment:
-      KAFKA_USER: ${KAFKA_USER}
-      KAFKA_PASSWORD: ${KAFKA_PASSWORD}
+      KAFKA_USER: ${KAFKA_VECTOR}
+      KAFKA_PASSWORD: ${KAFKA_VECTOR_PASSWORD}
 
 volumes:
   vector_disk_buffer:

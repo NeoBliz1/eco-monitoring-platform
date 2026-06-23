@@ -1,25 +1,38 @@
 spring:
     application:
-        name: ingestion-service
+        name: ${SPRING_APPLICATION_NAME}
     cloud:
         consul:
-            port: 8500
-server:
-    port: 8081
----
-spring:
-    config:
-        activate:
-            on-profile: dev
-    cloud:
-        consul:
-            host: localhost
+            host: ${SPRING_CLOUD_CONSUL_HOST}
+            port: ${SPRING_CLOUD_CONSUL_PORT}
+            discovery:
+                enabled: true
+                prefer-ip-address: true
+                ip-address: 10.10.5.253
+                port: 8080
+                service-name: eco-monitoring-ingestion
+                health-check-path: /actuator/health
+                health-check-interval: 10s
 
----
-spring:
-    config:
-        activate:
-            on-profile: prod
-    cloud:
-        consul:
-            host: consul-mesh-dns.internal
+vector:
+    sidecar:
+        host: ${VECTOR_SIDECAR_HOST}
+        port: ${VECTOR_SIDECAR_PORT}
+
+server:
+    port: ${SERVER_PORT}
+
+management:
+    health:
+        defaults:
+            enabled: true
+    endpoint:
+        health:
+            show-details: "always"
+            show-components: "always"
+            probes:
+                enabled: true
+    endpoints:
+        web:
+            exposure:
+                include: "health,info,prometheus"
