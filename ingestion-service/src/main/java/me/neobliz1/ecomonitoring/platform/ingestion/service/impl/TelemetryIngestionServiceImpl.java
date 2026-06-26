@@ -8,6 +8,8 @@ import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.VectorIngestSer
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.VectorPayload;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.VectorResponse;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import reactor.core.publisher.Mono;
 
 public class TelemetryIngestionServiceImpl implements TelemetryIngestionService {
@@ -53,5 +55,13 @@ public class TelemetryIngestionServiceImpl implements TelemetryIngestionService 
                 .build();
         var response = blockingStub.streamTelemetry(vectorPayload);
         return response.getAccepted();
+    }
+
+    public static ResponseEntity<Void> getResponseEntity(Boolean isAccepted) {
+        if(isAccepted) {
+            return ResponseEntity.status(HttpStatus.ACCEPTED).build();
+        } else {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        }
     }
 }

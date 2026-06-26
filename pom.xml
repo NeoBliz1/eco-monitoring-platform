@@ -13,11 +13,13 @@
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <spring-boot.version>4.0.5</spring-boot.version>
+        <validproto.version>0.0.1</validproto.version>
         <spring-cloud.version>2025.1.2</spring-cloud.version>
         <lombok.version>1.18.46</lombok.version>
         <logstash-logback-encoder.version>9.0</logstash-logback-encoder.version>
         <reactor-core.version>3.8.6</reactor-core.version>
-        <protobuf.version>4.26.1</protobuf.version>
+        <protobuf.version>4.34.1</protobuf.version>
+        <protovalidate.version>1.2.2</protovalidate.version>
         <avro-plugin.version>1.12.1</avro-plugin.version>
         <maven-plugin.version>3.1.2</maven-plugin.version>
         <os-maven-plugin.version>1.7.1</os-maven-plugin.version>
@@ -41,6 +43,18 @@
 
     <dependencyManagement>
         <dependencies>
+            <!--project modules-->
+            <dependency>
+                <groupId>me.neobliz1.ecomonitoring.platform</groupId>
+                <artifactId>platform-common-contracts</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>me.neobliz1.ecomonitoring.platform</groupId>
+                <artifactId>platform-common-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
             <dependency>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
@@ -60,7 +74,11 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
-
+            <dependency>
+                <groupId>io.github.neobliz1</groupId>
+                <artifactId>validproto-spring-web-starter</artifactId>
+                <version>${validproto.version}</version>
+            </dependency>
             <dependency>
                 <groupId>io.projectreactor</groupId>
                 <artifactId>reactor-core</artifactId>
@@ -88,9 +106,9 @@
                 <version>${protobuf.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.google.protobuf</groupId>
-                <artifactId>protobuf-java-util</artifactId>
-                <version>${protobuf.version}</version>
+                <groupId>build.buf</groupId>
+                <artifactId>protovalidate</artifactId>
+                <version>${protovalidate.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.avro</groupId>
@@ -122,11 +140,6 @@
                 <artifactId>grpc-api</artifactId>
                 <version>${grpc.version}</version>
                 <scope>compile</scope>
-            </dependency>
-            <dependency>
-                <groupId>me.neobliz1.ecomonitoring.platform</groupId>
-                <artifactId>platform-common-contracts</artifactId>
-                <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.kafka</groupId>

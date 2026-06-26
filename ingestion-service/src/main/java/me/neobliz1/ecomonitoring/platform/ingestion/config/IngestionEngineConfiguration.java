@@ -5,6 +5,7 @@ import static me.neobliz1.ecomonitoring.platform.shared.contracts.proto.VectorIn
 
 import io.grpc.ManagedChannel;
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
+import me.neobliz1.ecomonitoring.platform.ingestion.controller.ReactiveValidationWebExceptionHandler;
 import me.neobliz1.ecomonitoring.platform.ingestion.service.TelemetryIngestionService;
 import me.neobliz1.ecomonitoring.platform.ingestion.service.impl.TelemetryIngestionServiceImpl;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.ReactorVectorIngestServiceGrpc;
@@ -12,6 +13,7 @@ import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.VectorIngestSer
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 
 import java.util.concurrent.TimeUnit;
 
@@ -44,5 +46,11 @@ public class IngestionEngineConfiguration {
     @Bean
     public VectorIngestServiceStub vectorStandardAsyncStub(ManagedChannel channel) {
         return newStub(channel);
+    }
+
+    @Bean
+    @Order(-2) // Executes before Spring Boot's default error page handler (-1)
+    public ReactiveValidationWebExceptionHandler reactiveValidationWebExceptionHandler() {
+        return new ReactiveValidationWebExceptionHandler();
     }
 }

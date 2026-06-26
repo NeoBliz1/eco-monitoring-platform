@@ -6,6 +6,5 @@ import reactor.core.publisher.Mono;
 public interface TelemetryIngestionService {
 
     Mono<Boolean> processTelemetryPacket(WeatherPacket packet);
-
     boolean processTelemetryPacketVirtual(WeatherPacket packet);
 }

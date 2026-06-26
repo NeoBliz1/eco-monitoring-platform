@@ -5,21 +5,37 @@ package me.neobliz1.ecomonitoring.platform.shared.contracts.proto;
 option java_package = "me.neobliz1.ecomonitoring.platform.shared.contracts.proto";
 option java_multiple_files = true;
 
+import "buf/validate/validate.proto";
+
 message WeatherPacket {
-  string station_id = 1;      // ID 1 to 30
-  int64 timestamp = 2;        // Java 21: Instant.now().toEpochMilli()
-  Location location = 3;
-  repeated SensorReading readings = 4; // Batch multiple sensors in one request
+  // Station ID: Not empty, must be a numeric string between "1" and "30" via Regex
+  string station_id = 1 [(buf.validate.field).string = {
+    min_len: 1,
+    pattern: "^([1-9]|[12][0-9]|30)$"
+  }];
+
+  // Timestamp: Must be greater than 0 (valid epoch milli)
+  int64 timestamp = 2 [(buf.validate.field).int64.gt = 0];
+
+  // Location: Required (non-null) object
+  Location location = 3 [(buf.validate.field).required = true];
+
+  // Readings: Must have at least 1 sensor reading in the list
+  repeated SensorReading readings = 4 [(buf.validate.field).repeated.min_items = 1];
 }
 
 message Location {
-  double latitude = 1;
-  double longitude = 2;
+  // Coordinates validation
+  double latitude = 1 [(buf.validate.field).double = {gte: -90.0, lte: 90.0}];
+  double longitude = 2 [(buf.validate.field).double = {gte: -180.0, lte: 180.0}];
   double altitude = 3;
 }
 
 message SensorReading {
+  // Oneof validation: Enforces that exactly ONE of the data groups must be set per reading
   oneof sensor_data {
+    option (buf.validate.oneof).required = true;
+
     WindReading wind = 1;
     AmbientReading ambient = 2;
     AirQualityReading air_quality = 3;
@@ -28,38 +44,38 @@ message SensorReading {
   }
 }
 
-// --- Specific Data Groups ---
+// --- Specific Data Groups with Logical Bounds ---
 
 message WindReading {
-  float speed_mps = 1;        // Meters per second
-  int32 direction_deg = 2;    // 0-360
-  float gust_mps = 3;
+  float speed_mps = 1 [(buf.validate.field).float.gte = 0.0];
+  int32 direction_deg = 2 [(buf.validate.field).int32 = {gte: 0, lte: 360}]; // Valid degrees
+  float gust_mps = 3 [(buf.validate.field).float.gte = 0.0];
 }
 
 message AmbientReading {
-  float temperature_c = 1;
-  float humidity_pct = 2;
-  float pressure_hpa = 3;     // Barometer
-  float leaf_wetness_pct = 4;
+  float temperature_c = 1 [(buf.validate.field).float = {gte: -100.0, lte: 100.0}];
+  float humidity_pct = 2 [(buf.validate.field).float = {gte: 0.0, lte: 100.0}]; // Percentage bound
+  float pressure_hpa = 3 [(buf.validate.field).float = {gte: 0.0, lte: 1500.0}];
+  float leaf_wetness_pct = 4 [(buf.validate.field).float = {gte: 0.0, lte: 100.0}];
 }
 
 message AirQualityReading {
-  float pm100 = 1;            // µg/m³
-  float pm2_5 = 2;
-  float pm10 = 3;
-  float voc_index = 4;        // Volatile Organic Compounds
-  float noise_db = 5;         // Decibels
+  float pm100 = 1 [(buf.validate.field).float.gte = 0.0];
+  float pm2_5 = 2 [(buf.validate.field).float.gte = 0.0];
+  float pm10 = 3 [(buf.validate.field).float.gte = 0.0];
+  float voc_index = 4 [(buf.validate.field).float.gte = 0.0];
+  float noise_db = 5 [(buf.validate.field).float.gte = 0.0];
 }
 
 message PrecipitationReading {
-  float rain_rate_mm_h = 1;   // Rain Gauge
-  float snow_depth_cm = 2;
-  float evaporation_rate = 3;
+  float rain_rate_mm_h = 1 [(buf.validate.field).float.gte = 0.0];
+  float snow_depth_cm = 2 [(buf.validate.field).float.gte = 0.0];
+  float evaporation_rate = 3 [(buf.validate.field).float.gte = 0.0];
 }
 
 message OpticalReading {
-  float uv_index = 1;
-  float solar_radiation_wm2 = 2; // Pyranometer
-  float lux = 3;                 // Illuminance
-  float visibility_m = 4;        // Visibility sensor
+  float uv_index = 1 [(buf.validate.field).float.gte = 0.0];
+  float solar_radiation_wm2 = 2 [(buf.validate.field).float.gte = 0.0];
+  float lux = 3 [(buf.validate.field).float.gte = 0.0];
+  float visibility_m = 4 [(buf.validate.field).float.gte = 0.0];
 }
