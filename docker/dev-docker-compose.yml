@@ -13,9 +13,9 @@ services:
         log.dirs=/var/lib/kafka/data
         controller.quorum.voters=1@kafka:19093
         controller.listener.names=CONTROLLER
-        listener.security.protocol.map=INTERNAL:SASL_PLAINTEXT,CLIENT:SASL_PLAINTEXT,CONTROLLER:SASL_PLAINTEXT
-        listeners=INTERNAL://:9093,CLIENT://:9092,CONTROLLER://:19093
-        advertised.listeners=INTERNAL://kafka:9093,CLIENT://kafka:9092
+        listener.security.protocol.map=INTERNAL:SASL_PLAINTEXT,CLIENT:SASL_PLAINTEXT,EXTERNAL:SASL_PLAINTEXT,CONTROLLER:SASL_PLAINTEXT
+        listeners=INTERNAL://:9093,CLIENT://:9092,EXTERNAL://:9094,CONTROLLER://:19093
+        advertised.listeners=INTERNAL://kafka:9093,CLIENT://kafka:9092,EXTERNAL://localhost:9094
         sasl.enabled.mechanisms=SCRAM-SHA-512
         inter.broker.listener.name=INTERNAL
         sasl.mechanism.inter.broker.protocol=SCRAM-SHA-512
@@ -35,24 +35,23 @@ services:
         exec /etc/confluent/docker/run
     ports:
       - "9092:9092"
+      - "9094:9094"
     networks:
       - eco-net
     secrets:
       - kafka_server_jaas
     healthcheck:
-      # Uses native Bash to open a raw TCP connection socket directly against the controller port
-      test: [ "CMD", "bash", "-c", "cat < /dev/null > /dev/tcp/127.0.0.1/19093 || exit 1" ]
+      test: [ "CMD", "bash", "-c", "cat < /dev/null > /dev/tcp/127.0.0.1/9092 && cat < /dev/null > /dev/tcp/127.0.0.1/9094 || exit 1" ]
       interval: 5s
       timeout: 5s
       retries: 5
-      start_period: 5s
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: 'broker,controller'
       KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:19093'
-      KAFKA_LISTENERS: 'INTERNAL://:9093,CLIENT://:9092,CONTROLLER://:19093'
-      KAFKA_ADVERTISED_LISTENERS: 'INTERNAL://kafka:9093,CLIENT://kafka:9092'
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'INTERNAL:SASL_PLAINTEXT,CLIENT:SASL_PLAINTEXT,CONTROLLER:SASL_PLAINTEXT'
+      KAFKA_LISTENERS: 'INTERNAL://:9093,CLIENT://:9092,EXTERNAL://:9094,CONTROLLER://:19093'
+      KAFKA_ADVERTISED_LISTENERS: 'INTERNAL://kafka:9093,CLIENT://kafka:9092,EXTERNAL://localhost:9094'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'INTERNAL:SASL_PLAINTEXT,CLIENT:SASL_PLAINTEXT,EXTERNAL:SASL_PLAINTEXT,CONTROLLER:SASL_PLAINTEXT'
       KAFKA_INTER_BROKER_LISTENER_NAME: 'INTERNAL'
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
       KAFKA_OPTS: "-Djava.security.auth.login.config=/run/secrets/kafka_server_jaas"
@@ -207,6 +206,7 @@ services:
     volumes:
       - ./vector.yaml:/etc/vector/vector.yaml:ro
       - vector_disk_buffer:/var/lib/vector/buffer
+      - ../platform-common-contracts/src/main/proto:/etc/vector/proto:ro
     networks:
       - eco-net
     depends_on:

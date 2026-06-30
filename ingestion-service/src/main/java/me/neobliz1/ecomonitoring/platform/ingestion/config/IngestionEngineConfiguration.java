@@ -1,19 +1,15 @@
 package me.neobliz1.ecomonitoring.platform.ingestion.config;
 
-import static me.neobliz1.ecomonitoring.platform.shared.contracts.proto.ReactorVectorIngestServiceGrpc.newReactorStub;
-import static me.neobliz1.ecomonitoring.platform.shared.contracts.proto.VectorIngestServiceGrpc.newStub;
-
 import io.grpc.ManagedChannel;
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
 import me.neobliz1.ecomonitoring.platform.ingestion.controller.ReactiveValidationWebExceptionHandler;
 import me.neobliz1.ecomonitoring.platform.ingestion.service.TelemetryIngestionService;
 import me.neobliz1.ecomonitoring.platform.ingestion.service.impl.TelemetryIngestionServiceImpl;
-import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.ReactorVectorIngestServiceGrpc;
-import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.VectorIngestServiceGrpc.VectorIngestServiceStub;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
+import vector.VectorGrpc;
 
 import java.util.concurrent.TimeUnit;
 
@@ -26,8 +22,9 @@ public class IngestionEngineConfiguration {
     private int port;
 
     @Bean
-    public TelemetryIngestionService telemetryIngestionService(ManagedChannel channel) {
-        return new TelemetryIngestionServiceImpl(channel);
+    public TelemetryIngestionService telemetryIngestionService(VectorGrpc.VectorStub reactiveStub,
+                                                               VectorGrpc.VectorBlockingStub blockingStub) {
+        return new TelemetryIngestionServiceImpl(reactiveStub, blockingStub);
     }
 
     @Bean(destroyMethod = "shutdown")
@@ -39,17 +36,17 @@ public class IngestionEngineConfiguration {
     }
 
     @Bean
-    public ReactorVectorIngestServiceGrpc.ReactorVectorIngestServiceStub vectorReactiveStub(ManagedChannel channel) {
-        return newReactorStub(channel);
+    public VectorGrpc.VectorStub vectorReactiveStub(ManagedChannel channel) {
+        return VectorGrpc.newStub(channel);
     }
 
     @Bean
-    public VectorIngestServiceStub vectorStandardAsyncStub(ManagedChannel channel) {
-        return newStub(channel);
+    public VectorGrpc.VectorBlockingStub vectorStandardBlockingStub(ManagedChannel channel) {
+        return VectorGrpc.newBlockingStub(channel);
     }
 
     @Bean
-    @Order(-2) // Executes before Spring Boot's default error page handler (-1)
+    @Order(-2)
     public ReactiveValidationWebExceptionHandler reactiveValidationWebExceptionHandler() {
         return new ReactiveValidationWebExceptionHandler();
     }

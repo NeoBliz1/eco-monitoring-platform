@@ -6,6 +6,7 @@ import io.github.neobliz1.validproto.annotation.ValidProto;
 import io.github.neobliz1.validproto.annotation.ValidatedProto;
 import lombok.RequiredArgsConstructor;
 import me.neobliz1.ecomonitoring.platform.ingestion.service.TelemetryIngestionService;
+import me.neobliz1.ecomonitoring.platform.ingestion.service.impl.TelemetryIngestionServiceImpl;
 import me.neobliz1.ecomonitoring.platform.model.exception.PipelineTimeoutException;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import org.springframework.http.MediaType;
@@ -33,7 +34,7 @@ public class TelemetryInvocationController {
         return telemetryIngestionService.processTelemetryPacket(packet)
                 .timeout(Duration.ofMillis(200))
                 .publishOn(Schedulers.parallel())
-                .map(isAccepted -> getResponseEntity(Boolean.TRUE.equals(isAccepted)))
+                .map(TelemetryIngestionServiceImpl::getResponseEntity)
                 .onErrorMap(ex -> {
                     if(ex instanceof TimeoutException) {
                         return new PipelineTimeoutException();
@@ -45,13 +46,6 @@ public class TelemetryInvocationController {
 
     @PostMapping(value = "/virtual", consumes = MediaType.APPLICATION_PROTOBUF_VALUE)
     public ResponseEntity<Void> receivedSensorStationDataVirtual(@ValidProto @RequestBody WeatherPacket packet) {
-        try {
-            return getResponseEntity(telemetryIngestionService.processTelemetryPacketVirtual(packet));
-        } catch(Exception e) {
-            if(e.getMessage()!=null && e.getMessage().contains("timeout")) {
-                throw new PipelineTimeoutException();
-            }
-            throw e;
-        }
+        return getResponseEntity(telemetryIngestionService.processTelemetryPacketVirtual(packet));
     }
 }

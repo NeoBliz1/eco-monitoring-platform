@@ -1,17 +1,40 @@
 syntax = "proto3";
 
-package me.neobliz1.ecomonitoring.platform.shared.contracts.proto;
-option java_package = "me.neobliz1.ecomonitoring.platform.shared.contracts.proto";
+package vector;
+
 option java_multiple_files = true;
 
-service VectorIngestService {
-  rpc StreamTelemetry (VectorPayload) returns (VectorResponse);
+service Vector {
+  rpc PushEvents (PushEventsRequest) returns (PushEventsResponse);
 }
 
-message VectorPayload {
-  bytes raw_protobuf_packet = 1;
+message PushEventsRequest {
+  repeated EventWrapper events = 1;
 }
 
-message VectorResponse {
-  bool accepted = 1;
+message PushEventsResponse {}
+
+message EventWrapper {
+  oneof event {
+    Log log = 1;
+  }
+}
+
+message Log {
+  // Field 1 was deprecated in Vector. Field 2 maps to the root Value container object.
+  Value value = 2;
+}
+
+message Value {
+  oneof kind {
+    bytes raw_bytes = 1; // Corrected: bytes must be tag 1 to match Vector's engine
+    int64 integer = 4;
+    double float = 5;
+    bool boolean = 6;
+    ValueMap map = 7;
+  }
+}
+
+message ValueMap {
+  map<string, Value> fields = 1;
 }

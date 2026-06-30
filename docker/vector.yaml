@@ -1,3 +1,7 @@
+api:
+  enabled: true
+  address: "127.0.0.1:8686"
+
 sources:
   grpc_sensor_in:
     type: "vector"
@@ -8,9 +12,7 @@ transforms:
     type: "remap"
     inputs: [ "grpc_sensor_in" ]
     source: |
-      # 1. Vector encodes the incoming gRPC ByteString into a Base64 string internally.
-      # 2. Decode it back to raw binary bytes and place it in the root message field.
-      .message = decode_base64!(.raw_protobuf_packet)
+      .message = .raw_protobuf_packet
 
 sinks:
   kafka_out:
@@ -20,7 +22,10 @@ sinks:
     topic: "environment.weather.telemetry.live"
     encoding:
       codec: "raw_message"
-
+    compression: "lz4"
+    librdkafka_options:
+      "queue.buffering.max.messages": "100000"
+      "acks": "all"
     sasl:
       enabled: true
       mechanism: "SCRAM-SHA-512"

@@ -8,8 +8,8 @@ spring:
             discovery:
                 enabled: true
                 prefer-ip-address: true
-                ip-address: 10.10.5.253
-                port: 8080
+                ip-address: ${SERVER_HOST}
+                port: ${SERVER_PORT}
                 service-name: eco-monitoring-ingestion
                 health-check-path: /actuator/health
                 health-check-interval: 10s

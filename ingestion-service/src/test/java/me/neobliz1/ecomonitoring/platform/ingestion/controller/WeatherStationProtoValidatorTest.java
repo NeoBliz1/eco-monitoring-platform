@@ -1,8 +1,10 @@
 package me.neobliz1.ecomonitoring.platform.ingestion.controller;
 
-import static me.neobliz1.ecomonitoring.platform.ingestion.controller.ProtoValidatorTestUtils.createValidBase;
-import static me.neobliz1.ecomonitoring.platform.ingestion.controller.ProtoValidatorTestUtils.performInvalidPost;
-import static me.neobliz1.ecomonitoring.platform.ingestion.controller.ProtoValidatorTestUtils.performValidPost;
+import static me.neobliz1.ecomonitoring.platform.ingestion.util.TestUtils.REACTIVE_MONO_URL;
+import static me.neobliz1.ecomonitoring.platform.ingestion.util.TestUtils.SYNC_SINGLE_URL;
+import static me.neobliz1.ecomonitoring.platform.ingestion.util.TestUtils.createValidBase;
+import static me.neobliz1.ecomonitoring.platform.ingestion.util.TestUtils.performInvalidPost;
+import static me.neobliz1.ecomonitoring.platform.ingestion.util.TestUtils.performValidPost;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
@@ -27,9 +29,6 @@ import reactor.core.publisher.Mono;
 @AutoConfigureWebTestClient
 @TestPropertySource(locations = "classpath:.env.test")
 public class WeatherStationProtoValidatorTest {
-
-    private static final String SYNC_SINGLE_URL = "/api/v1/telemetry/virtual";
-    private static final String REACTIVE_MONO_URL = "/api/v1/telemetry/mono";
 
     @MockitoBean
     private TelemetryIngestionService telemetryService;

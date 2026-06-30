@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.ingestion.controller;
+package me.neobliz1.ecomonitoring.platform.ingestion.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -12,9 +12,13 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import java.time.Instant;
 import java.util.List;
 
-public final class ProtoValidatorTestUtils {
+public final class TestUtils {
 
-    private ProtoValidatorTestUtils() {
+    public static final String STATION_ID = "15";
+    public static final String SYNC_SINGLE_URL = "/api/v1/telemetry/virtual";
+    public static final String REACTIVE_MONO_URL = "/api/v1/telemetry/mono";
+
+    private TestUtils() {
     }
 
     public static void performValidPost(WebTestClient webTestClient, String uri, WeatherPacket.Builder builder) {
@@ -59,7 +63,7 @@ public final class ProtoValidatorTestUtils {
 
     public static WeatherPacket.Builder createValidBase() {
         return WeatherPacket.newBuilder()
-                .setStationId("15")
+                .setStationId(STATION_ID)
                 .setTimestamp(Instant.now().toEpochMilli())
                 .setLocation(Location.newBuilder()
                         .setLatitude(45.0)
