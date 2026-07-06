@@ -5,6 +5,7 @@ import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import me.neobliz1.ecomonitoring.platform.ingestion.service.TelemetryIngestionService;
 import me.neobliz1.ecomonitoring.platform.model.exception.PipelineTimeoutException;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
@@ -19,6 +20,7 @@ import vector.Value;
 import vector.ValueMap;
 import vector.VectorGrpc;
 
+@Slf4j
 @RequiredArgsConstructor
 public class TelemetryIngestionServiceImpl implements TelemetryIngestionService {
 
@@ -64,9 +66,11 @@ public class TelemetryIngestionServiceImpl implements TelemetryIngestionService 
     }
 
     private PushEventsRequest buildVectorPushRequest(WeatherPacket packet) {
+        String uniqueId = packet.getStationId()+packet.getTimestamp();
         // 1. Assign the payload to raw_bytes (field 1)
         Value byteValue = Value.newBuilder()
                 .setRawBytes(ByteString.copyFrom(packet.toByteArray()))
+                .setInteger(Integer.parseInt(uniqueId))
                 .build();
 
         // 2. Wrap it inside the log payload's map fields

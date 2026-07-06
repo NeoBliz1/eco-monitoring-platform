@@ -6,11 +6,15 @@ import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.AmbientReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.Location;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.SensorReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 public final class TestUtils {
 
@@ -75,5 +79,22 @@ public final class TestUtils {
                                 .setHumidityPct(55.0f)
                                 .setPressureHpa(1013.2f)
                                 .setLeafWetnessPct(10.0f)));
+    }
+
+    public static Map<String, Object> getConsumerConf(String kafkaClient, String kafkaClientPwd, String kafkaServer) {
+        String jaasFormat = String.format(
+                "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"%s\" password=\"%s\";",
+                kafkaClient, kafkaClientPwd
+        );
+
+        return Map.of(
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaServer,
+                ConsumerConfig.GROUP_ID_CONFIG, "integration-test-group-stable",
+                CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SASL_PLAINTEXT",
+                SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-512",
+                SaslConfigs.SASL_JAAS_CONFIG, jaasFormat,
+                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
+                ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"
+        );
     }
 }

@@ -1,0 +1,51 @@
+api:
+  enabled: true
+  address: "127.0.0.1:8686"
+
+sources:
+  grpc_sensor_in:
+    type: "vector"
+    address: "0.0.0.0:6000"
+
+transforms:
+  extract_pure_bytes:
+    type: "remap"
+    inputs: [ "grpc_sensor_in" ]
+    source: |
+      .message = .raw_protobuf_packet
+sinks:
+  console_debug:
+    type: "console"
+    inputs: [ "extract_pure_bytes" ]
+    encoding:
+      codec: "json"
+  kafka_out:
+    type: "kafka"
+    inputs: [ "extract_pure_bytes" ]
+    bootstrap_servers: "eco_kafka_1:9092,eco_kafka_2:9092,eco_kafka_3:9092"
+    topic: "environment.weather.telemetry.live"
+    compression: "lz4"
+    encoding:
+      codec: "raw_message"
+    acknowledgements:
+      enabled: true
+    sasl:
+      enabled: true
+      mechanism: "SCRAM-SHA-512"
+      username: "${KAFKA_USER}"
+      password: "${KAFKA_PASSWORD}"
+    buffer:
+      type: "disk"
+      max_size: 5368709120
+      when_full: "block"
+    librdkafka_options:
+      "acks": "all"
+      "enable.idempotence": "true"
+      "transaction.timeout.ms": "60000"
+      "message.timeout.ms": "60000"
+      "queue.buffering.max.messages": "100000"
+      "debug": "generic,broker,topic,metadata,feature,queue,msg,protocol,cgrp,security,fetch,interceptor,plugin,consumer,admin,eos,mock,assignor,conf,telemetry,all"
+      "log_level": "7"                                 # Maximum verbosity
+      "log.thread.name": "true"                        # Show thread names
+      "log.connection.close": "true"                   # Log disconnections
+      "log.queue": "false"                             # Don't queue logs, output immediately

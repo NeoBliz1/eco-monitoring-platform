@@ -1,0 +1,12 @@
+services:
+  redis-cache:
+    image: redis:8.8.0-alpine
+    container_name: eco_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - eco-net
+    secrets:
+      - redis_password
+    command: >
+      sh -c "redis-server --requirepass \"$$(cat /run/secrets/redis_password)\" --appendonly yes"

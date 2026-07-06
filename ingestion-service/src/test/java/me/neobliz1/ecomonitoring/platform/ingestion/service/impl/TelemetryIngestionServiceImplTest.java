@@ -3,18 +3,16 @@ package me.neobliz1.ecomonitoring.platform.ingestion.service.impl;
 import static me.neobliz1.ecomonitoring.platform.ingestion.util.TestUtils.REACTIVE_MONO_URL;
 import static me.neobliz1.ecomonitoring.platform.ingestion.util.TestUtils.SYNC_SINGLE_URL;
 import static me.neobliz1.ecomonitoring.platform.ingestion.util.TestUtils.createValidBase;
+import static me.neobliz1.ecomonitoring.platform.ingestion.util.TestUtils.getConsumerConf;
 import static me.neobliz1.ecomonitoring.platform.ingestion.util.TestUtils.performValidPost;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import me.neobliz1.ecomonitoring.platform.common.serialization.WeatherPacketDeserializer;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
@@ -53,30 +51,9 @@ public class TelemetryIngestionServiceImplTest {
 
     @BeforeEach
     public void setUp() {
-        String jaasFormat = String.format(
-                "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"%s\" password=\"%s\";",
-                kafkaClient, kafkaClientPwd
-        );
+        Map<String, Object> conf = getConsumerConf(kafkaClient, kafkaClientPwd, kafkaServer);
 
-        Deserializer<WeatherPacket> weatherPacketDeserializer = (topic, data) -> {
-            if(data==null) return null;
-            try {
-                return WeatherPacket.parseFrom(data);
-            } catch(Exception e) {
-                return null;
-            }
-        };
-
-        Map<String, Object> conf = Map.of(
-                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaServer,
-                ConsumerConfig.GROUP_ID_CONFIG, "integration-test-group-stable",
-                CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SASL_PLAINTEXT",
-                SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-512",
-                SaslConfigs.SASL_JAAS_CONFIG, jaasFormat,
-                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest"
-        );
-
-        consumer = new KafkaConsumer<>(conf, new StringDeserializer(), weatherPacketDeserializer);
+        consumer = new KafkaConsumer<>(conf, new StringDeserializer(), new WeatherPacketDeserializer());
 
         List<TopicPartition> partitions = IntStream.range(0, PARTITION_COUNT)
                 .mapToObj(p -> new TopicPartition(TOPIC_NAME, p))
@@ -86,7 +63,7 @@ public class TelemetryIngestionServiceImplTest {
 
         System.out.println("⏳ Warm-up connection layer handshake verification...");
         // Triggers initial network loop sync so that the cluster registers this static group profile
-        consumer.poll(Duration.ofMillis(1000));
+        consumer.poll(Duration.ofMillis(2000));
         System.out.println("✅ READY: Consumer group cached.");
     }
 

@@ -1,0 +1,228 @@
+services:
+  kafka-1:
+    image: confluentinc/cp-kafka:8.2.0
+    container_name: eco_kafka_1
+    ports:
+      - "9092:9092"
+      - "9094:9094"
+    networks:
+      - eco-net
+    secrets:
+      - kafka_server_jaas
+    healthcheck:
+      test: [ "CMD", "bash", "-c", "cat < /dev/null > /dev/tcp/127.0.0.1/9092 || exit 1" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    environment: &kafka-env
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@eco_kafka_1:19093,2@eco_kafka_2:19093,3@eco_kafka_3:19093'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'INTERNAL:SASL_PLAINTEXT,CLIENT:SASL_PLAINTEXT,EXTERNAL:SASL_PLAINTEXT,CONTROLLER:PLAINTEXT'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'INTERNAL'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_OPTS: "-Djava.security.auth.login.config=/run/secrets/kafka_server_jaas"
+      KAFKA_SASL_ENABLED_MECHANISMS: SCRAM-SHA-512
+      KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL: SCRAM-SHA-512
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 3000
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_NUM_PARTITIONS: 6
+      KAFKA_CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_TRANSACTION_STATE_LOG_NUM_PARTITIONS: 50
+      KAFKA_TRANSACTION_STATE_LOG_RECOVERY_THREADS: 1
+      NODE_ID: 1
+      KAFKA_NODE_ID: 1
+      LISTENERS_CONFIG: "INTERNAL://:9093,CLIENT://:9092,EXTERNAL://:9094,CONTROLLER://:19093"
+      ADVERTISED_LISTENERS_CONFIG: "INTERNAL://eco_kafka_1:9093,CLIENT://eco_kafka_1:9092,EXTERNAL://localhost:9094"
+      KAFKA_LISTENERS: 'INTERNAL://:9093,CLIENT://:9092,EXTERNAL://:9094,CONTROLLER://:19093'
+      KAFKA_ADVERTISED_LISTENERS: 'INTERNAL://eco_kafka_1:9093,CLIENT://eco_kafka_1:9092,EXTERNAL://localhost:9094'
+
+    command: &kafka-command
+      - bash
+      - -c
+      - |
+        cat <<EOF > /tmp/kraft.properties
+        process.roles=broker,controller
+        node.id=$${NODE_ID}
+        log.dirs=/var/lib/kafka/data
+        controller.quorum.voters=1@eco_kafka_1:19093,2@eco_kafka_2:19093,3@eco_kafka_3:19093
+        controller.listener.names=CONTROLLER
+        listener.security.protocol.map=INTERNAL:SASL_PLAINTEXT,CLIENT:SASL_PLAINTEXT,EXTERNAL:SASL_PLAINTEXT,CONTROLLER:PLAINTEXT
+        listeners=$${LISTENERS_CONFIG}
+        advertised.listeners=$${ADVERTISED_LISTENERS_CONFIG}
+        sasl.enabled.mechanisms=SCRAM-SHA-512
+        inter.broker.listener.name=INTERNAL
+        sasl.mechanism.inter.broker.protocol=SCRAM-SHA-512
+        group.initial.rebalance.delay.ms=3000
+        auto.create.topics.enable=true
+        num.partitions=6
+        offsets.topic.replication.factor=3
+        transaction.state.log.replication.factor=3
+        transaction.state.log.min.isr=2
+        transaction.state.log.num.partitions=50
+        EOF
+
+        echo "Formatting storage for Node $${NODE_ID} with SCRAM users..."
+        kafka-storage format \
+          --cluster-id "MkU3OEVBNTcwNTJENDM2Qk" \
+          --config /tmp/kraft.properties \
+          --add-scram "SCRAM-SHA-512=[name=${KAFKA_ADMIN},password=${KAFKA_ADMIN_PASSWORD}]" \
+          --add-scram "SCRAM-SHA-512=[name=${KAFKA_REGISTRY},password=${KAFKA_REGISTRY_PASSWORD}]" \
+          --add-scram "SCRAM-SHA-512=[name=${KAFKA_VECTOR},password=${KAFKA_VECTOR_PASSWORD}]" \
+          --add-scram "SCRAM-SHA-512=[name=${KAFKA_CLIENT},password=${KAFKA_CLIENT_PASSWORD}]" \
+          && echo "✅ SUCCESS: KRaft storage formatting finalized!"
+        
+        export KAFKA_OPTS="-Djava.security.auth.login.config=/run/secrets/kafka_server_jaas"
+        exec /etc/confluent/docker/run
+
+  kafka-2:
+    image: confluentinc/cp-kafka:8.2.0
+    container_name: eco_kafka_2
+    ports:
+      - "9192:9092"   # Maps external host 9192 to container internal 9092
+      - "9194:9194"
+    networks:
+      - eco-net
+    secrets:
+      - kafka_server_jaas
+    healthcheck:
+      test: [ "CMD", "bash", "-c", "cat < /dev/null > /dev/tcp/127.0.0.1/9092 || exit 1" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    environment:
+      <<: *kafka-env
+      NODE_ID: 2
+      KAFKA_NODE_ID: 2
+      LISTENERS_CONFIG: "INTERNAL://:9093,CLIENT://:9092,EXTERNAL://:9194,CONTROLLER://:19093"
+      ADVERTISED_LISTENERS_CONFIG: "INTERNAL://eco_kafka_2:9093,CLIENT://eco_kafka_2:9092,EXTERNAL://localhost:9194"
+      KAFKA_LISTENERS: 'INTERNAL://:9093,CLIENT://:9092,EXTERNAL://:9194,CONTROLLER://:19093'
+      KAFKA_ADVERTISED_LISTENERS: 'INTERNAL://eco_kafka_2:9093,CLIENT://eco_kafka_2:9092,EXTERNAL://localhost:9194'
+    command: *kafka-command
+
+  kafka-3:
+    image: confluentinc/cp-kafka:8.2.0
+    container_name: eco_kafka_3
+    ports:
+      - "9292:9092"   # Maps external host 9292 to container internal 9092
+      - "9294:9294"   # Maps external host 9294 to container internal 9294
+    networks:
+      - eco-net
+    secrets:
+      - kafka_server_jaas
+    healthcheck:
+      test: [ "CMD", "bash", "-c", "cat < /dev/null > /dev/tcp/127.0.0.1/9092 || exit 1" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    environment:
+      <<: *kafka-env
+      NODE_ID: 3
+      KAFKA_NODE_ID: 3
+      LISTENERS_CONFIG: "INTERNAL://:9093,CLIENT://:9092,EXTERNAL://:9294,CONTROLLER://:19093"
+      ADVERTISED_LISTENERS_CONFIG: "INTERNAL://eco_kafka_3:9093,CLIENT://eco_kafka_3:9092,EXTERNAL://localhost:9294"
+      KAFKA_LISTENERS: 'INTERNAL://:9093,CLIENT://:9092,EXTERNAL://:9294,CONTROLLER://:19093'
+      KAFKA_ADVERTISED_LISTENERS: 'INTERNAL://eco_kafka_3:9093,CLIENT://eco_kafka_3:9092,EXTERNAL://localhost:9294'
+    command: *kafka-command
+
+  kafka-init-topics:
+    image: confluentinc/cp-kafka:8.2.0
+    container_name: eco_kafka_init_topics
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
+        condition: service_healthy
+      consul-server:
+        condition: service_started
+    networks:
+      - eco-net
+    entrypoint: [ "bash", "-c" ]
+    command:
+      - |
+        echo "Creating runtime properties for cluster admin authentication..."
+        cat <<EOF > /tmp/admin.properties
+        security.protocol=SASL_PLAINTEXT
+        sasl.mechanism=SCRAM-SHA-512
+        sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_ADMIN}" password="${KAFKA_ADMIN_PASSWORD}";
+        EOF
+
+        echo "Waiting 5 seconds for KRaft node elections to finalize..."
+        sleep 5
+
+        echo "Validating broker connection and provisioning custom business topics..."
+        kafka-topics --create --if-not-exists \
+          --bootstrap-server eco_kafka_1:9092 \
+          --command-config /tmp/admin.properties \
+          --topic environment.weather.telemetry.live \
+          --partitions 6 \
+          --replication-factor 3 \
+          --config min.insync.replicas=2 \
+          --config cleanup.policy=delete \
+          --config retention.ms=604800000
+
+        echo "🔍 VERIFICATION: Fetching live cluster structure for confirmation..."
+        kafka-topics --bootstrap-server eco_kafka_1:9092 \
+          --command-config /tmp/admin.properties \
+          --describe \
+          --topic environment.weather.telemetry.live
+
+        echo "📡 Announcing secure Apache Kafka Broker to Consul Discovery catalog..."
+        curl -s --request PUT \
+          --url http://eco_consul:8500/v1/agent/service/register \
+          --header 'Content-Type: application/json' \
+          --data '{
+            "ID": "kafka-broker-1",
+            "Name": "kafka",
+            "Tags": ["secure", "message-broker", "kraft"],
+            "Address": "eco_kafka_1",
+            "Port": 9092,
+            "Check": {
+              "TCP": "eco_kafka_1:9092",
+              "Interval": "10s",
+              "Timeout": "5s"
+            }
+          }'
+
+        echo "📡 Announcing Confluent Schema Registry to Consul Discovery catalog..."
+        curl -s --request PUT \
+          --url http://eco_consul:8500/v1/agent/service/register \
+          --header 'Content-Type: application/json' \
+          --data '{
+            "ID": "schema-registry-1",
+            "Name": "schema-registry",
+            "Tags": ["avro", "serialization-core"],
+            "Address": "eco_schema_registry",
+            "Port": 8085,
+            "Check": {
+              "HTTP": "http://eco_schema_registry:8081/",
+              "Interval": "10s",
+              "Timeout": "5s"
+            }
+          }'
+
+        echo "📡 Announcing Vector Ingestion Sidecar to Consul Discovery catalog..."
+        curl -s --request PUT \
+          --url http://eco_consul:8500/v1/agent/service/register \
+          --header 'Content-Type: application/json' \
+          --data '{
+            "ID": "vector-sidecar-1",
+            "Name": "vector-sidecar",
+            "Tags": ["ingestion", "sidecar", "protobuf-relay"],
+            "Address": "eco_vector_sidecar",
+            "Port": 6000,
+            "Check": {
+              "TCP": "eco_vector_sidecar:6000",
+              "Interval": "10s",
+              "Timeout": "5s"
+            }
+          }'
+
+        echo "✅ Infrastructure discovery sync sequence complete."
+
+  

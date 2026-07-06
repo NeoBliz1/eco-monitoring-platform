@@ -1,0 +1,54 @@
+spring:
+  application:
+    name: ${SPRING_APPLICATION_NAME}
+  cloud:
+    consul:
+      host: ${SPRING_CLOUD_CONSUL_HOST}
+      port: ${SPRING_CLOUD_CONSUL_PORT}
+      discovery:
+        enabled: true
+        prefer-ip-address: true
+        service-name: ${SPRING_APPLICATION_NAME}
+        health-check-path: "/actuator/health"
+        health-check-interval: "10s"
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    streams:
+      application-id: "eco-analysis-streams-pipeline"
+      properties:
+        processing.guarantee: "exactly_once_v2"
+        default.key.serde: "org.apache.kafka.common.serialization.Serdes$StringSerde"
+        default.value.serde: "org.apache.kafka.common.serialization.Serdes$ByteArraySerde"
+        state.dir: "/var/lib/kafka-streams/analysis-state"
+    consumer:
+      group-id: "eco-analysis-consumer-group"
+      auto-offset-reset: "earliest"
+      isolation-level: "read_committed"
+      enable-auto-commit: false
+      key-deserializer: "org.apache.kafka.common.serialization.StringDeserializer"
+      value-deserializer: "org.springframework.kafka.support.serializer.ErrorHandlingDeserializer"
+    listener:
+      ack-mode: "manual_immediate"
+    properties:
+      security.protocol: "SASL_PLAINTEXT"
+      sasl.mechanism: "SCRAM-SHA-512"
+      sasl.jaas.config: "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"${KAFKA_CLIENT}\" password=\"${KAFKA_CLIENT_PASSWORD}\";"
+      spring.deserializer.value.delegate.class: "me.neobliz1.ecomonitoring.platform.common.serialization.WeatherPacketDeserializer"
+
+server:
+  port: ${SERVER_PORT}
+
+management:
+  health:
+    defaults:
+      enabled: true
+  endpoint:
+    health:
+      show-details: "always"
+      show-components: "always"
+      probes:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: "health,info,prometheus"
