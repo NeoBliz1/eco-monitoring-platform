@@ -53,9 +53,8 @@ public class TelemetryIngestionServiceImpl implements TelemetryIngestionService 
     @Override
     @SuppressWarnings({ "ResultOfMethodCallIgnored" })
     public boolean processTelemetryPacketVirtual(WeatherPacket packet) {
-        PushEventsRequest request = buildVectorPushRequest(packet);
         try {
-            blockingStub.pushEvents(request);
+            blockingStub.pushEvents(buildVectorPushRequest(packet));
             return true;
         } catch(StatusRuntimeException e) {
             if(Status.Code.DEADLINE_EXCEEDED.equals(e.getStatus().getCode())) {
@@ -66,11 +65,9 @@ public class TelemetryIngestionServiceImpl implements TelemetryIngestionService 
     }
 
     private PushEventsRequest buildVectorPushRequest(WeatherPacket packet) {
-        String uniqueId = packet.getStationId()+packet.getTimestamp();
         // 1. Assign the payload to raw_bytes (field 1)
         Value byteValue = Value.newBuilder()
                 .setRawBytes(ByteString.copyFrom(packet.toByteArray()))
-                .setInteger(Integer.parseInt(uniqueId))
                 .build();
 
         // 2. Wrap it inside the log payload's map fields

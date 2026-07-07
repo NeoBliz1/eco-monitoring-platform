@@ -15,11 +15,17 @@ spring:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
     streams:
       application-id: "eco-analysis-streams-pipeline"
+      state-dir: "/var/lib/kafka-streams/analysis-state"
       properties:
         processing.guarantee: "exactly_once_v2"
+        isolation.level: "read_committed"
+        commit.interval.ms: 100
+        topology.optimization: "all"
         default.key.serde: "org.apache.kafka.common.serialization.Serdes$StringSerde"
         default.value.serde: "org.apache.kafka.common.serialization.Serdes$ByteArraySerde"
-        state.dir: "/var/lib/kafka-streams/analysis-state"
+        security.protocol: "SASL_PLAINTEXT"
+        sasl.mechanism: "SCRAM-SHA-512"
+        sasl.jaas.config: "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"${KAFKA_CLIENT}\" password=\"${KAFKA_CLIENT_PASSWORD}\";"
     consumer:
       group-id: "eco-analysis-consumer-group"
       auto-offset-reset: "earliest"

@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.ingestion.service.impl;
+package me.neobliz1.ecomonitoring.platform.ingestion.controller;
 
 import static me.neobliz1.ecomonitoring.platform.ingestion.util.TestUtils.REACTIVE_MONO_URL;
 import static me.neobliz1.ecomonitoring.platform.ingestion.util.TestUtils.SYNC_SINGLE_URL;
@@ -35,7 +35,7 @@ import java.util.stream.IntStream;
 @AutoConfigureWebTestClient
 @TestPropertySource(locations = "classpath:.env.test")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-public class TelemetryIngestionServiceImplTest {
+public class TelemetryInvocationControllerIntegrationTest {
 
     private static final String TOPIC_NAME = "environment.weather.telemetry.live";
     private static final int PARTITION_COUNT = 6;
@@ -60,11 +60,6 @@ public class TelemetryIngestionServiceImplTest {
                 .collect(Collectors.toList());
 
         consumer.assign(partitions);
-
-        System.out.println("⏳ Warm-up connection layer handshake verification...");
-        // Triggers initial network loop sync so that the cluster registers this static group profile
-        consumer.poll(Duration.ofMillis(2000));
-        System.out.println("✅ READY: Consumer group cached.");
     }
 
     @AfterEach

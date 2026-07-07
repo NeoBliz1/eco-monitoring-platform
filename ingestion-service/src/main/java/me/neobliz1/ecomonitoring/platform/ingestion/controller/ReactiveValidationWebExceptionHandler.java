@@ -29,7 +29,7 @@ public class ReactiveValidationWebExceptionHandler implements WebExceptionHandle
 
             List<String> errors;
 
-            // Apply your precise diagnostic checking rules
+            // Apply precise diagnostic checking rules
             if(ex instanceof MethodValidationException mve) {
                 errors = mve.getParameterValidationResults().stream()
                         .flatMap(result -> result.getResolvableErrors().stream())
@@ -47,7 +47,7 @@ public class ReactiveValidationWebExceptionHandler implements WebExceptionHandle
                     .map(err -> "\""+err.replace("\"", "\\\"")+"\"")
                     .collect(Collectors.joining(",", "[", "]"));
 
-            // Mirror your exact body signature: status, error, violations
+            // Mirror exact body signature: status, error, violations
             String bodyJson = "{"
                     +"\"status\":400,"
                     +"\"error\":\"Bad Request\","

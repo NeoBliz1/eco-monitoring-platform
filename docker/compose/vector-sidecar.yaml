@@ -11,9 +11,10 @@ services:
     networks:
       - eco-net
     depends_on:
-      - schema-registry
+      kafka-init-topics:
+        condition: service_completed_successfully
     restart: on-failure
     environment:
       KAFKA_USER: ${KAFKA_ADMIN}
       KAFKA_PASSWORD: ${KAFKA_ADMIN_PASSWORD}
-      VECTOR_LOG: "debug"
+      VECTOR_LOG: "info"

@@ -94,7 +94,8 @@ public final class TestUtils {
                 SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-512",
                 SaslConfigs.SASL_JAAS_CONFIG, jaasFormat,
                 ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
-                ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"
+                ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed",
+                ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, "false"
         );
     }
 }
