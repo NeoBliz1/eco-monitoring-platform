@@ -1,6 +1,8 @@
 spring:
   application:
-    name: ${SPRING_APPLICATION_NAME}
+    name: ${SPRING_ANALYSIS_APPLICATION_NAME}
+  config:
+    import: "optional:consul:${SPRING_CLOUD_CONSUL_HOST}:${SPRING_CLOUD_CONSUL_PORT}/"
   cloud:
     consul:
       host: ${SPRING_CLOUD_CONSUL_HOST}
@@ -8,15 +10,27 @@ spring:
       discovery:
         enabled: true
         prefer-ip-address: true
-        service-name: ${SPRING_APPLICATION_NAME}
-        health-check-path: "/actuator/health"
-        health-check-interval: "10s"
+        ip-address: ${SERVER_HOST}
+        port: ${ANALYSIS_APPLICATION_SERVER_PORT}
+        service-name: ${SPRING_ANALYSIS_APPLICATION_NAME}
+        health-check-path: /actuator/health
+        health-check-interval: 10s
+      config:
+        enabled: true
+        format: yaml
+        prefixes: config
+  data:
+    redis:
+      service-name: ${SPRING_DATA_REDIS_SERVICE_NAME}
+      password: ${SPRING_DATA_REDIS_PASSWORD}
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    service-name: ${KAFKA_SERVICE_NAME}
     streams:
       application-id: "eco-analysis-streams-pipeline"
-      state-dir: "/var/lib/kafka-streams/analysis-state"
       properties:
+        schema:
+          registry:
+            url: ${SCHEMA_REGISTRY_URL}
         processing.guarantee: "exactly_once_v2"
         isolation.level: "read_committed"
         commit.interval.ms: 100
@@ -42,7 +56,7 @@ spring:
       spring.deserializer.value.delegate.class: "me.neobliz1.ecomonitoring.platform.common.serialization.WeatherPacketDeserializer"
 
 server:
-  port: ${SERVER_PORT}
+  port: ${ANALYSIS_APPLICATION_SERVER_PORT}
 
 management:
   health:

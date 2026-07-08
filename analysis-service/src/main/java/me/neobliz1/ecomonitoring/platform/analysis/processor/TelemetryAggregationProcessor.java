@@ -3,6 +3,7 @@ package me.neobliz1.ecomonitoring.platform.analysis.processor;
 import lombok.RequiredArgsConstructor;
 import me.neobliz1.ecomonitoring.platform.analysis.service.TelemetryAnalysisService;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
+import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.api.Processor;
@@ -18,20 +19,23 @@ import java.util.List;
 import java.util.Map;
 
 @RequiredArgsConstructor
-public class TelemetryAggregationProcessor implements Processor<String, WeatherPacket, String, WeatherPacket> {
+public class TelemetryAggregationProcessor implements Processor<String, WeatherPacket, String, WeatherMap> {
 
     public static final String ZERO_LOSS_ACCUMULATION_STORE = "zero-loss-accumulation-store";
     private static final long BUFFERING_INTERVAL_MS = 300_000L; // 5 min
 
     private final TelemetryAnalysisService service;
+    private final int interval;
     private KeyValueStore<String, WeatherPacket> accumStore;
+    private ProcessorContext<String, WeatherMap> context;
 
     @Override
-    public void init(ProcessorContext<String, WeatherPacket> context) {
-        this.accumStore = context.getStateStore(ZERO_LOSS_ACCUMULATION_STORE);
+    public void init(ProcessorContext<String, WeatherMap> context) {
+        this.context = context;
+        this.accumStore = this.context.getStateStore(ZERO_LOSS_ACCUMULATION_STORE);
 
-        context.schedule(
-                Duration.ofMinutes(5),
+        this.context.schedule(
+                Duration.ofMinutes(interval),
                 PunctuationType.STREAM_TIME,
                 this::flushAccumulatedWindows
         );
@@ -93,7 +97,7 @@ public class TelemetryAggregationProcessor implements Processor<String, WeatherP
 
         // Hand off structured calculations safely to the service layer for history topic emission
         if(!extractionMatrix.isEmpty()) {
-            this.service.persistAggregatedHistory(extractionMatrix);
+            this.service.persistAggregatedHistory(extractionMatrix, this.context, currentWallClockFloor);
         }
     }
 }

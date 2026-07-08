@@ -1,0 +1,6 @@
+spring:
+  kafka:
+    topic:
+      weather-live: environment.weather.telemetry.live
+      weather-raw: environment.weather.telemetry.raw
+      weather-history: environment.weather.telemetry.history

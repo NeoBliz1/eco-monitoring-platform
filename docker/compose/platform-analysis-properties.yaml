@@ -1,0 +1,8 @@
+spring:
+  kafka:
+    streams:
+      state-dir: /tmp/kafka-streams/analysis-state
+      scheduler:
+        name:
+          aggregation-processor:
+            interval: 5

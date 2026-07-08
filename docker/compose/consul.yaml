@@ -7,7 +7,35 @@ services:
       - "8600:8600/udp"
     networks:
       - eco-net
-    depends_on:
-      - schema-registry
-      - vector-sidecar
+    healthcheck:
+      test: [ "CMD", "consul", "operator", "raft", "list-peers" ]
+      interval: 10s       # How often to perform the check
+      timeout: 5s         # Max time to allow each check to run
+      retries: 3          # Consecutive failures required to report unhealthy
+      start_period: 5s    # Grace period to allow boot setup before counting failures
     command: "agent -server -bootstrap-expect=1 -ui -node=control-plane-one -client=0.0.0.0"
+
+  kafka-init-service:
+    image: hashicorp/consul:2.0.0
+    container_name: eco_consul_init_service
+    depends_on:
+      consul-server:
+        condition: service_healthy
+    networks:
+      - eco-net
+    volumes:
+      - ./platform-global-properties.yaml:/tmp/platform-global-properties.yaml:ro
+      - ./platform-analysis-properties.yaml:/tmp/platform-analysis-properties.yaml:ro
+    entrypoint: [ "sh", "-c" ]
+    command:
+      - |
+        echo "📡 Uploading global shared platform properties to Consul KV..."
+        GLOBAL_CONTENT=$$(cat /tmp/platform-global-properties.yaml)
+        consul kv put -http-addr="http://eco_consul:8500" "config/application/data" "$$GLOBAL_CONTENT"
+        
+        echo "📡 Uploading service-specific properties for Analysis Service..."
+        ANALYSIS_CONTENT=$$(cat /tmp/platform-analysis-properties.yaml)
+        consul kv put -http-addr="http://eco_consul:8500" "config/eco-monitoring-analysis/data" "$$ANALYSIS_CONTENT"
+        
+        echo "✅ All configurations loaded successfully into Consul KV."
+

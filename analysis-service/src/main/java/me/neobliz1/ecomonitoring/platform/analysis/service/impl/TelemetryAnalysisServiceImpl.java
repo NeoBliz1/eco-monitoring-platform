@@ -3,11 +3,12 @@ package me.neobliz1.ecomonitoring.platform.analysis.service.impl;
 import static me.neobliz1.ecomonitoring.platform.analysis.processor.TelemetryAggregationProcessor.ZERO_LOSS_ACCUMULATION_STORE;
 
 import com.google.protobuf.util.JsonFormat;
+import io.confluent.kafka.streams.serdes.protobuf.KafkaProtobufSerde;
 import lombok.RequiredArgsConstructor;
 import me.neobliz1.ecomonitoring.platform.analysis.processor.TelemetryAggregationProcessor;
 import me.neobliz1.ecomonitoring.platform.analysis.processor.TelemetryDeduplicationProcessor;
 import me.neobliz1.ecomonitoring.platform.analysis.service.TelemetryAnalysisService;
-import me.neobliz1.ecomonitoring.platform.common.serialization.WeatherPacketDeserializer;
+import me.neobliz1.ecomonitoring.platform.model.exception.ProtocolBufferTranslationException;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.AirQualityReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.AmbientReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.OpticalReading;
@@ -17,21 +18,20 @@ import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WindReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.GridCellLayers;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.kafka.core.KafkaTemplate;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -46,52 +46,50 @@ public class TelemetryAnalysisServiceImpl implements TelemetryAnalysisService {
     public static final String WEATHER_MAP_KEY = "weather:map:";
 
     private final StringRedisTemplate redisTemplate;
-    private final KafkaTemplate<String, byte[]> kafkaTemplate;
 
-    @Value("${kafka.topics.ingestion}")
-    private String kafkaIngestionTopic;
-    @Value("${kafka.topics.analysis-raw}")
+    @Value("${spring.kafka.topic.weather-live}")
+    private String kafkaIngestionLiveTopic;
+    @Value("${spring.kafka.topic.weather-raw}")
     private String kafkaAnalysisRawTopic;
-    @Value("${kafka.topics.analysis-history}")
+    @Value("${spring.kafka.topic.weather-history}")
     private String kafkaAnalysisHistoryTopic;
+    @Value("${spring.kafka.streams.scheduler.name.aggregation-processor.interval}")
+    private Integer interval;
+    @Value("${spring.kafka.streams.properties.schema.registry.url}")
+    private String schemaRegistryUrl;
 
     @Override
     public KStream<String, WeatherPacket> buildTopology(StreamsBuilder streamsBuilder) {
-        Serializer<WeatherPacket> customSerializer = (topic, data) -> data==null?null:data.toByteArray();
-        Deserializer<WeatherPacket> customDeserializer = new WeatherPacketDeserializer();
-        Serde<WeatherPacket> weatherPacketSerde = Serdes.serdeFrom(customSerializer, customDeserializer);
-
+        Map<String, String> serdeConfig = Map.of(
+                "schema.registry.url", schemaRegistryUrl
+        );
+        Serde<WeatherPacket> weatherPacketSerde = new KafkaProtobufSerde<>(WeatherPacket.class);
+        weatherPacketSerde.configure(serdeConfig, false);
         // Register State Stores globally to the Topology
         StoreBuilder<WindowStore<String, String>> dedupStoreBuilder = Stores.windowStoreBuilder(
                 Stores.persistentWindowStore(TelemetryDeduplicationProcessor.DEDUPLICATE_ROCKS_DB,
                         Duration.ofMinutes(10), Duration.ofMinutes(10), false),
                 Serdes.String(), Serdes.String());
-
         StoreBuilder<KeyValueStore<String, WeatherPacket>> accumStoreBuilder = Stores.keyValueStoreBuilder(
                 Stores.persistentKeyValueStore(ZERO_LOSS_ACCUMULATION_STORE),
                 Serdes.String(), weatherPacketSerde);
-
         streamsBuilder.addStateStore(dedupStoreBuilder);
         streamsBuilder.addStateStore(accumStoreBuilder);
-
         // ==========================================
         // PIPELINE 1: Deduplication Pipeline Layout
         // ==========================================
         KStream<String, WeatherPacket> rawInputStream = streamsBuilder.stream(
-                kafkaIngestionTopic,
+                kafkaIngestionLiveTopic,
                 Consumed.with(Serdes.String(), weatherPacketSerde)
         );
-
         KStream<String, WeatherPacket> deduplicatedStream = rawInputStream.process(
                 TelemetryDeduplicationProcessor::new,
                 TelemetryDeduplicationProcessor.DEDUPLICATE_ROCKS_DB
         );
-
         deduplicatedStream.to(
                 kafkaAnalysisRawTopic,
                 Produced.with(Serdes.String(), weatherPacketSerde)
         );
-
         // ==========================================
         // PIPELINE 2: Aggregation Pipeline Layout
         // ==========================================
@@ -99,13 +97,17 @@ public class TelemetryAnalysisServiceImpl implements TelemetryAnalysisService {
                 kafkaAnalysisRawTopic,
                 Consumed.with(Serdes.String(), weatherPacketSerde)
         );
-
         // This stream reads committed messages, maps to cache views, and builds the history snapshot
-        cleanInputStream.process(
-                () -> new TelemetryAggregationProcessor(this),
+        KStream<String, WeatherMap> historyStream = cleanInputStream.process(
+                () -> new TelemetryAggregationProcessor(this, interval),
                 ZERO_LOSS_ACCUMULATION_STORE
         );
-
+        Serde<WeatherMap> weatherMapSerde = new KafkaProtobufSerde<>(WeatherMap.class);
+        weatherMapSerde.configure(serdeConfig, false);
+        historyStream.to(
+                kafkaAnalysisHistoryTopic,
+                Produced.with(Serdes.String(), weatherMapSerde)
+        );
         // Return the clean stream to satisfy  application configuration definitions bean
         return deduplicatedStream;
     }
@@ -120,7 +122,8 @@ public class TelemetryAnalysisServiceImpl implements TelemetryAnalysisService {
     }
 
     @Override
-    public void persistAggregatedHistory(Map<Long, Map<String, List<WeatherPacket>>> extractionMatrix) {
+    public void persistAggregatedHistory(Map<Long, Map<String, List<WeatherPacket>>> extractionMatrix, ProcessorContext<String, WeatherMap> context,
+                                         long currentStreamTime) {
         extractionMatrix.forEach((bucketTime, spatialMap) -> {
             WeatherMap.Builder weatherMapBuilder = WeatherMap.newBuilder()
                     .setTimestampBucket(bucketTime)
@@ -134,15 +137,16 @@ public class TelemetryAnalysisServiceImpl implements TelemetryAnalysisService {
             });
 
             WeatherMap finalReport = weatherMapBuilder.build();
-            byte[] payloadBytes = finalReport.toByteArray();
             String transactionRoutingKey = String.valueOf(bucketTime);
 
-            kafkaTemplate.send(kafkaAnalysisHistoryTopic, transactionRoutingKey, payloadBytes);
 
             String redisHistoryKey = WEATHER_MAP_KEY+bucketTime;
             finalReport.getGridCellsMap().forEach((geohash, cellLayers) ->
                     redisTemplate.opsForHash().put(redisHistoryKey, geohash, cellLayers.toString()));
             redisTemplate.expire(redisHistoryKey, Duration.ofHours(24));
+
+            Record<String, WeatherMap> record = new Record<>(transactionRoutingKey, finalReport, currentStreamTime);
+            context.forward(record);
         });
     }
 
@@ -184,7 +188,7 @@ public class TelemetryAnalysisServiceImpl implements TelemetryAnalysisService {
             return Optional.of(jsonMapResponse);
 
         } catch(Exception e) {
-            throw new RuntimeException("Failed to translate underlying Protobuf structural matrices in synchronous chain", e);
+            throw new ProtocolBufferTranslationException("Failed to translate underlying Protobuf structural matrices in synchronous chain", e);
         }
     }
 

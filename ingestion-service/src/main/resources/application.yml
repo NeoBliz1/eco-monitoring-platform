@@ -1,6 +1,6 @@
 spring:
     application:
-        name: ${SPRING_APPLICATION_NAME}
+        name: ${SPRING_INGESTION_APPLICATION_NAME}
     cloud:
         consul:
             host: ${SPRING_CLOUD_CONSUL_HOST}
@@ -9,18 +9,13 @@ spring:
                 enabled: true
                 prefer-ip-address: true
                 ip-address: ${SERVER_HOST}
-                port: ${SERVER_PORT}
-                service-name: eco-monitoring-ingestion
+                port: ${INGESTION_APPLICATION_SERVER_PORT}
+                service-name: ${SPRING_INGESTION_APPLICATION_NAME}
                 health-check-path: /actuator/health
                 health-check-interval: 10s
 
-vector:
-    sidecar:
-        host: ${VECTOR_SIDECAR_HOST}
-        port: ${VECTOR_SIDECAR_PORT}
-
 server:
-    port: ${SERVER_PORT}
+    port: ${INGESTION_APPLICATION_SERVER_PORT}
 
 management:
     health:

@@ -10,4 +10,9 @@ public class BasePlatformException extends RuntimeException {
         super();
         this.errorCode = errorCode;
     }
+
+    public BasePlatformException(String msg, ErrorCode errorCode) {
+        super(msg);
+        this.errorCode = errorCode;
+    }
 }

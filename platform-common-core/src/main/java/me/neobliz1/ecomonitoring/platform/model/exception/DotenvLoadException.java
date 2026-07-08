@@ -4,8 +4,8 @@ import static me.neobliz1.ecomonitoring.platform.model.exception.ErrorCode.ENV_F
 
 public class DotenvLoadException extends BasePlatformException {
 
-    public DotenvLoadException(Throwable cause) {
-        super(ENV_FILE_LOAD_FAILED);
+    public DotenvLoadException(String msg, Throwable cause) {
+        super(msg, ENV_FILE_LOAD_FAILED);
         initCause(cause);
     }
 }

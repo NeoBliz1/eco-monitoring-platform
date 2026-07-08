@@ -3,7 +3,6 @@ services:
     image: confluentinc/cp-kafka:8.2.0
     container_name: eco_kafka_1
     ports:
-      - "9092:9092"
       - "9094:9094"
     networks:
       - eco-net
@@ -82,7 +81,6 @@ services:
     image: confluentinc/cp-kafka:8.2.0
     container_name: eco_kafka_2
     ports:
-      - "9192:9092"   # Maps external host 9192 to container internal 9092
       - "9194:9194"
     networks:
       - eco-net
@@ -107,7 +105,6 @@ services:
     image: confluentinc/cp-kafka:8.2.0
     container_name: eco_kafka_3
     ports:
-      - "9292:9092"   # Maps external host 9292 to container internal 9092
       - "9294:9294"   # Maps external host 9294 to container internal 9294
     networks:
       - eco-net
@@ -138,6 +135,8 @@ services:
         condition: service_healthy
       kafka-3:
         condition: service_healthy
+      consul-server:
+        condition: service_healthy
     networks:
       - eco-net
     entrypoint: [ "bash", "-c" ]
@@ -157,7 +156,7 @@ services:
         kafka-topics --create --if-not-exists \
           --bootstrap-server eco_kafka_1:9092 \
           --command-config /tmp/admin.properties \
-          --topic environment.weather.telemetry.live \
+          --topic ${KAFKA_WEATHER_LIVE_TOPIC} \
           --partitions 6 \
           --replication-factor 3 \
           --config min.insync.replicas=2 \
@@ -167,7 +166,7 @@ services:
         kafka-topics --create --if-not-exists \
           --bootstrap-server eco_kafka_1:9092 \
           --command-config /tmp/admin.properties \
-          --topic environment.weather.telemetry.raw \
+          --topic ${KAFKA_WEATHER_RAW_TOPIC} \
           --partitions 6 \
           --replication-factor 3 \
           --config min.insync.replicas=2 \
@@ -177,7 +176,7 @@ services:
         kafka-topics --create --if-not-exists \
           --bootstrap-server eco_kafka_1:9092 \
           --command-config /tmp/admin.properties \
-          --topic environment.weather.telemetry.history \
+          --topic ${KAFKA_WEATHER_HISTORY_TOPIC} \
           --partitions 6 \
           --replication-factor 3 \
           --config min.insync.replicas=2 \
@@ -188,20 +187,54 @@ services:
         kafka-topics --bootstrap-server eco_kafka_1:9092 \
           --command-config /tmp/admin.properties \
           --describe \
-          --topic environment.weather.telemetry.live,environment.weather.telemetry.raw,environment.weather.telemetry.history
+          --topic ${KAFKA_WEATHER_LIVE_TOPIC},${KAFKA_WEATHER_RAW_TOPIC},${KAFKA_WEATHER_HISTORY_TOPIC}
 
-        echo "📡 Announcing secure Apache Kafka Broker to Consul Discovery catalog..."
+        echo "📡 Announcing Kafka Broker 1 to Consul..."
         curl -s --request PUT \
-          --url http://eco_consul:8500/v1/agent/service/register \
+        --url ${CONSUL_URL} \
+        --header 'Content-Type: application/json' \
+        --data '{
+          "ID": "kafka-broker-1",
+          "Name": "kafka",
+          "Tags": ["secure", "node-1"],
+          "Address": "eco_kafka_1",
+          "Port": 9094,
+          "Check": {
+            "TCP": "eco_kafka_1:9094",
+            "Interval": "10s",
+            "Timeout": "5s"
+          }
+        }'
+        
+        echo "📡 Announcing Kafka Broker 2 to Consul..."
+        curl -s --request PUT \
+          --url ${CONSUL_URL} \
           --header 'Content-Type: application/json' \
           --data '{
-            "ID": "kafka-broker-1",
+            "ID": "kafka-broker-2",
             "Name": "kafka",
-            "Tags": ["secure", "message-broker", "kraft"],
-            "Address": "eco_kafka_1",
-            "Port": 9092,
+            "Tags": ["secure", "node-2"],
+            "Address": "eco_kafka_2",
+            "Port": 9194,
             "Check": {
-              "TCP": "eco_kafka_1:9092",
+              "TCP": "eco_kafka_2:9194",
+              "Interval": "10s",
+              "Timeout": "5s"
+            }
+        }'
+        
+        echo "📡 Announcing Kafka Broker 3 to Consul..."
+        curl -s --request PUT \
+          --url ${CONSUL_URL} \
+          --header 'Content-Type: application/json' \
+          --data '{
+            "ID": "kafka-broker-3",
+            "Name": "kafka",
+            "Tags": ["secure", "node-3"],
+            "Address": "eco_kafka_3",
+            "Port": 9294,
+            "Check": {
+              "TCP": "eco_kafka_3:9294",
               "Interval": "10s",
               "Timeout": "5s"
             }
@@ -209,7 +242,7 @@ services:
 
         echo "📡 Announcing Confluent Schema Registry to Consul Discovery catalog..."
         curl -s --request PUT \
-          --url http://eco_consul:8500/v1/agent/service/register \
+          --url ${CONSUL_URL} \
           --header 'Content-Type: application/json' \
           --data '{
             "ID": "schema-registry-1",
@@ -218,7 +251,7 @@ services:
             "Address": "eco_schema_registry",
             "Port": 8085,
             "Check": {
-              "HTTP": "http://eco_schema_registry:8081/",
+              "TCP": "eco_schema_registry:8081",
               "Interval": "10s",
               "Timeout": "5s"
             }
@@ -226,7 +259,7 @@ services:
 
         echo "📡 Announcing Vector Ingestion Sidecar to Consul Discovery catalog..."
         curl -s --request PUT \
-          --url http://eco_consul:8500/v1/agent/service/register \
+          --url ${CONSUL_URL} \
           --header 'Content-Type: application/json' \
           --data '{
             "ID": "vector-sidecar-1",
@@ -240,7 +273,24 @@ services:
               "Timeout": "5s"
             }
           }'
-
+        
+        echo "📡 Announcing Redis Cache to Consul Discovery catalog..."
+        curl -s --request PUT \
+          --url ${CONSUL_URL} \
+          --header 'Content-Type: application/json' \
+          --data '{
+            "ID": "redis-cache-1",
+            "Name": "redis",
+            "Tags": ["cache", "reactive-state", "rocksdb-mirror"],
+            "Address": "eco_redis",
+            "Port": 6379,
+            "Check": {
+              "TCP": "eco_redis:6379",
+              "Interval": "10s",
+              "Timeout": "5s"
+            }
+          }'  
+        
         echo "✅ Infrastructure discovery sync sequence complete."
 
   

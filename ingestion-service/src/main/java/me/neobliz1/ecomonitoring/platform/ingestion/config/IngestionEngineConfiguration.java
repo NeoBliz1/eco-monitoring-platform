@@ -2,24 +2,31 @@ package me.neobliz1.ecomonitoring.platform.ingestion.config;
 
 import io.grpc.ManagedChannel;
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
+import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
+import me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils;
+import me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils.ServiceAddressRecord;
 import me.neobliz1.ecomonitoring.platform.ingestion.controller.ReactiveValidationWebExceptionHandler;
 import me.neobliz1.ecomonitoring.platform.ingestion.service.TelemetryIngestionService;
 import me.neobliz1.ecomonitoring.platform.ingestion.service.impl.TelemetryIngestionServiceImpl;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
+import org.springframework.core.env.ConfigurableEnvironment;
 import vector.VectorGrpc;
 
 import java.util.concurrent.TimeUnit;
 
 @Configuration
+@RequiredArgsConstructor
 public class IngestionEngineConfiguration {
 
-    @Value("${vector.sidecar.host}")
-    private String host;
-    @Value("${vector.sidecar.port}")
-    private int port;
+    private final DiscoveryClient discoveryClient;
+
+    @Value("${VECTOR_SERVICE_NAME}")
+    private String vectorServiceName;
 
     @Bean
     public TelemetryIngestionService telemetryIngestionService(VectorGrpc.VectorStub reactiveStub,
@@ -28,8 +35,10 @@ public class IngestionEngineConfiguration {
     }
 
     @Bean(destroyMethod = "shutdown")
-    public ManagedChannel vectorManagedChannel() {
-        return NettyChannelBuilder.forAddress(host, port)
+    public ManagedChannel vectorManagedChannel(@NonNull ConfigurableEnvironment environment) {
+        ServiceAddressRecord serviceAddress = PlatformCommonUtils.discoverServiceAddressFromConsulServerByName(discoveryClient,
+                environment, vectorServiceName);
+        return NettyChannelBuilder.forAddress(serviceAddress.resolvedHost(), serviceAddress.resolvedPort())
                 .usePlaintext()
                 .keepAliveTime(30, TimeUnit.SECONDS)
                 .build();
