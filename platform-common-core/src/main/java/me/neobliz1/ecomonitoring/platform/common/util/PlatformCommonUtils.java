@@ -12,15 +12,15 @@ import java.util.List;
 @UtilityClass
 public class PlatformCommonUtils {
 
-    public static final String RESOLVED_HOST = "127.0.0.1";
+    public static final String LOCAL_HOST = "127.0.0.1";
     public static final String DEVELOPMENT_PROFILE = "dev";
 
-    public ServiceAddressRecord discoverServiceAddressFromConsulServerByName(DiscoveryClient discoveryClient,
+    public static ServiceAddressRecord discoverServiceAddressFromConsulServerByName(DiscoveryClient discoveryClient,
                                                                              ConfigurableEnvironment environment,
                                                                              String serviceName) {
         List<ServiceInstance> instances = discoveryClient.getInstances(serviceName);
 
-        String resolvedHost = RESOLVED_HOST;
+        String resolvedHost = LOCAL_HOST;
         int resolvedPort;
 
         if(!instances.isEmpty()) {
@@ -35,15 +35,22 @@ public class PlatformCommonUtils {
         return new ServiceAddressRecord(resolvedHost, resolvedPort);
     }
 
-    public List<String> discoverServiceAddressesFromConsulServerByName(DiscoveryClient discoveryClient,
-                                                                       ConfigurableEnvironment environment,
-                                                                       String serviceName) {
-        return discoveryClient.getInstances(serviceName).stream()
+    public static List<String> discoverServiceAddressesFromConsulServerByName(
+            DiscoveryClient discoveryClient,
+            ConfigurableEnvironment environment,
+            String serviceName) {
+
+        List<ServiceInstance> instances = discoveryClient.getInstances(serviceName);
+
+        if(instances.isEmpty()) {
+            throw new ServiceInstanceNotFoundException(serviceName);
+        }
+
+        boolean isDevelopment = environment.acceptsProfiles(Profiles.of(DEVELOPMENT_PROFILE));
+
+        return instances.stream()
                 .map(instance -> {
-                    String host = RESOLVED_HOST;
-                    if(!environment.acceptsProfiles(Profiles.of(DEVELOPMENT_PROFILE))) {
-                        host = instance.getHost();
-                    }
+                    String host = isDevelopment?LOCAL_HOST:instance.getHost();
                     return host+":"+instance.getPort();
                 })
                 .toList();

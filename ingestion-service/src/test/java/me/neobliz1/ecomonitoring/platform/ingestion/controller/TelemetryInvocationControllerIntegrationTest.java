@@ -1,13 +1,13 @@
 package me.neobliz1.ecomonitoring.platform.ingestion.controller;
 
-import static me.neobliz1.ecomonitoring.platform.ingestion.util.TestUtils.REACTIVE_MONO_URL;
-import static me.neobliz1.ecomonitoring.platform.ingestion.util.TestUtils.SYNC_SINGLE_URL;
-import static me.neobliz1.ecomonitoring.platform.ingestion.util.TestUtils.createValidBase;
-import static me.neobliz1.ecomonitoring.platform.ingestion.util.TestUtils.getConsumerConf;
-import static me.neobliz1.ecomonitoring.platform.ingestion.util.TestUtils.performValidPost;
+import static me.neobliz1.ecomonitoring.platform.common.util.WeatherTestUtils.REACTIVE_MONO_URL;
+import static me.neobliz1.ecomonitoring.platform.common.util.WeatherTestUtils.SYNC_SINGLE_URL;
+import static me.neobliz1.ecomonitoring.platform.common.util.WeatherTestUtils.createValidBase;
+import static me.neobliz1.ecomonitoring.platform.common.util.WeatherTestUtils.performValidPost;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import me.neobliz1.ecomonitoring.platform.common.serialization.WeatherPacketDeserializer;
+import me.neobliz1.ecomonitoring.platform.common.util.WeatherTestUtils;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -53,7 +53,7 @@ public class TelemetryInvocationControllerIntegrationTest {
 
     @BeforeEach
     public void setUp() {
-        Map<String, Object> conf = getConsumerConf(kafkaClient, kafkaClientPwd, kafkaServer);
+        Map<String, Object> conf = WeatherTestUtils.getConsumerConf(kafkaClient, kafkaClientPwd, kafkaServer);
 
         consumer = new KafkaConsumer<>(conf, new StringDeserializer(), new WeatherPacketDeserializer());
 

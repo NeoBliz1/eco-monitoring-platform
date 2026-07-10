@@ -1,0 +1,17 @@
+<component name="ProjectRunConfigurationManager">
+    <configuration default="false" name="AnalysisBootEngine" type="SpringBootApplicationConfigurationType"
+                   factoryName="Spring Boot" nameIsGenerated="true">
+        <option name="ACTIVE_PROFILES" value="dev"/>
+        <module name="analysis-service"/>
+        <option name="SPRING_BOOT_MAIN_CLASS" value="me.neobliz1.ecomonitoring.platform.analysis.AnalysisBootEngine"/>
+        <extension name="coverage">
+            <pattern>
+                <option name="PATTERN" value="me.neobliz1.ecomonitoring.platform.analysis.*"/>
+                <option name="ENABLED" value="true"/>
+            </pattern>
+        </extension>
+        <method v="2">
+            <option name="Make" enabled="true"/>
+        </method>
+    </configuration>
+</component>

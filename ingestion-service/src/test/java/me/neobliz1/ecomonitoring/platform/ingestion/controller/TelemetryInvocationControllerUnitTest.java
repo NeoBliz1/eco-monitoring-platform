@@ -1,7 +1,7 @@
 package me.neobliz1.ecomonitoring.platform.ingestion.controller;
 
-import static me.neobliz1.ecomonitoring.platform.ingestion.util.TestUtils.STATION_ID;
-import static me.neobliz1.ecomonitoring.platform.ingestion.util.TestUtils.createValidBase;
+import static me.neobliz1.ecomonitoring.platform.common.util.WeatherTestUtils.STATION_ID;
+import static me.neobliz1.ecomonitoring.platform.common.util.WeatherTestUtils.createValidBase;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;

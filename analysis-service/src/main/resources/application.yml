@@ -28,9 +28,6 @@ spring:
     streams:
       application-id: "eco-analysis-streams-pipeline"
       properties:
-        schema:
-          registry:
-            url: ${SCHEMA_REGISTRY_URL}
         processing.guarantee: "exactly_once_v2"
         isolation.level: "read_committed"
         commit.interval.ms: 100

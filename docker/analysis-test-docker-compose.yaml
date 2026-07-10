@@ -1,0 +1,21 @@
+include:
+  - ./compose/kafka.yaml
+  - ./compose/schema-registry.yaml
+  - ./compose/analysis-test/consul.yaml
+  - ./compose/redis.yaml
+
+volumes:
+  vector_disk_buffer:
+    driver: local
+
+secrets:
+  kafka_server_jaas:
+    file: secrets/scram/kafka_server_jaas.conf
+  schema_registry_jaas:
+    file: secrets/scram/schema_registry_jaas.conf
+  redis_password:
+    file: secrets/redis/redis_password.txt
+
+networks:
+  eco-net:
+    driver: bridge

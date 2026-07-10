@@ -53,8 +53,10 @@ public class TelemetryAnalysisServiceImpl implements TelemetryAnalysisService {
     private String kafkaAnalysisRawTopic;
     @Value("${spring.kafka.topic.weather-history}")
     private String kafkaAnalysisHistoryTopic;
-    @Value("${spring.kafka.streams.scheduler.name.aggregation-processor.interval}")
+    @Value("${spring.kafka.streams.pipeline.name.aggregation-processor.interval}")
     private Integer interval;
+    @Value("${spring.kafka.streams.pipeline.name.deduplication-processor.interval}")
+    private Long deduplicationInterval;
     @Value("${spring.kafka.streams.properties.schema.registry.url}")
     private String schemaRegistryUrl;
 
@@ -67,9 +69,14 @@ public class TelemetryAnalysisServiceImpl implements TelemetryAnalysisService {
         weatherPacketSerde.configure(serdeConfig, false);
         // Register State Stores globally to the Topology
         StoreBuilder<WindowStore<String, String>> dedupStoreBuilder = Stores.windowStoreBuilder(
-                Stores.persistentWindowStore(TelemetryDeduplicationProcessor.DEDUPLICATE_ROCKS_DB,
-                        Duration.ofMinutes(10), Duration.ofMinutes(10), false),
-                Serdes.String(), Serdes.String());
+                Stores.persistentWindowStore(
+                        TelemetryDeduplicationProcessor.DEDUPLICATE_ROCKS_DB,
+                        Duration.ofMinutes(10),
+                        Duration.ofMinutes(10),
+                        false
+                ),
+                Serdes.String(), Serdes.String()
+        );
         StoreBuilder<KeyValueStore<String, WeatherPacket>> accumStoreBuilder = Stores.keyValueStoreBuilder(
                 Stores.persistentKeyValueStore(ZERO_LOSS_ACCUMULATION_STORE),
                 Serdes.String(), weatherPacketSerde);
@@ -83,7 +90,7 @@ public class TelemetryAnalysisServiceImpl implements TelemetryAnalysisService {
                 Consumed.with(Serdes.String(), weatherPacketSerde)
         );
         KStream<String, WeatherPacket> deduplicatedStream = rawInputStream.process(
-                TelemetryDeduplicationProcessor::new,
+                () -> new TelemetryDeduplicationProcessor(deduplicationInterval),
                 TelemetryDeduplicationProcessor.DEDUPLICATE_ROCKS_DB
         );
         deduplicatedStream.to(

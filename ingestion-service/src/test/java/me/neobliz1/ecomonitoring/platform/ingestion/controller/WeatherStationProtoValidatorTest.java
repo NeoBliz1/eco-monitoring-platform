@@ -1,10 +1,10 @@
 package me.neobliz1.ecomonitoring.platform.ingestion.controller;
 
-import static me.neobliz1.ecomonitoring.platform.ingestion.util.TestUtils.REACTIVE_MONO_URL;
-import static me.neobliz1.ecomonitoring.platform.ingestion.util.TestUtils.SYNC_SINGLE_URL;
-import static me.neobliz1.ecomonitoring.platform.ingestion.util.TestUtils.createValidBase;
-import static me.neobliz1.ecomonitoring.platform.ingestion.util.TestUtils.performInvalidPost;
-import static me.neobliz1.ecomonitoring.platform.ingestion.util.TestUtils.performValidPost;
+import static me.neobliz1.ecomonitoring.platform.common.util.WeatherTestUtils.REACTIVE_MONO_URL;
+import static me.neobliz1.ecomonitoring.platform.common.util.WeatherTestUtils.SYNC_SINGLE_URL;
+import static me.neobliz1.ecomonitoring.platform.common.util.WeatherTestUtils.createValidBase;
+import static me.neobliz1.ecomonitoring.platform.common.util.WeatherTestUtils.performInvalidPost;
+import static me.neobliz1.ecomonitoring.platform.common.util.WeatherTestUtils.performValidPost;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
@@ -33,6 +33,7 @@ import reactor.core.publisher.Mono;
 public class WeatherStationProtoValidatorTest {
 
     @MockitoBean
+    @SuppressWarnings("unused")
     private TelemetryIngestionService telemetryService;
 
     @Autowired

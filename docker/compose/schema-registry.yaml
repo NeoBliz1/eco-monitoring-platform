@@ -1,7 +1,6 @@
 services:
   schema-registry:
     image: confluentinc/cp-schema-registry:8.2.0
-    container_name: eco_schema_registry
     ports:
       - "8085:8081"
     networks:
@@ -15,10 +14,15 @@ services:
         condition: service_healthy
     secrets:
       - schema_registry_jaas
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8081/subjects" ]
+      interval: 3s
+      timeout: 3s
+      retries: 10
     environment:
-      SCHEMA_REGISTRY_HOST_NAME: eco_schema_registry
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
       SCHEMA_REGISTRY_LISTENERS: "http://0.0.0.0:8081"
-      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: "SASL_PLAINTEXT://eco_kafka_1:9092,SASL_PLAINTEXT://eco_kafka_2:9092,SASL_PLAINTEXT://eco_kafka_3:9092"
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: "SASL_PLAINTEXT://kafka-1:9092,SASL_PLAINTEXT://kafka-2:9092,SASL_PLAINTEXT://kafka-3:9092"
       SCHEMA_REGISTRY_KAFKASTORE_TOPIC_REPLICATION_FACTOR: 3
       SCHEMA_REGISTRY_KAFKASTORE_SECURITY_PROTOCOL: SASL_PLAINTEXT
       SCHEMA_REGISTRY_KAFKASTORE_SASL_MECHANISM: SCRAM-SHA-512

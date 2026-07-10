@@ -1,6 +1,7 @@
 package me.neobliz1.ecomonitoring.platform.analysis.processor;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import me.neobliz1.ecomonitoring.platform.analysis.service.TelemetryAnalysisService;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
@@ -18,6 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @RequiredArgsConstructor
 public class TelemetryAggregationProcessor implements Processor<String, WeatherPacket, String, WeatherMap> {
 
@@ -35,7 +37,7 @@ public class TelemetryAggregationProcessor implements Processor<String, WeatherP
         this.accumStore = this.context.getStateStore(ZERO_LOSS_ACCUMULATION_STORE);
 
         this.context.schedule(
-                Duration.ofMinutes(interval),
+                Duration.ofSeconds(interval),
                 PunctuationType.STREAM_TIME,
                 this::flushAccumulatedWindows
         );
@@ -75,14 +77,19 @@ public class TelemetryAggregationProcessor implements Processor<String, WeatherP
         try(KeyValueIterator<String, WeatherPacket> iterator = accumStore.range(startRangeKey, endRangeKey)) {
             while(iterator.hasNext()) {
                 KeyValue<String, WeatherPacket> entry = iterator.next();
-                String[] parts = entry.key.split("_");
+                String underscore = "_";
+                String[] parts = entry.key.split(underscore);
                 long bucketTime = Long.parseLong(parts[0]);
 
                 if(bucketTime>=currentWallClockFloor) {
                     continue;
                 }
-
-                String spatialKey = parts[0]+"_"+parts[1];
+                String spatialKey = parts[0]
+                        +underscore
+                        +parts[1]
+                        +underscore
+                        +parts[2];
+                log.info("Run flushAccumulatedWindows {}", spatialKey);
 
                 extractionMatrix.computeIfAbsent(bucketTime, k -> new HashMap<>())
                         .computeIfAbsent(spatialKey, k -> new ArrayList<>())

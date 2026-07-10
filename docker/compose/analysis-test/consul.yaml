@@ -21,8 +21,8 @@ services:
     networks:
       - eco-net
     volumes:
-      - ./platform-global-properties.yaml:/tmp/platform-global-properties.yaml:ro
-      - ./platform-analysis-properties.yaml:/tmp/platform-analysis-properties.yaml:ro
+      - ./../platform-global-properties.yaml:/tmp/platform-global-properties.yaml:ro
+      - ./test-platform-analysis-properties.yaml:/tmp/platform-analysis-properties.yaml:ro
     entrypoint: [ "sh", "-c" ]
     command:
       - |
@@ -36,3 +36,4 @@ services:
 
         echo "✅ All configurations loaded successfully into Consul KV."
   
+

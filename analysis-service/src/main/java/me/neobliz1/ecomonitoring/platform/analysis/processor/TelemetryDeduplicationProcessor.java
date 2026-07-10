@@ -12,10 +12,10 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 public class TelemetryDeduplicationProcessor implements Processor<String, WeatherPacket, String, WeatherPacket> {
 
     public static final String DEDUPLICATE_ROCKS_DB = "embedded-deduplicate-rocks-db";
-    private static final long DEDUPLICATION_INTERVAL_MS = 600_000L; // 10 min
 
     private WindowStore<String, String> deduplicateStore;
     private ProcessorContext<String, WeatherPacket> context;
+    private final long deduplication_interval;
 
     @Override
     public void init(ProcessorContext<String, WeatherPacket> context) {
@@ -36,8 +36,8 @@ public class TelemetryDeduplicationProcessor implements Processor<String, Weathe
         // 1. Check local sliding window for duplicates
         try(WindowStoreIterator<String> iterator = deduplicateStore.fetch(
                 uniqueTxId,
-                recordTimestamp-DEDUPLICATION_INTERVAL_MS,
-                recordTimestamp+DEDUPLICATION_INTERVAL_MS)) {
+                recordTimestamp-deduplication_interval,
+                recordTimestamp+deduplication_interval)) {
             if(iterator.hasNext()) {
                 return; // Silently drop record to satisfy exactly-once semantics
             }

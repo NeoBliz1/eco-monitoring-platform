@@ -1,7 +1,6 @@
 services:
   jaeger-tracing:
     image: jaegertracing/all-in-one:1.76.0
-    container_name: eco_jaeger
     ports:
       - "16686:16686"
       - "4317:4317"

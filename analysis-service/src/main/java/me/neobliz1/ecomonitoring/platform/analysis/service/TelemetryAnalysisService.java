@@ -14,7 +14,6 @@ public interface TelemetryAnalysisService {
 
     KStream<String, WeatherPacket> buildTopology(StreamsBuilder streamsBuilder);
     void updateRealTimeSlidingWindow(WeatherPacket packet, double latGrid, double lonGrid);
-
     void persistAggregatedHistory(Map<Long, Map<String, List<WeatherPacket>>> extractionMatrix, ProcessorContext<String, WeatherMap> context,
                                   long currentStreamTime);
     Optional<String> getLatestFiveMinuteWeatherMapJson();
