@@ -1,7 +1,11 @@
 package me.neobliz1.ecomonitoring.platform.analysis.processor;
 
+import static me.neobliz1.ecomonitoring.platform.analysis.constants.AnalysisConstants.ZERO_LOSS_ACCUMULATION_STORE;
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.HASHTAG_DELIMITER;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import me.neobliz1.ecomonitoring.platform.analysis.constants.AnalysisConstants;
 import me.neobliz1.ecomonitoring.platform.analysis.service.TelemetryAnalysisService;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
@@ -14,22 +18,22 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 @Slf4j
 @RequiredArgsConstructor
 public class TelemetryAggregationProcessor implements Processor<String, WeatherPacket, String, WeatherMap> {
 
-    public static final String ZERO_LOSS_ACCUMULATION_STORE = "zero-loss-accumulation-store";
-    private static final long BUFFERING_INTERVAL_MS = 300_000L; // 5 min
-
     private final TelemetryAnalysisService service;
-    private final int interval;
+    private final int secondsPerInterval;
     private KeyValueStore<String, WeatherPacket> accumStore;
     private ProcessorContext<String, WeatherMap> context;
+    private long lastStreamTime = Instant.now().toEpochMilli();
 
     @Override
     public void init(ProcessorContext<String, WeatherMap> context) {
@@ -37,7 +41,7 @@ public class TelemetryAggregationProcessor implements Processor<String, WeatherP
         this.accumStore = this.context.getStateStore(ZERO_LOSS_ACCUMULATION_STORE);
 
         this.context.schedule(
-                Duration.ofSeconds(interval),
+                Duration.ofSeconds(secondsPerInterval),
                 PunctuationType.STREAM_TIME,
                 this::flushAccumulatedWindows
         );
@@ -50,62 +54,54 @@ public class TelemetryAggregationProcessor implements Processor<String, WeatherP
         }
 
         WeatherPacket packet = record.value();
-        long packetTimestamp = packet.getTimestamp();
-        long utcFiveMinuteBucketFloor = packetTimestamp-(packetTimestamp%BUFFERING_INTERVAL_MS);
 
+        // record.key() is already pre-formatted as "00001783949700000#55.0#-61.0" by selectKey()
+        String uniqueTxId = packet.getStationId()+":"+packet.getTimestamp();
+        String storageKey = String.format("%017d", service.getAggregationBucketFloorInterval(packet.getTimestamp()))
+                +HASHTAG_DELIMITER+record.key()+HASHTAG_DELIMITER+uniqueTxId;
+        log.debug("Storing taskId {}", this.context.taskId().toString());
+        // Persist records inside the transactional boundary local state store
+        accumStore.put(storageKey, packet);
         double latGrid = Math.round(packet.getLocation().getLatitude()*10.0)/10.0;
         double lonGrid = Math.round(packet.getLocation().getLongitude()*10.0)/10.0;
-        String uniqueTxId = packet.getStationId()+":"+packetTimestamp;
-
-        // 1. Dynamic storage key mapping ensuring optimal range-scans
-        String storageKey = String.format("%017d_%.1f_%.1f_%s", utcFiveMinuteBucketFloor, latGrid, lonGrid, uniqueTxId);
-        accumStore.put(storageKey, packet);
-
-        // 2. Real-time idempotent cache write-through target
         this.service.updateRealTimeSlidingWindow(packet, latGrid, lonGrid);
     }
 
-    private void flushAccumulatedWindows(long currentStreamTime) {
-        long currentWallClockFloor = (currentStreamTime/BUFFERING_INTERVAL_MS)*BUFFERING_INTERVAL_MS;
-
-        String startRangeKey = String.format("%017d", 0);
-        String endRangeKey = String.format("%017d", currentWallClockFloor);
-
-        List<String> keysToRemove = new ArrayList<>();
+    private void flushAccumulatedWindows(long currentStreamTimeInMillis) {
+        long currentStreamTimeMs = this.context.currentStreamTimeMs();
+        if(currentStreamTimeMs<lastStreamTime) {
+            return;
+        }
+        lastStreamTime = currentStreamTimeMs;
+        long currentWindowFloor = service.getAggregationBucketFloorInterval(currentStreamTimeInMillis);
+        String startRangeKey = String.format(AnalysisConstants.UTC_TIMESTAMP_FORMAT, 0);
+        String endRangeKey = String.format(AnalysisConstants.UTC_TIMESTAMP_FORMAT, currentWindowFloor)+"\uFFFF";
+        List<String> keysToRemove = new CopyOnWriteArrayList<>();
         Map<Long, Map<String, List<WeatherPacket>>> extractionMatrix = new HashMap<>();
-
         try(KeyValueIterator<String, WeatherPacket> iterator = accumStore.range(startRangeKey, endRangeKey)) {
             while(iterator.hasNext()) {
                 KeyValue<String, WeatherPacket> entry = iterator.next();
-                String underscore = "_";
-                String[] parts = entry.key.split(underscore);
+                String key = entry.key;
+
+                String[] parts = key.split(HASHTAG_DELIMITER);
                 long bucketTime = Long.parseLong(parts[0]);
 
-                if(bucketTime>=currentWallClockFloor) {
+                if(bucketTime>currentWindowFloor) {
                     continue;
                 }
-                String spatialKey = parts[0]
-                        +underscore
-                        +parts[1]
-                        +underscore
-                        +parts[2];
-                log.info("Run flushAccumulatedWindows {}", spatialKey);
-
+                //UTS timestamp + latitude + longitude
+                String spatialKey = parts[0]+HASHTAG_DELIMITER+parts[1]+HASHTAG_DELIMITER+parts[2];
+                log.debug("Run flushAccumulatedWindows {}", spatialKey);
                 extractionMatrix.computeIfAbsent(bucketTime, k -> new HashMap<>())
                         .computeIfAbsent(spatialKey, k -> new ArrayList<>())
                         .add(entry.value);
-
-                keysToRemove.add(entry.key);
+                keysToRemove.add(key);
             }
         }
-
-        // Purge collected keys atomically inside the current transaction
-        keysToRemove.forEach(accumStore::delete);
-
-        // Hand off structured calculations safely to the service layer for history topic emission
+        // Forward calculations downstream safely within the active Kafka stream execution runtime task context
         if(!extractionMatrix.isEmpty()) {
-            this.service.persistAggregatedHistory(extractionMatrix, this.context, currentWallClockFloor);
+            this.service.persistAggregatedHistory(extractionMatrix, this.context, currentWindowFloor);
+            keysToRemove.forEach(accumStore::delete);
         }
     }
 }
-

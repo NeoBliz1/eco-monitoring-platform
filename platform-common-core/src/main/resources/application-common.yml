@@ -1,0 +1,7 @@
+spring:
+  messages:
+    basename: exceptionsDescription
+    encoding: UTF-8
+    fallback-to-system-locale: false
+    default-locale: en
+    use-code-as-default-message: false

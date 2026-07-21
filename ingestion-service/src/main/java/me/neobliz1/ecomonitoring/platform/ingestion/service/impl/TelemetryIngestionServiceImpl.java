@@ -1,14 +1,23 @@
 package me.neobliz1.ecomonitoring.platform.ingestion.service.impl;
 
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.SCHEMA_REGISTRY_URL;
+
 import com.google.protobuf.ByteString;
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
+import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants;
 import me.neobliz1.ecomonitoring.platform.ingestion.service.TelemetryIngestionService;
 import me.neobliz1.ecomonitoring.platform.model.exception.PipelineTimeoutException;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import reactor.core.publisher.Mono;
@@ -16,9 +25,13 @@ import vector.EventWrapper;
 import vector.Log;
 import vector.PushEventsRequest;
 import vector.PushEventsResponse;
-import vector.Value;
 import vector.ValueMap;
 import vector.VectorGrpc;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -26,6 +39,22 @@ public class TelemetryIngestionServiceImpl implements TelemetryIngestionService 
 
     private final VectorGrpc.VectorStub asyncStub;
     private final VectorGrpc.VectorBlockingStub blockingStub;
+    private SchemaRegistryClient schemaRegistryClient;
+
+    @Value("${spring.kafka.streams.properties.schema.registry.url}")
+    private String schemaRegistryUrl;
+    @Value("${spring.kafka.topic.weather-live}")
+    private String kafkaIngestionLiveTopic;
+
+    @PostConstruct
+    public void init() {
+        this.schemaRegistryClient = new CachedSchemaRegistryClient(
+                schemaRegistryUrl,
+                100,
+                List.of(new ProtobufSchemaProvider()),
+                Collections.emptyMap()
+        );
+    }
 
     @Override
     public Mono<Boolean> processTelemetryPacket(WeatherPacket packet) {
@@ -65,29 +94,28 @@ public class TelemetryIngestionServiceImpl implements TelemetryIngestionService 
     }
 
     private PushEventsRequest buildVectorPushRequest(WeatherPacket packet) {
-        // 1. Assign the payload to raw_bytes (field 1)
-        Value byteValue = Value.newBuilder()
-                .setRawBytes(ByteString.copyFrom(packet.toByteArray()))
+        byte[] verifiedConfluentBytes;
+        Map<String, Object> serializerConfig = new HashMap<>();
+        serializerConfig.put(SCHEMA_REGISTRY_URL, schemaRegistryUrl);
+        try (KafkaProtobufSerializer<WeatherPacket> serializer = new KafkaProtobufSerializer<>(schemaRegistryClient)) {
+            serializer.configure(serializerConfig, false);
+            verifiedConfluentBytes = serializer.serialize(kafkaIngestionLiveTopic, packet);
+        }
+        vector.Value byteValue = vector.Value.newBuilder()
+                .setRawBytes(ByteString.copyFrom(verifiedConfluentBytes))
                 .build();
-
-        // 2. Wrap it inside the log payload's map fields
         ValueMap fieldsMap = ValueMap.newBuilder()
-                .putFields("raw_protobuf_packet", byteValue)
+                .putFields(PlatformConstants.RAW_PROTOBUF_PACKET, byteValue)
                 .build();
-
-        Value logMapValue = Value.newBuilder()
+        vector.Value logMapValue = vector.Value.newBuilder()
                 .setMap(fieldsMap)
                 .build();
-
-        // 3. Attach the value map container directly to field 2 of the Log event
         Log vectorLog = Log.newBuilder()
                 .setValue(logMapValue)
                 .build();
-
         EventWrapper eventWrapper = EventWrapper.newBuilder()
                 .setLog(vectorLog)
                 .build();
-
         return PushEventsRequest.newBuilder()
                 .addEvents(eventWrapper)
                 .build();

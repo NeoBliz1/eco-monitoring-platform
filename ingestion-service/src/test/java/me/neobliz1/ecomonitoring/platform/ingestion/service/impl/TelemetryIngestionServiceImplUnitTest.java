@@ -1,28 +1,38 @@
 package me.neobliz1.ecomonitoring.platform.ingestion.service.impl;
 
-import static me.neobliz1.ecomonitoring.platform.model.exception.ErrorCode.PIPELINE_TIMEOUT;
+import static me.neobliz1.ecomonitoring.platform.model.exception.EcoPlatformErrorCode.PIPELINE_TIMEOUT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import me.neobliz1.ecomonitoring.platform.model.exception.PipelineTimeoutException;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
+import com.google.common.base.Ticker;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import vector.PushEventsRequest;
 import vector.PushEventsResponse;
 import vector.VectorGrpc;
+
+import java.io.IOException;
 
 @ExtendWith(MockitoExtension.class)
 public class TelemetryIngestionServiceImplUnitTest {
@@ -31,8 +41,28 @@ public class TelemetryIngestionServiceImplUnitTest {
     private VectorGrpc.VectorStub asyncStub;
     @Mock
     private VectorGrpc.VectorBlockingStub blockingStub;
+    @Mock
+    private SchemaRegistryClient mockSchemaRegistryClient;
     @InjectMocks
     private TelemetryIngestionServiceImpl service;
+
+    @BeforeEach
+    void setUp() throws RestClientException, IOException {
+        ReflectionTestUtils.setField(service, "schemaRegistryUrl", "http://localhost:8085");
+        ReflectionTestUtils.setField(service, "kafkaIngestionLiveTopic", "environment.weather.telemetry.live");
+        ReflectionTestUtils.setField(service, "schemaRegistryClient", mockSchemaRegistryClient);
+        when(mockSchemaRegistryClient.ticker()).thenReturn(Ticker.systemTicker());
+        RegisterSchemaResponse mockResponse = new RegisterSchemaResponse();
+        mockResponse.setId(1);
+        mockResponse.setVersion(1);
+        mockResponse.setSchema("syntax = \"proto3\"; message Mock {}");
+        when(mockSchemaRegistryClient.registerWithResponse(
+                anyString(),
+                any(io.confluent.kafka.schemaregistry.ParsedSchema.class),
+                anyBoolean(),
+                anyBoolean()
+        )).thenReturn(mockResponse);
+    }
 
     @Test
     void shouldReturnMonoTrue_whenStreamTelemetrySucceedsAndResponseIsAccepted() {
@@ -94,6 +124,6 @@ public class TelemetryIngestionServiceImplUnitTest {
 
         PipelineTimeoutException exception = assertThrows(PipelineTimeoutException.class, () -> service.processTelemetryPacketVirtual(packet));
 
-        assertEquals(PIPELINE_TIMEOUT.getCodeStr(), exception.getErrorCode().getCodeStr());
+        assertEquals(PIPELINE_TIMEOUT.getCodeStr(), exception.getEcoPlatformErrorCode().getCodeStr());
     }
 }

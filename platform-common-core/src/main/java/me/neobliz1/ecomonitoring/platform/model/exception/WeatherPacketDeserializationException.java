@@ -1,6 +1,6 @@
 package me.neobliz1.ecomonitoring.platform.model.exception;
 
-import static me.neobliz1.ecomonitoring.platform.model.exception.ErrorCode.WEATHER_PACKET_DESERIALIZATION_ERROR;
+import static me.neobliz1.ecomonitoring.platform.model.exception.EcoPlatformErrorCode.WEATHER_PACKET_DESERIALIZATION_ERROR;
 
 public class WeatherPacketDeserializationException extends BasePlatformException {
 

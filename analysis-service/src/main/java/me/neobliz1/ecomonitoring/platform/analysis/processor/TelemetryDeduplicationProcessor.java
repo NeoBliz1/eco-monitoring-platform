@@ -1,6 +1,9 @@
 package me.neobliz1.ecomonitoring.platform.analysis.processor;
 
+import static me.neobliz1.ecomonitoring.platform.analysis.constants.AnalysisConstants.DEDUPLICATE_ROCKS_DB;
+
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -8,10 +11,9 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
+@Slf4j
 @RequiredArgsConstructor
 public class TelemetryDeduplicationProcessor implements Processor<String, WeatherPacket, String, WeatherPacket> {
-
-    public static final String DEDUPLICATE_ROCKS_DB = "embedded-deduplicate-rocks-db";
 
     private WindowStore<String, String> deduplicateStore;
     private ProcessorContext<String, WeatherPacket> context;
@@ -39,11 +41,12 @@ public class TelemetryDeduplicationProcessor implements Processor<String, Weathe
                 recordTimestamp-deduplication_interval,
                 recordTimestamp+deduplication_interval)) {
             if(iterator.hasNext()) {
-                return; // Silently drop record to satisfy exactly-once semantics
+                log.warn("Duplicate record found for txId: {}", uniqueTxId);
+                return;
             }
         }
 
-        // 2. Mark as processed and forward down to intermediate topic (environment.weather.raw)
+        // 2. Mark as processed and forward down
         deduplicateStore.put(uniqueTxId, "COMMITTED", recordTimestamp);
         context.forward(record);
     }

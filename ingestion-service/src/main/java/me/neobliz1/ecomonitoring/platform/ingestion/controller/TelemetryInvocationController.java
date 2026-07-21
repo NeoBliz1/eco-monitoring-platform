@@ -1,5 +1,8 @@
 package me.neobliz1.ecomonitoring.platform.ingestion.controller;
 
+import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.BLOCKING_TELEMETRY_ENDPOINT_URI;
+import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.REACTIVE_TELEMETRY_ENDPOINT_URI;
+import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.TELEMETRY_URI;
 import static me.neobliz1.ecomonitoring.platform.ingestion.service.impl.TelemetryIngestionServiceImpl.getResponseEntity;
 
 import io.github.neobliz1.validproto.annotation.ValidProto;
@@ -24,12 +27,12 @@ import java.util.concurrent.TimeoutException;
 @ValidatedProto
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/telemetry")
+@RequestMapping(TELEMETRY_URI)
 public class TelemetryInvocationController {
 
     private final TelemetryIngestionService telemetryIngestionService;
 
-    @PostMapping(value = "/mono", consumes = MediaType.APPLICATION_PROTOBUF_VALUE)
+    @PostMapping(value = REACTIVE_TELEMETRY_ENDPOINT_URI, consumes = MediaType.APPLICATION_PROTOBUF_VALUE)
     public Mono<ResponseEntity<Void>> receivedReactiveSensorStationData(@ValidProto @RequestBody WeatherPacket packet) {
         return telemetryIngestionService.processTelemetryPacket(packet)
                 .timeout(Duration.ofMillis(200))
@@ -44,7 +47,7 @@ public class TelemetryInvocationController {
                 });
     }
 
-    @PostMapping(value = "/virtual", consumes = MediaType.APPLICATION_PROTOBUF_VALUE)
+    @PostMapping(value = BLOCKING_TELEMETRY_ENDPOINT_URI, consumes = MediaType.APPLICATION_PROTOBUF_VALUE)
     public ResponseEntity<Void> receivedSensorStationDataVirtual(@ValidProto @RequestBody WeatherPacket packet) {
         return getResponseEntity(telemetryIngestionService.processTelemetryPacketVirtual(packet));
     }

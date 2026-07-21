@@ -1,6 +1,6 @@
 package me.neobliz1.ecomonitoring.platform.model.exception;
 
-import static me.neobliz1.ecomonitoring.platform.model.exception.ErrorCode.REDIS_PASSWORD_NOT_SET;
+import static me.neobliz1.ecomonitoring.platform.model.exception.EcoPlatformErrorCode.REDIS_PASSWORD_NOT_SET;
 
 public class RedisPasswordNotSetException extends BasePlatformException {
 

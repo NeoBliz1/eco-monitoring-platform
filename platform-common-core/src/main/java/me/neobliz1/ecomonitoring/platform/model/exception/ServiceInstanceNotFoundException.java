@@ -1,6 +1,6 @@
 package me.neobliz1.ecomonitoring.platform.model.exception;
 
-import static me.neobliz1.ecomonitoring.platform.model.exception.ErrorCode.SERVICE_INSTANCE_NOT_FOUND;
+import static me.neobliz1.ecomonitoring.platform.model.exception.EcoPlatformErrorCode.SERVICE_INSTANCE_NOT_FOUND;
 
 public class ServiceInstanceNotFoundException extends BasePlatformException {
 

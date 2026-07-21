@@ -22,7 +22,7 @@ sinks:
   kafka_out:
     type: "kafka"
     inputs: [ "extract_pure_bytes" ]
-    bootstrap_servers: "eco_kafka_1:9092,eco_kafka_2:9092,eco_kafka_3:9092"
+    bootstrap_servers: "kafka-1:9092,kafka-2:9092,kafka-3:9092"
     topic: "environment.weather.telemetry.live"
     compression: "lz4"
     encoding:

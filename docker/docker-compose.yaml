@@ -4,7 +4,7 @@ include:
   - ./compose/consul.yaml
   - ./compose/jaeger.yaml
   - ./compose/redis.yaml
-  - ./compose/vector-sidecar.yaml
+  - ./compose/vector/vector-sidecar.yaml
 
 volumes:
   vector_disk_buffer:

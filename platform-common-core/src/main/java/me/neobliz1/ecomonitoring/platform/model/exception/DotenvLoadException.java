@@ -1,6 +1,6 @@
 package me.neobliz1.ecomonitoring.platform.model.exception;
 
-import static me.neobliz1.ecomonitoring.platform.model.exception.ErrorCode.ENV_FILE_LOAD_FAILED;
+import static me.neobliz1.ecomonitoring.platform.model.exception.EcoPlatformErrorCode.ENV_FILE_LOAD_FAILED;
 
 public class DotenvLoadException extends BasePlatformException {
 

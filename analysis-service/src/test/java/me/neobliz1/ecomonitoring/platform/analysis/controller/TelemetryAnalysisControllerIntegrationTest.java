@@ -1,0 +1,233 @@
+package me.neobliz1.ecomonitoring.platform.analysis.controller;
+
+import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.LATEST_WEATHER_MAP_ENDPOINT;
+import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.WEATHER_MAP_URI;
+import static org.hamcrest.Matchers.oneOf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import lombok.extern.slf4j.Slf4j;
+import me.neobliz1.ecomonitoring.platform.analysis.AnalysisBootEngine;
+import me.neobliz1.ecomonitoring.platform.analysis.AssertionTestHelpers;
+import me.neobliz1.ecomonitoring.platform.analysis.service.impl.BaseKafkaIntegrationTest;
+import me.neobliz1.ecomonitoring.platform.model.exception.EcoPlatformErrorCode;
+import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
+import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
+import org.jspecify.annotations.NonNull;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+import org.testcontainers.containers.ComposeContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+
+import java.time.Instant;
+
+@Slf4j
+@Testcontainers
+@AutoConfigureMockMvc
+@ActiveProfiles({ "dev", "common" })
+@SpringBootTest(classes = AnalysisBootEngine.class)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
+public class TelemetryAnalysisControllerIntegrationTest extends BaseKafkaIntegrationTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Container
+    @SuppressWarnings("unused")
+    public static final ComposeContainer ENVIRONMENT = getComposeContainer();
+
+    private long currentBucketFloor;
+    private final double testLat = 55.0;
+    private final double testLon = -61.0;
+
+    @BeforeEach
+    public void setup() throws Exception {
+        currentBucketFloor = getCurrentBucketFloor();
+        String stationId = "test-station-1";
+        WeatherPacket packet1 = createFullSensorPacket(stationId, currentBucketFloor + 1000, testLat, testLon);
+        WeatherPacket packet2 = createFullSensorPacket("test-station-2", currentBucketFloor + 2000, testLat + 0.05, testLon + 0.05);
+        
+        sendPacket(packet1);
+        sendPacket(packet2);
+        sendFlushPackage(stationId, currentBucketFloor, testLat, testLon);
+        
+        // Wait for the WeatherMap to be processed and stored in Redis
+        String gridCellKey = calculateGridCellKey(testLat, testLon);
+        WeatherMap map = findWeatherMapByGridCellAnBucketFloor(gridCellKey, currentBucketFloor);
+        AssertionTestHelpers.assertGridCellExists(map, gridCellKey);
+    }
+
+    @Test
+    public void shouldReturnWeatherMapWithValidData_whenValidRequest() throws Exception {
+        long targetTimestamp = currentBucketFloor + 300000; // Within the same bucket
+        String coordinatesSquare = getCoordinatesSquare();
+
+        mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
+                .param("targetTimestamp", String.valueOf(targetTimestamp))
+                .param("coordinates-square", coordinatesSquare)
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.timestamp_bucket").value(currentBucketFloor))
+                .andExpect(jsonPath("$.interval_minutes").value(10))
+                .andExpect(jsonPath("$.grid_cells").exists())
+                .andExpect(jsonPath("$.grid_cells..avg_temperature").value(22.5))
+                .andExpect(jsonPath("$.grid_cells..avg_humidity").value(55.0))
+                .andExpect(jsonPath("$.grid_cells..avg_pressure").value(1013.25));
+
+        mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
+                        .param("targetTimestamp", String.valueOf(Instant.now().toEpochMilli()))
+                        .param("coordinates-square", coordinatesSquare)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.timestamp_bucket").value(currentBucketFloor))
+                .andExpect(jsonPath("$.interval_minutes").value(10))
+                .andExpect(jsonPath("$.grid_cells").exists())
+                .andExpect(jsonPath("$.grid_cells..avg_temperature").value(22.5))
+                .andExpect(jsonPath("$.grid_cells..avg_humidity").value(55.0))
+                .andExpect(jsonPath("$.grid_cells..avg_pressure").value(1013.25));
+    }
+
+    @Test
+    public void shouldReturnNotFound_whenNoWeatherMapDataAvailable() throws Exception {
+        long targetTimestamp = currentBucketFloor + 86400000; // 24 hours later
+        String coordinatesSquare = getCoordinatesSquare();
+        String exMsg = "Weather map data not found for the requested time interval and coordinates.";
+
+        mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
+                        .param("targetTimestamp", String.valueOf(targetTimestamp))
+                        .param("coordinates-square", coordinatesSquare)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(EcoPlatformErrorCode.WEATHER_MAP_DATA_NOT_FOUND.getCodeStr()))
+                .andExpect(jsonPath("$.description").value(exMsg));
+    }
+
+    @Test
+    public void shouldReturnBadRequest_whenCoordinatesSquareEmpty() throws Exception {
+        String exMsg = "Invalid request parameters: getLatestFiveMinuteWeatherMapJson.arg1: "
+                + "Coordinates square cannot be empty, getLatestFiveMinuteWeatherMapJson.arg1: "
+                + "Coordinates square must contain exactly 4 parameters: minLat, maxLat, minLon, maxLon";
+        String exMsg1 = "Invalid request parameters: getLatestFiveMinuteWeatherMapJson.arg1: "
+                + "Coordinates square must contain exactly 4 parameters: minLat, maxLat, minLon, maxLon, getLatestFiveMinuteWeatherMapJson.arg1: "
+                + "Coordinates square cannot be empty";
+
+        mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
+                .param("targetTimestamp", String.valueOf(currentBucketFloor))
+                .param("coordinates-square", "")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(HttpStatus.BAD_REQUEST.toString()))
+                .andExpect(jsonPath("$.description").value(oneOf(exMsg, exMsg1)));
+    }
+
+    @Test
+    public void shouldReturnBadRequest_whenCoordinatesSquareHasLessThan4Elements() throws Exception {
+        String exMsg = "Invalid request parameters: getLatestFiveMinuteWeatherMapJson.arg1: "
+                + "Coordinates square must contain exactly 4 parameters: minLat, maxLat, minLon, maxLon";
+
+        mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
+                .param("targetTimestamp", String.valueOf(currentBucketFloor))
+                .param("coordinates-square", "55.0,56.0")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(HttpStatus.BAD_REQUEST.toString()))
+                .andExpect(jsonPath("$.description").value(exMsg));
+    }
+
+    @Test
+    public void shouldReturnBadRequest_whenCoordinatesSquareHasMoreThan4Elements() throws Exception {
+        String exMsg = "Invalid request parameters: getLatestFiveMinuteWeatherMapJson.arg1: "
+                + "Coordinates square must contain exactly 4 parameters: minLat, maxLat, minLon, maxLon";
+
+        mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
+                .param("targetTimestamp", String.valueOf(currentBucketFloor))
+                .param("coordinates-square", "55.0,56.0,-61.0,-60.0,1.0")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(HttpStatus.BAD_REQUEST.toString()))
+                .andExpect(jsonPath("$.description").value(exMsg));
+    }
+
+    @Test
+    public void shouldReturnBadRequest_whenCoordinatesExceedLatitudeBoundaries() throws Exception {
+        String exMsg = "GPS coordinates out of legal boundaries. Valid ranges: latitude -90 to 90, longitude -180 to 180.";
+
+        mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
+                .param("targetTimestamp", String.valueOf(currentBucketFloor))
+                .param("coordinates-square", "89.0,91.0,-61.0,-60.0")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(EcoPlatformErrorCode.INVALID_COORDINATES_BOUNDARIES.getCodeStr()))
+                .andExpect(jsonPath("$.description").value(exMsg));
+    }
+
+    @Test
+    public void shouldReturnBadRequest_whenCoordinatesExceedLongitudeBoundaries() throws Exception {
+        String exMsg = "GPS coordinates out of legal boundaries. Valid ranges: latitude -90 to 90, longitude -180 to 180.";
+
+        mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
+                .param("targetTimestamp", String.valueOf(currentBucketFloor))
+                .param("coordinates-square", "55.0,56.0,-179.0,181.0")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(EcoPlatformErrorCode.INVALID_COORDINATES_BOUNDARIES.getCodeStr()))
+                .andExpect(jsonPath("$.description").value(exMsg));
+    }
+
+    @Test
+    public void shouldReturnBadRequest_whenCoordinatesSquareTooLarge() throws Exception {
+        String exMsg = "Requested bounding box area is too large. Maximum delta allowed is 5.0 degrees.";
+
+        mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
+                .param("targetTimestamp", String.valueOf(currentBucketFloor))
+                .param("coordinates-square", "50.0,60.0,-70.0,-60.0")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(EcoPlatformErrorCode.COORDINATES_SQUARE_TOO_LARGE.getCodeStr()))
+                .andExpect(jsonPath("$.description").value(exMsg));
+    }
+
+    @Test
+    public void shouldReturnBadRequest_whenTimestampNegative() throws Exception {
+        String exMsg = "Invalid request parameters: getLatestFiveMinuteWeatherMapJson.arg0: Timestamp cannot be negative";
+
+        mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
+                .param("targetTimestamp", "-1000")
+                .param("coordinates-square", "55.0,56.0,-61.0,-60.0")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(HttpStatus.BAD_REQUEST.toString()))
+                .andExpect(jsonPath("$.description").value(exMsg));
+    }
+
+    @Test
+    public void shouldReturnBadRequest_whenTimestampTooFarInFuture() throws Exception {
+        String exMsg = "Invalid request parameters: getLatestFiveMinuteWeatherMapJson.arg0: "
+                + "Timestamp cannot be unreasonably far in the future (Max: Year 2100)";
+
+        mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
+                .param("targetTimestamp", "4102444800001")
+                .param("coordinates-square", "55.0,56.0,-61.0,-60.0")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(HttpStatus.BAD_REQUEST.toString()))
+                .andExpect(jsonPath("$.description").value(exMsg));
+    }
+
+    private @NonNull String getCoordinatesSquare() {
+        return String.format("%.1f,%.1f,%.1f,%.1f", testLat-0.5, testLat+0.5, testLon-0.5, testLon+0.5);
+    }
+}

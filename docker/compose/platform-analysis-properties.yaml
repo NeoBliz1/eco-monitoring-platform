@@ -5,6 +5,9 @@ spring:
       pipeline:
         name:
           aggregation-processor:
-            interval: 300 #seconds = 5 minutes
+            interval: 600 #seconds = 10 minutes
           deduplication-processor:
             interval: 600000 #miliseconds = 10 minutes
+  redis:
+    records:
+      ttl: 24 #hours

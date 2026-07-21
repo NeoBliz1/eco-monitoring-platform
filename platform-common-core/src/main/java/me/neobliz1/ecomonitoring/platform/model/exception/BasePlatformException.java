@@ -4,15 +4,15 @@ import lombok.Getter;
 
 @Getter
 public class BasePlatformException extends RuntimeException {
-    private final ErrorCode errorCode;
+    private final EcoPlatformErrorCode ecoPlatformErrorCode;
 
-    public BasePlatformException(ErrorCode errorCode) {
+    public BasePlatformException(EcoPlatformErrorCode ecoPlatformErrorCode) {
         super();
-        this.errorCode = errorCode;
+        this.ecoPlatformErrorCode = ecoPlatformErrorCode;
     }
 
-    public BasePlatformException(String msg, ErrorCode errorCode) {
+    public BasePlatformException(String msg, EcoPlatformErrorCode ecoPlatformErrorCode) {
         super(msg);
-        this.errorCode = errorCode;
+        this.ecoPlatformErrorCode = ecoPlatformErrorCode;
     }
 }

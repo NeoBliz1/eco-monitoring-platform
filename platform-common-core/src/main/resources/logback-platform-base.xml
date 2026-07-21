@@ -8,13 +8,13 @@
         </appender>
 
         <!-- Testcontainers logs -->
-        <logger name="org.testcontainers" level="DEBUG"/>
-        <logger name="tc" level="DEBUG"/>
+        <logger name="org.testcontainers" level="INFO"/>
+        <logger name="tc" level="INFO"/>
         <logger name="com.github.dockerjava" level="WARN"/>
-        <logger name="org.testcontainers.containers.output" level="DEBUG"/>
+        <logger name="org.testcontainers.containers.output" level="INFO"/>
 
         <!-- Application logs -->
-        <logger name="me.neobliz1.ecomonitoring" level="INFO"/>
+        <logger name="me.neobliz1.ecomonitoring" level="DEBUG"/>
 
         <root level="INFO">
             <appender-ref ref="CONSOLE"/>

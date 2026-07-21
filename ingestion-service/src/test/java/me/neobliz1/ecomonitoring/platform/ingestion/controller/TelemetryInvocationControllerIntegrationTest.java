@@ -1,74 +1,119 @@
 package me.neobliz1.ecomonitoring.platform.ingestion.controller;
 
-import static me.neobliz1.ecomonitoring.platform.common.util.WeatherTestUtils.REACTIVE_MONO_URL;
-import static me.neobliz1.ecomonitoring.platform.common.util.WeatherTestUtils.SYNC_SINGLE_URL;
-import static me.neobliz1.ecomonitoring.platform.common.util.WeatherTestUtils.createValidBase;
-import static me.neobliz1.ecomonitoring.platform.common.util.WeatherTestUtils.performValidPost;
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.SCHEMA_REGISTRY_URL;
+import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.REACTIVE_MONO_URL;
+import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.SYNC_SINGLE_URL;
+import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.createValidBase;
+import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.loadEnvironmentMap;
+import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.performValidPost;
+import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.waitForConsulServicesToBeHealthy;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import me.neobliz1.ecomonitoring.platform.common.serialization.WeatherPacketDeserializer;
-import me.neobliz1.ecomonitoring.platform.common.util.WeatherTestUtils;
+import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
+import me.neobliz1.ecomonitoring.platform.test.common.listener.TestKafkaListener;
+import me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.testcontainers.containers.ComposeContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.Duration;
-import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
+import java.io.File;
 
+@Testcontainers
 @ActiveProfiles("dev")
 @AutoConfigureWebTestClient
 @TestPropertySource(locations = "classpath:.env.test")
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public class TelemetryInvocationControllerIntegrationTest {
 
-    private static final String TOPIC_NAME = "environment.weather.telemetry.live";
-    private static final int PARTITION_COUNT = 6;
+    @Container
+    @SuppressWarnings("unused")
+    public static final ComposeContainer ENVIRONMENT = new ComposeContainer(new File("../docker/docker-compose.yaml"))
+            .withEnv(loadEnvironmentMap())
+            .withRemoveVolumes(true)
+            .withTailChildContainers(true);
+
+    @DynamicPropertySource
+    static void registerDynamicProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.kafka.topic.weather-live", () -> "environment.weather.telemetry.live");
+        registry.add("spring.kafka.streams.properties.schema.registry.url", () -> "http://localhost:8085");
+    }
+
     @Autowired
     private WebTestClient webTestClient;
     private Consumer<String, WeatherPacket> consumer;
+    private TestKafkaListener<WeatherPacket> kafkaListener;
+
     @Value("${KAFKA_BOOTSTRAP_SERVERS}")
     private String kafkaServer;
     @Value("${KAFKA_CLIENT}")
     private String kafkaClient;
     @Value("${KAFKA_CLIENT_PASSWORD}")
     private String kafkaClientPwd;
+    @Value("${spring.kafka.topic.weather-live}")
+    private String kafkaIngestionLiveTopic;
+    @Value("${spring.kafka.streams.properties.schema.registry.url}")
+    private String schemaRegistryUrl;
+
+
+    @BeforeAll
+    static void beforeAll() {
+        waitForConsulServicesToBeHealthy();
+    }
 
     @BeforeEach
     public void setUp() {
-        Map<String, Object> conf = WeatherTestUtils.getConsumerConf(kafkaClient, kafkaClientPwd, kafkaServer);
+        Map<String, Object> conf = WeatherTestUtils.getConsumerConf(kafkaClient, kafkaClientPwd, kafkaServer, schemaRegistryUrl);
+        Map<String, Object> rawSrConfig = new HashMap<>();
+        rawSrConfig.put(SCHEMA_REGISTRY_URL, schemaRegistryUrl);
+        rawSrConfig.put("specific.protobuf.value.type", WeatherPacket.class);
+        KafkaProtobufDeserializer<WeatherPacket> rawDeserializer = new KafkaProtobufDeserializer<>();
+        rawDeserializer.configure(rawSrConfig, false);
+        consumer = new KafkaConsumer<>(conf, new StringDeserializer(), rawDeserializer);
+        consumer.subscribe(Collections.singletonList(kafkaIngestionLiveTopic),
+                new ConsumerRebalanceListener() {
+                    @Override
+                    public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                    }
 
-        consumer = new KafkaConsumer<>(conf, new StringDeserializer(), new WeatherPacketDeserializer());
-
-        List<TopicPartition> partitions = IntStream.range(0, PARTITION_COUNT)
-                .mapToObj(p -> new TopicPartition(TOPIC_NAME, p))
-                .collect(Collectors.toList());
-
-        consumer.assign(partitions);
+                    @Override
+                    public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                        consumer.seekToBeginning(partitions);
+                    }
+                });
+        kafkaListener = new TestKafkaListener<>(consumer);
     }
 
     @AfterEach
     public void tearDown() {
-        if(consumer!=null) {
-            consumer.close();
-        }
+        kafkaListener.close();
     }
 
     @Test
@@ -90,27 +135,12 @@ public class TelemetryInvocationControllerIntegrationTest {
     }
 
     private void assertDelivery(String targetStationId) {
-        List<TopicPartition> partitions = IntStream.range(0, PARTITION_COUNT)
-                .mapToObj(p -> new TopicPartition(TOPIC_NAME, p))
-                .collect(Collectors.toList());
-
-        consumer.seekToBeginning(partitions);
-
-        List<WeatherPacket> receivedPackets = new ArrayList<>();
-
         Awaitility.await()
-                .atMost(Duration.ofSeconds(12))
-                .pollInterval(Duration.ofMillis(300))
+                .atMost(Duration.ofMinutes(1))
                 .untilAsserted(() -> {
-                    for(ConsumerRecord<String, WeatherPacket> record : consumer.poll(Duration.ofMillis(500))) {
-                        if(record.value()!=null) {
-                            receivedPackets.add(record.value());
-                        }
-                    }
-
+                    List<WeatherPacket> receivedPackets = kafkaListener.getReceivedPackets();
                     boolean foundMatch = receivedPackets.stream()
                             .anyMatch(packet -> targetStationId.equals(packet.getStationId()));
-
                     assertTrue(foundMatch, "Expected WeatherPacket was not received by the Kafka consumer group yet");
                 });
     }

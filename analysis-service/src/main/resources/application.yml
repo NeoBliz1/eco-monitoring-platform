@@ -1,4 +1,6 @@
 spring:
+  profiles:
+    include: common
   application:
     name: ${SPRING_ANALYSIS_APPLICATION_NAME}
   config:

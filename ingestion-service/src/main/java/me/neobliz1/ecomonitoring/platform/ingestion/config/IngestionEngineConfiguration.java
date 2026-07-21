@@ -1,7 +1,10 @@
 package me.neobliz1.ecomonitoring.platform.ingestion.config;
 
+import static me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils.resolveSchemaRegistryServer;
+
 import io.grpc.ManagedChannel;
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
+import jakarta.annotation.PostConstruct;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils;
@@ -24,6 +27,7 @@ import java.util.concurrent.TimeUnit;
 public class IngestionEngineConfiguration {
 
     private final DiscoveryClient discoveryClient;
+    private final ConfigurableEnvironment environment;
 
     @Value("${VECTOR_SERVICE_NAME}")
     private String vectorServiceName;
@@ -58,5 +62,10 @@ public class IngestionEngineConfiguration {
     @Order(-2)
     public ReactiveValidationWebExceptionHandler reactiveValidationWebExceptionHandler() {
         return new ReactiveValidationWebExceptionHandler();
+    }
+
+    @PostConstruct
+    public void resolveEnvironmentBootstrapServers() {
+        resolveSchemaRegistryServer(discoveryClient, environment);
     }
 }

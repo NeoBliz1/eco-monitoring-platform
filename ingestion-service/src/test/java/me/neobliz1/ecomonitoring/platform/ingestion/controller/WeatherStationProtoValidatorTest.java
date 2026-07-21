@@ -1,13 +1,14 @@
 package me.neobliz1.ecomonitoring.platform.ingestion.controller;
 
-import static me.neobliz1.ecomonitoring.platform.common.util.WeatherTestUtils.REACTIVE_MONO_URL;
-import static me.neobliz1.ecomonitoring.platform.common.util.WeatherTestUtils.SYNC_SINGLE_URL;
-import static me.neobliz1.ecomonitoring.platform.common.util.WeatherTestUtils.createValidBase;
-import static me.neobliz1.ecomonitoring.platform.common.util.WeatherTestUtils.performInvalidPost;
-import static me.neobliz1.ecomonitoring.platform.common.util.WeatherTestUtils.performValidPost;
+import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.REACTIVE_MONO_URL;
+import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.SYNC_SINGLE_URL;
+import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.createValidBase;
+import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.performInvalidPost;
+import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.performValidPost;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import io.github.neobliz1.validproto.config.HttpValidateProtoAutoConfiguration;
 import me.neobliz1.ecomonitoring.platform.ingestion.service.TelemetryIngestionService;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.AirQualityReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.AmbientReading;
@@ -18,18 +19,19 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
-import org.springframework.test.context.ActiveProfiles;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
+import org.springframework.context.annotation.Bean;
+import org.springframework.core.annotation.Order;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Mono;
 
-@SpringBootTest
-@ActiveProfiles("dev")
-@AutoConfigureWebTestClient
+@Import(HttpValidateProtoAutoConfiguration.class)
 @TestPropertySource(locations = "classpath:.env.test")
+@WebFluxTest(controllers = TelemetryInvocationController.class)
 public class WeatherStationProtoValidatorTest {
 
     @MockitoBean
@@ -82,6 +84,7 @@ public class WeatherStationProtoValidatorTest {
     void shouldReturn400_whenLongitudeExceedsMinBounds(String url) {
         WeatherPacket.Builder base = createValidBase();
         base.getLocationBuilder().setLongitude(-180.1);
+
         performInvalidPost(webTestClient, url, base, "location: must be greater than or equal to -180 and less than or equal to 180");
     }
 
@@ -96,6 +99,7 @@ public class WeatherStationProtoValidatorTest {
     void shouldReturn400_whenSensorDataOneofIsMissing(String url) {
         WeatherPacket.Builder base = createValidBase();
         base.clearReadings().addReadings(SensorReading.newBuilder());
+
         performInvalidPost(webTestClient, url, base, "readings: exactly one field is required in oneof");
     }
 
@@ -105,6 +109,7 @@ public class WeatherStationProtoValidatorTest {
         WeatherPacket.Builder base = createValidBase();
         base.clearReadings().addReadings(SensorReading.newBuilder()
                 .setWind(WindReading.newBuilder().setSpeedMps(-0.1f)));
+
         performInvalidPost(webTestClient, url, base, "readings: must be greater than or equal to 0");
     }
 
@@ -114,6 +119,7 @@ public class WeatherStationProtoValidatorTest {
         WeatherPacket.Builder base = createValidBase();
         base.clearReadings().addReadings(SensorReading.newBuilder()
                 .setAmbient(AmbientReading.newBuilder().setHumidityPct(100.1f)));
+
         performInvalidPost(webTestClient, url, base, "readings: must be greater than or equal to 0 and less than or equal to 100");
     }
 
@@ -123,6 +129,16 @@ public class WeatherStationProtoValidatorTest {
         WeatherPacket.Builder base = createValidBase();
         base.clearReadings().addReadings(SensorReading.newBuilder()
                 .setAirQuality(AirQualityReading.newBuilder().setPm25(-1.0f)));
+
         performInvalidPost(webTestClient, url, base, "readings: must be greater than or equal to 0");
+    }
+
+    @TestConfiguration
+    static class TestConfig {
+        @Bean
+        @Order(-2)
+        public ReactiveValidationWebExceptionHandler reactiveValidationWebExceptionHandler() {
+            return new ReactiveValidationWebExceptionHandler();
+        }
     }
 }

@@ -1,6 +1,8 @@
 spring:
     application:
         name: ${SPRING_INGESTION_APPLICATION_NAME}
+    config:
+        import: "optional:consul:${SPRING_CLOUD_CONSUL_HOST}:${SPRING_CLOUD_CONSUL_PORT}/"
     cloud:
         consul:
             host: ${SPRING_CLOUD_CONSUL_HOST}

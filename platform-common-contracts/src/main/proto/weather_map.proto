@@ -17,23 +17,24 @@ message GridCellLayers {
   double avg_temperature = 3;
   double avg_humidity = 4;
   double avg_pressure = 5;
+  double avg_leaf_wetness_pct = 6;
 
-  double avg_wind_speed = 6;
-  double avg_wind_direction = 7;
+  double avg_wind_speed = 7;
+  double avg_wind_direction = 8;
 
-  double avg_pm25 = 8;
-  double avg_pm10 = 9;
-  double avg_pm100 = 10;
+  double avg_pm25 = 9;
+  double avg_pm10 = 10;
+  double avg_pm100 = 11;
 
-  double avg_voc = 11;
-  double avg_noise_db = 12;
+  double avg_voc = 12;
+  double avg_noise_db = 13;
 
-  double avg_rain_mm = 13;
-  double avg_snow_cm = 14;
-  double avg_evap_rate = 15;
+  double avg_rain_mm = 14;
+  double avg_snow_cm = 15;
+  double avg_evap_rate = 16;
 
-  double avg_uv_index = 16;
-  double avg_solar_radiation_wm2 = 17;
-  double avg_lux = 18;
-  double avg_visibility_m = 19;
+  double avg_uv_index = 17;
+  double avg_solar_radiation_wm2 = 18;
+  double avg_lux = 19;
+  double avg_visibility_m = 20;
 }

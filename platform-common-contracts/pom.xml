@@ -84,18 +84,21 @@
                 <executions>
                     <execution>
                         <id>compile-protobuf</id>
+                        <phase>generate-sources</phase>
                         <goals>
                             <goal>compile</goal>
                         </goals>
                     </execution>
                     <execution>
                         <id>compile-grpc</id>
+                        <phase>generate-sources</phase>
                         <goals>
                             <goal>compile-custom</goal>
                         </goals>
                     </execution>
                     <execution>
                         <id>compile-grpc-reactor</id>
+                        <phase>generate-sources</phase>
                         <goals>
                             <goal>compile-custom</goal>
                         </goals>
@@ -118,6 +121,8 @@
                 </configuration>
                 <executions>
                     <execution>
+                        <id>generate-avro-schema</id>
+                        <phase>generate-resources</phase>
                         <goals>
                             <goal>schema</goal>
                         </goals>

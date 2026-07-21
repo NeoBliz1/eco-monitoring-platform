@@ -8,7 +8,6 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 public interface TelemetryAnalysisService {
 
@@ -16,5 +15,6 @@ public interface TelemetryAnalysisService {
     void updateRealTimeSlidingWindow(WeatherPacket packet, double latGrid, double lonGrid);
     void persistAggregatedHistory(Map<Long, Map<String, List<WeatherPacket>>> extractionMatrix, ProcessorContext<String, WeatherMap> context,
                                   long currentStreamTime);
-    Optional<String> getLatestFiveMinuteWeatherMapJson();
+    String getLatestTimeIntervalWeatherMapByCoordinates(long targetTimestamp, List<Double> coordinatesSquare);
+    long getAggregationBucketFloorInterval(long targetTimestamp);
 }
