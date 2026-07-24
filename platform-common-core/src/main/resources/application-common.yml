@@ -1,7 +1,24 @@
 spring:
+  threads:
+    virtual:
+      enabled: true
   messages:
     basename: exceptionsDescription
     encoding: UTF-8
     fallback-to-system-locale: false
     default-locale: en
     use-code-as-default-message: false
+
+management:
+  health:
+    defaults:
+      enabled: true
+  endpoints:
+    health:
+      show-details: "always"
+      show-components: "always"
+      probes:
+        enabled: true
+    web:
+      exposure:
+        include: "health,info,prometheus"

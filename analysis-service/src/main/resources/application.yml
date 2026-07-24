@@ -1,5 +1,6 @@
 spring:
   profiles:
+    # profile for include common configs from common-core module
     include: common
   application:
     name: ${SPRING_ANALYSIS_APPLICATION_NAME}
@@ -31,43 +32,11 @@ spring:
       application-id: "eco-analysis-streams-pipeline"
       properties:
         processing.guarantee: "exactly_once_v2"
-        isolation.level: "read_committed"
         commit.interval.ms: 100
         topology.optimization: "all"
-        default.key.serde: "org.apache.kafka.common.serialization.Serdes$StringSerde"
-        default.value.serde: "org.apache.kafka.common.serialization.Serdes$ByteArraySerde"
         security.protocol: "SASL_PLAINTEXT"
         sasl.mechanism: "SCRAM-SHA-512"
         sasl.jaas.config: "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"${KAFKA_CLIENT}\" password=\"${KAFKA_CLIENT_PASSWORD}\";"
-    consumer:
-      group-id: "eco-analysis-consumer-group"
-      auto-offset-reset: "earliest"
-      isolation-level: "read_committed"
-      enable-auto-commit: false
-      key-deserializer: "org.apache.kafka.common.serialization.StringDeserializer"
-      value-deserializer: "org.springframework.kafka.support.serializer.ErrorHandlingDeserializer"
-    listener:
-      ack-mode: "manual_immediate"
-    properties:
-      security.protocol: "SASL_PLAINTEXT"
-      sasl.mechanism: "SCRAM-SHA-512"
-      sasl.jaas.config: "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"${KAFKA_CLIENT}\" password=\"${KAFKA_CLIENT_PASSWORD}\";"
-      spring.deserializer.value.delegate.class: "me.neobliz1.ecomonitoring.platform.common.serialization.WeatherPacketDeserializer"
 
 server:
   port: ${ANALYSIS_APPLICATION_SERVER_PORT}
-
-management:
-  health:
-    defaults:
-      enabled: true
-  endpoint:
-    health:
-      show-details: "always"
-      show-components: "always"
-      probes:
-        enabled: true
-  endpoints:
-    web:
-      exposure:
-        include: "health,info,prometheus"

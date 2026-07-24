@@ -11,3 +11,9 @@ spring:
   redis:
     records:
       ttl: 24 #hours
+  cache:
+    type: caffeine
+    cache-names:
+      - weatherMaps
+    caffeine:
+      spec: expireAfterWrite=2s,maximumSize=100

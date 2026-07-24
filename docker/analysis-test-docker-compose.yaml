@@ -14,7 +14,7 @@ secrets:
   schema_registry_jaas:
     file: secrets/scram/schema_registry_jaas.conf
   redis_password:
-    file: secrets/redis/redis_password.txt
+    file: secrets/redis/redis_password
 
 networks:
   eco-net:

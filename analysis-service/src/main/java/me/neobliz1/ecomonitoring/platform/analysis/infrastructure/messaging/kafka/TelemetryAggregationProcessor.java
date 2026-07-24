@@ -1,12 +1,13 @@
-package me.neobliz1.ecomonitoring.platform.analysis.processor;
+package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.messaging.kafka;
 
-import static me.neobliz1.ecomonitoring.platform.analysis.constants.AnalysisConstants.ZERO_LOSS_ACCUMULATION_STORE;
+import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.ZERO_LOSS_ACCUMULATION_STORE;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.HASHTAG_DELIMITER;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import me.neobliz1.ecomonitoring.platform.analysis.constants.AnalysisConstants;
-import me.neobliz1.ecomonitoring.platform.analysis.service.TelemetryAnalysisService;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryPersistentService;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryUtils;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 import org.apache.kafka.streams.KeyValue;
@@ -29,7 +30,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 @RequiredArgsConstructor
 public class TelemetryAggregationProcessor implements Processor<String, WeatherPacket, String, WeatherMap> {
 
-    private final TelemetryAnalysisService service;
+    private final TelemetryPersistentService persistentService;
     private final int secondsPerInterval;
     private KeyValueStore<String, WeatherPacket> accumStore;
     private ProcessorContext<String, WeatherMap> context;
@@ -57,14 +58,14 @@ public class TelemetryAggregationProcessor implements Processor<String, WeatherP
 
         // record.key() is already pre-formatted as "00001783949700000#55.0#-61.0" by selectKey()
         String uniqueTxId = packet.getStationId()+":"+packet.getTimestamp();
-        String storageKey = String.format("%017d", service.getAggregationBucketFloorInterval(packet.getTimestamp()))
+        String storageKey = String.format("%017d", TelemetryUtils.getAggregationBucketFloorInterval(packet.getTimestamp(), secondsPerInterval))
                 +HASHTAG_DELIMITER+record.key()+HASHTAG_DELIMITER+uniqueTxId;
         log.debug("Storing taskId {}", this.context.taskId().toString());
         // Persist records inside the transactional boundary local state store
         accumStore.put(storageKey, packet);
         double latGrid = Math.round(packet.getLocation().getLatitude()*10.0)/10.0;
         double lonGrid = Math.round(packet.getLocation().getLongitude()*10.0)/10.0;
-        this.service.updateRealTimeSlidingWindow(packet, latGrid, lonGrid);
+        persistentService.updateRealTimeSlidingWindow(packet, latGrid, lonGrid);
     }
 
     private void flushAccumulatedWindows(long currentStreamTimeInMillis) {
@@ -73,7 +74,7 @@ public class TelemetryAggregationProcessor implements Processor<String, WeatherP
             return;
         }
         lastStreamTime = currentStreamTimeMs;
-        long currentWindowFloor = service.getAggregationBucketFloorInterval(currentStreamTimeInMillis);
+        long currentWindowFloor = TelemetryUtils.getAggregationBucketFloorInterval(currentStreamTimeInMillis, secondsPerInterval);
         String startRangeKey = String.format(AnalysisConstants.UTC_TIMESTAMP_FORMAT, 0);
         String endRangeKey = String.format(AnalysisConstants.UTC_TIMESTAMP_FORMAT, currentWindowFloor)+"\uFFFF";
         List<String> keysToRemove = new CopyOnWriteArrayList<>();
@@ -100,7 +101,7 @@ public class TelemetryAggregationProcessor implements Processor<String, WeatherP
         }
         // Forward calculations downstream safely within the active Kafka stream execution runtime task context
         if(!extractionMatrix.isEmpty()) {
-            this.service.persistAggregatedHistory(extractionMatrix, this.context, currentWindowFloor);
+            persistentService.persistAggregatedHistory(extractionMatrix, this.context, currentWindowFloor);
             keysToRemove.forEach(accumStore::delete);
         }
     }

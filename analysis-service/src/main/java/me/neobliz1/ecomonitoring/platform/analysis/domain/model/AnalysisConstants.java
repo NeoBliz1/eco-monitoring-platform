@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.analysis.constants;
+package me.neobliz1.ecomonitoring.platform.analysis.domain.model;
 
 import lombok.experimental.UtilityClass;
 

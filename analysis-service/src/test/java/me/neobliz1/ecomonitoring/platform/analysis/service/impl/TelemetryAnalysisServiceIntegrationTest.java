@@ -1,8 +1,8 @@
 package me.neobliz1.ecomonitoring.platform.analysis.service.impl;
 
-import static me.neobliz1.ecomonitoring.platform.analysis.constants.AnalysisConstants.HOT_WINDOW_PREFIX;
-import static me.neobliz1.ecomonitoring.platform.analysis.constants.AnalysisConstants.WEATHER_HOTWINDOW;
-import static me.neobliz1.ecomonitoring.platform.analysis.constants.AnalysisConstants.WEATHER_MAP_KEY;
+import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.HOT_WINDOW_PREFIX;
+import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.WEATHER_HOTWINDOW;
+import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.WEATHER_MAP_KEY;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hibernate.validator.internal.util.Contracts.assertNotEmpty;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -20,9 +20,6 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.annotation.DirtiesContext;
-import org.testcontainers.containers.ComposeContainer;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.junit.jupiter.Container;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,13 +28,13 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
-@Testcontainers
+//@Testcontainers
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 public class TelemetryAnalysisServiceIntegrationTest extends BaseKafkaIntegrationTest {
 
-    @Container
-    @SuppressWarnings("unused")
-    public static final ComposeContainer ENVIRONMENT = getComposeContainer();
+//    @Container
+//    @SuppressWarnings("unused")
+//    public static final ComposeContainer ENVIRONMENT = getComposeContainer();
 
     @Test
     public void shouldProcessCustomAmbientReadings_whenPacketContainsSpecificTemperatureHumidityPressure() throws Exception {
@@ -424,11 +421,11 @@ public class TelemetryAnalysisServiceIntegrationTest extends BaseKafkaIntegratio
 
         assertEquals(currentWindowTimeFloor, weatherMap.getTimestampBucket());
         assertNotNull(historyTTL, "historyTTL should exist");
-        assertTrue(historyTTL>0, "historyTTL should have positive TTL");
-        assertTrue(historyTTL<=86400, "historyTTL should not exceed 24 hours");
+        assertTrue(historyTTL>1435, "historyTTL should have positive TTL");
+        assertTrue(historyTTL<=1440, "historyTTL should not exceed 24 hours");
         assertNotNull(historyTTL, "hotWindowTTL key should exist");
-        assertTrue(hotWindowTTL>0, "hotWindowTTL should have positive TTL");
-        assertTrue(hotWindowTTL<=86400, "hotWindowTTL should not exceed 24 hours");
+        assertTrue(hotWindowTTL>1435, "hotWindowTTL should have positive TTL");
+        assertTrue(hotWindowTTL<=1440, "hotWindowTTL should not exceed 24 hours");
     }
 
     @Test

@@ -1,6 +1,6 @@
-package me.neobliz1.ecomonitoring.platform.analysis.processor;
+package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.messaging.kafka;
 
-import static me.neobliz1.ecomonitoring.platform.analysis.constants.AnalysisConstants.DEDUPLICATE_ROCKS_DB;
+import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.DEDUPLICATE_ROCKS_DB;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,7 +35,7 @@ public class TelemetryDeduplicationProcessor implements Processor<String, Weathe
         String uniqueTxId = packet.getStationId()+":"+packet.getTimestamp();
         long recordTimestamp = record.timestamp();
 
-        // 1. Check local sliding window for duplicates
+        // Check local sliding window for duplicates
         try(WindowStoreIterator<String> iterator = deduplicateStore.fetch(
                 uniqueTxId,
                 recordTimestamp-deduplication_interval,
@@ -46,7 +46,7 @@ public class TelemetryDeduplicationProcessor implements Processor<String, Weathe
             }
         }
 
-        // 2. Mark as processed and forward down
+        // Mark as processed and forward down
         deduplicateStore.put(uniqueTxId, "COMMITTED", recordTimestamp);
         context.forward(record);
     }

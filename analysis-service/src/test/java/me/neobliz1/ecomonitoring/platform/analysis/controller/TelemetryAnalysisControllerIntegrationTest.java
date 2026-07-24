@@ -2,7 +2,9 @@ package me.neobliz1.ecomonitoring.platform.analysis.controller;
 
 import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.LATEST_WEATHER_MAP_ENDPOINT;
 import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.WEATHER_MAP_URI;
-import static org.hamcrest.Matchers.oneOf;
+import static org.awaitility.Awaitility.await;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -21,6 +23,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
@@ -31,6 +35,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Testcontainers
@@ -42,6 +48,9 @@ public class TelemetryAnalysisControllerIntegrationTest extends BaseKafkaIntegra
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private CacheManager cacheManager;
 
     @Container
     @SuppressWarnings("unused")
@@ -56,7 +65,8 @@ public class TelemetryAnalysisControllerIntegrationTest extends BaseKafkaIntegra
         currentBucketFloor = getCurrentBucketFloor();
         String stationId = "test-station-1";
         WeatherPacket packet1 = createFullSensorPacket(stationId, currentBucketFloor + 1000, testLat, testLon);
-        WeatherPacket packet2 = createFullSensorPacket("test-station-2", currentBucketFloor + 2000, testLat + 0.05, testLon + 0.05);
+        WeatherPacket packet2 = createFullSensorPacket("test-station-2", currentBucketFloor+2000,
+                testLat+0.05, testLon+0.05);
         
         sendPacket(packet1);
         sendPacket(packet2);
@@ -101,6 +111,36 @@ public class TelemetryAnalysisControllerIntegrationTest extends BaseKafkaIntegra
     }
 
     @Test
+    public void shouldEvictCacheDataAutomatically_AfterTenSeconds() throws Exception {
+        long targetTimestamp = currentBucketFloor+300000;
+        String coordinatesSquareParam = "54.5,55.5,-61.5,-60.5";
+        List<Double> expectedListStructure = List.of(54.5, 55.5, -61.5, -60.5);
+        String expectedCacheKey = targetTimestamp+"#"+expectedListStructure;
+        Cache weatherMapsCache = cacheManager.getCache("weatherMaps");
+        assertNotNull(weatherMapsCache);
+
+        mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
+                        .param("targetTimestamp", String.valueOf(targetTimestamp))
+                        .param("coordinates-square", coordinatesSquareParam)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+
+        assertNotNull(weatherMapsCache.get(expectedCacheKey), "Cache should be populated after first call");
+        await().atMost(12, TimeUnit.SECONDS)
+                .pollInterval(1, TimeUnit.SECONDS)
+                .untilAsserted(() -> {
+                    Cache.ValueWrapper activeWrapper = weatherMapsCache.get(expectedCacheKey);
+                    assertNull(activeWrapper, "The cache record should have been evicted automatically after 10s!");
+                });
+
+        mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
+                        .param("targetTimestamp", String.valueOf(targetTimestamp))
+                        .param("coordinates-square", coordinatesSquareParam)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     public void shouldReturnNotFound_whenNoWeatherMapDataAvailable() throws Exception {
         long targetTimestamp = currentBucketFloor + 86400000; // 24 hours later
         String coordinatesSquare = getCoordinatesSquare();
@@ -118,11 +158,7 @@ public class TelemetryAnalysisControllerIntegrationTest extends BaseKafkaIntegra
     @Test
     public void shouldReturnBadRequest_whenCoordinatesSquareEmpty() throws Exception {
         String exMsg = "Invalid request parameters: getLatestFiveMinuteWeatherMapJson.arg1: "
-                + "Coordinates square cannot be empty, getLatestFiveMinuteWeatherMapJson.arg1: "
                 + "Coordinates square must contain exactly 4 parameters: minLat, maxLat, minLon, maxLon";
-        String exMsg1 = "Invalid request parameters: getLatestFiveMinuteWeatherMapJson.arg1: "
-                + "Coordinates square must contain exactly 4 parameters: minLat, maxLat, minLon, maxLon, getLatestFiveMinuteWeatherMapJson.arg1: "
-                + "Coordinates square cannot be empty";
 
         mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
                 .param("targetTimestamp", String.valueOf(currentBucketFloor))
@@ -130,7 +166,7 @@ public class TelemetryAnalysisControllerIntegrationTest extends BaseKafkaIntegra
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(HttpStatus.BAD_REQUEST.toString()))
-                .andExpect(jsonPath("$.description").value(oneOf(exMsg, exMsg1)));
+                .andExpect(jsonPath("$.description").value(exMsg));
     }
 
     @Test

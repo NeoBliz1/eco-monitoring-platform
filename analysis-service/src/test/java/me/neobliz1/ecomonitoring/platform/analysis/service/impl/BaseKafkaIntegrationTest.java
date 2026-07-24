@@ -9,6 +9,7 @@ import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUti
 
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import lombok.extern.slf4j.Slf4j;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryUtils;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.AirQualityReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.AmbientReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.Location;
@@ -93,8 +94,6 @@ public abstract class BaseKafkaIntegrationTest {
     
     @Autowired
     private KafkaProperties kafkaProperties;
-    @Autowired
-    private TelemetryAnalysisServiceImpl telemetryAnalysisService;
     TestKafkaListener<WeatherMap> kafkaHistoryListener;
     @Autowired
     private StreamsBuilderFactoryBean streamsBuilderFactoryBean;
@@ -111,6 +110,8 @@ public abstract class BaseKafkaIntegrationTest {
     String kafkaAnalysisHistoryTopic;
     @Value("${spring.kafka.streams.properties.schema.registry.url}")
     private String schemaRegistryUrl;
+    @Value("${spring.kafka.streams.pipeline.name.aggregation-processor.interval}")
+    private Integer aggregationSecondsPerInterval;
 
     Producer<String, WeatherPacket> testProducer;
     Consumer<String, WeatherPacket> rawTopicConsumer;
@@ -236,11 +237,11 @@ public abstract class BaseKafkaIntegrationTest {
     }
 
     protected long getCurrentBucketFloor() {
-        return telemetryAnalysisService.getAggregationBucketFloorInterval(Instant.now().toEpochMilli());
+        return TelemetryUtils.getAggregationBucketFloorInterval(Instant.now().toEpochMilli(), aggregationSecondsPerInterval);
     }
 
     long getNextBucketFloor(long timestamp) {
-        return telemetryAnalysisService.getAggregationBucketFloorInterval(timestamp+BUCKET_SIZE_MS);
+        return TelemetryUtils.getAggregationBucketFloorInterval(timestamp+BUCKET_SIZE_MS, aggregationSecondsPerInterval);
     }
 
     protected String calculateGridCellKey(double latitude, double longitude) {

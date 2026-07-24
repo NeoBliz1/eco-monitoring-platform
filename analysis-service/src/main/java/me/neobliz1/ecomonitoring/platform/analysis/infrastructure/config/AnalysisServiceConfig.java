@@ -1,12 +1,16 @@
-package me.neobliz1.ecomonitoring.platform.analysis.config;
+package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.config;
 
 import static me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils.resolveSchemaRegistryServer;
 
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import me.neobliz1.ecomonitoring.platform.analysis.service.TelemetryAnalysisService;
-import me.neobliz1.ecomonitoring.platform.analysis.service.impl.TelemetryAnalysisServiceImpl;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryAnalysisService;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryPersistentService;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryQueryService;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.messaging.kafka.TelemetryTopologyOrchestrator;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.persistence.TelemetryStatePersister;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.query.TelemetryStateQueryResolver;
 import me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils;
 import me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils.ServiceAddressRecord;
 import me.neobliz1.ecomonitoring.platform.model.exception.RedisPasswordNotSetException;
@@ -48,8 +52,19 @@ public class AnalysisServiceConfig {
     private String kafkaServiceName;
 
     @Bean
-    public TelemetryAnalysisService telemetryAnalysisService(RedisTemplate<String, byte[]> protobufRedisTemplate, StringRedisTemplate redisTemplate) {
-        return new TelemetryAnalysisServiceImpl(protobufRedisTemplate, redisTemplate);
+    public TelemetryPersistentService telemetryPersistentService(RedisTemplate<String, byte[]> protobufRedisTemplate,
+                                                                 StringRedisTemplate redisTemplate) {
+        return new TelemetryStatePersister(protobufRedisTemplate, redisTemplate);
+    }
+
+    @Bean
+    public TelemetryQueryService telemetryQueryService(RedisTemplate<String, byte[]> protobufRedisTemplate) {
+        return new TelemetryStateQueryResolver(protobufRedisTemplate);
+    }
+
+    @Bean
+    public TelemetryAnalysisService telemetryAnalysisService(TelemetryPersistentService persistentService) {
+        return new TelemetryTopologyOrchestrator(persistentService);
     }
 
     @Bean(name = "kafkaStream")

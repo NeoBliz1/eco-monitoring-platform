@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.analysis.util;
+package me.neobliz1.ecomonitoring.platform.analysis.domain.service;
 
 import lombok.Getter;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.AirQualityReading;

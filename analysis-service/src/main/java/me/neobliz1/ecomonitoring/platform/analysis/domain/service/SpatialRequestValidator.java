@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.analysis.validator;
+package me.neobliz1.ecomonitoring.platform.analysis.domain.service;
 
 import lombok.experimental.UtilityClass;
 import me.neobliz1.ecomonitoring.platform.model.exception.CoordinatesSquareTooLargeException;
