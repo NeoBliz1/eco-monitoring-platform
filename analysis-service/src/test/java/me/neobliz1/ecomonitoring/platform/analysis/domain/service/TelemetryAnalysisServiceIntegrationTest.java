@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.analysis.service.impl;
+package me.neobliz1.ecomonitoring.platform.analysis.domain.service;
 
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.HOT_WINDOW_PREFIX;
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.WEATHER_HOTWINDOW;

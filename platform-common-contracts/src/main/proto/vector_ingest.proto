@@ -27,7 +27,7 @@ message Log {
 
 message Value {
   oneof kind {
-    bytes raw_bytes = 1; // Corrected: bytes must be tag 1 to match Vector's engine
+    bytes raw_bytes = 1; // Bytes must be tag 1 to match Vector's engine
     int64 integer = 4;
     double float = 5;
     bool boolean = 6;

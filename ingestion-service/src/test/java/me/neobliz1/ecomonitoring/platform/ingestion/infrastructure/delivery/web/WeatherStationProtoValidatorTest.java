@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.ingestion.controller;
+package me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.delivery.web;
 
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.REACTIVE_MONO_URL;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.SYNC_SINGLE_URL;
@@ -9,7 +9,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import io.github.neobliz1.validproto.config.HttpValidateProtoAutoConfiguration;
-import me.neobliz1.ecomonitoring.platform.ingestion.service.TelemetryIngestionService;
+import me.neobliz1.ecomonitoring.platform.ingestion.domain.service.TelemetryIngestionService;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.AirQualityReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.AmbientReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.SensorReading;
@@ -22,8 +22,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
 import org.springframework.context.annotation.Bean;
-import org.springframework.core.annotation.Order;
 import org.springframework.context.annotation.Import;
+import org.springframework.core.annotation.Order;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;

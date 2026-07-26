@@ -8,7 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryAnalysisService;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryPersistentService;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryQueryService;
-import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.messaging.kafka.TelemetryTopologyOrchestrator;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.messaging.stream.TelemetryTopologyOrchestrator;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.persistence.TelemetryStatePersister;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.query.TelemetryStateQueryResolver;
 import me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils;

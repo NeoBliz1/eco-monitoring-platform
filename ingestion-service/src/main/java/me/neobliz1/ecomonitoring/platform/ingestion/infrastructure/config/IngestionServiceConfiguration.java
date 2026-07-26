@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.ingestion.config;
+package me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.config;
 
 import static me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils.resolveSchemaRegistryServer;
 
@@ -9,9 +9,10 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils;
 import me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils.ServiceAddressRecord;
-import me.neobliz1.ecomonitoring.platform.ingestion.controller.ReactiveValidationWebExceptionHandler;
-import me.neobliz1.ecomonitoring.platform.ingestion.service.TelemetryIngestionService;
-import me.neobliz1.ecomonitoring.platform.ingestion.service.impl.TelemetryIngestionServiceImpl;
+import me.neobliz1.ecomonitoring.platform.ingestion.domain.service.TelemetryIngestionService;
+import me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.delivery.grpc.VectorGrpcTelemetryIngestionAdapter;
+import me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.delivery.grpc.VectorPayloadMapper;
+import me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.delivery.web.ReactiveValidationWebExceptionHandler;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.context.annotation.Bean;
@@ -24,7 +25,7 @@ import java.util.concurrent.TimeUnit;
 
 @Configuration
 @RequiredArgsConstructor
-public class IngestionEngineConfiguration {
+public class IngestionServiceConfiguration {
 
     private final DiscoveryClient discoveryClient;
     private final ConfigurableEnvironment environment;
@@ -34,8 +35,14 @@ public class IngestionEngineConfiguration {
 
     @Bean
     public TelemetryIngestionService telemetryIngestionService(VectorGrpc.VectorStub reactiveStub,
-                                                               VectorGrpc.VectorBlockingStub blockingStub) {
-        return new TelemetryIngestionServiceImpl(reactiveStub, blockingStub);
+                                                               VectorGrpc.VectorBlockingStub blockingStub,
+                                                               VectorPayloadMapper vectorPayloadMapper) {
+        return new VectorGrpcTelemetryIngestionAdapter(reactiveStub, blockingStub, vectorPayloadMapper);
+    }
+
+    @Bean
+    public VectorPayloadMapper vectorPayloadMapper() {
+        return new VectorPayloadMapper();
     }
 
     @Bean(destroyMethod = "shutdown")

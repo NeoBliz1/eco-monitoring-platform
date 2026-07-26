@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.analysis.controller;
+package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.delivery.web;
 
 import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.LATEST_WEATHER_MAP_ENDPOINT;
 import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.WEATHER_MAP_URI;
@@ -13,7 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import lombok.extern.slf4j.Slf4j;
 import me.neobliz1.ecomonitoring.platform.analysis.AnalysisBootEngine;
 import me.neobliz1.ecomonitoring.platform.analysis.AssertionTestHelpers;
-import me.neobliz1.ecomonitoring.platform.analysis.service.impl.BaseKafkaIntegrationTest;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.service.BaseKafkaIntegrationTest;
 import me.neobliz1.ecomonitoring.platform.model.exception.EcoPlatformErrorCode;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;

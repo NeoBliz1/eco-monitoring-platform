@@ -1,4 +1,7 @@
 spring:
+    profiles:
+        # profile for include common configs from common-core module
+        include: common
     application:
         name: ${SPRING_INGESTION_APPLICATION_NAME}
     config:
@@ -15,21 +18,10 @@ spring:
                 service-name: ${SPRING_INGESTION_APPLICATION_NAME}
                 health-check-path: /actuator/health
                 health-check-interval: 10s
+            config:
+                enabled: true
+                format: yaml
+                prefixes: config
 
 server:
     port: ${INGESTION_APPLICATION_SERVER_PORT}
-
-management:
-    health:
-        defaults:
-            enabled: true
-    endpoint:
-        health:
-            show-details: "always"
-            show-components: "always"
-            probes:
-                enabled: true
-    endpoints:
-        web:
-            exposure:
-                include: "health,info,prometheus"

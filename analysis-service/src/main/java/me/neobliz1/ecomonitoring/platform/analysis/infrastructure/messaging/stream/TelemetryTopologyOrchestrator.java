@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.messaging.kafka;
+package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.messaging.stream;
 
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.SCHEMA_REGISTRY_URL;
 

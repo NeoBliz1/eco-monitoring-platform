@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.ingestion.controller;
+package me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.delivery.web;
 
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.STATION_ID;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.createValidBase;
@@ -8,7 +8,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import me.neobliz1.ecomonitoring.platform.ingestion.service.TelemetryIngestionService;
+import me.neobliz1.ecomonitoring.platform.ingestion.domain.service.TelemetryIngestionService;
 import me.neobliz1.ecomonitoring.platform.model.exception.PipelineTimeoutException;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import org.junit.jupiter.api.Test;

@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.analysis.service.impl;
+package me.neobliz1.ecomonitoring.platform.analysis.domain.service;
 
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.SCHEMA_REGISTRY_URL;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.getConsumerConf;
@@ -9,7 +9,6 @@ import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUti
 
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import lombok.extern.slf4j.Slf4j;
-import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryUtils;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.AirQualityReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.AmbientReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.Location;

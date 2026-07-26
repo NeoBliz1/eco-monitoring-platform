@@ -1,16 +1,17 @@
-package me.neobliz1.ecomonitoring.platform.ingestion.controller;
+package me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.delivery.web;
 
 import lombok.NonNull;
+import org.apache.kafka.common.errors.SerializationException;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpResponse;
-import org.springframework.web.bind.support.WebExchangeBindException;
 import org.springframework.validation.method.MethodValidationException;
+import org.springframework.web.bind.support.WebExchangeBindException;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebExceptionHandler;
-import org.apache.kafka.common.errors.SerializationException;
 import reactor.core.publisher.Mono;
+
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Objects;

@@ -1,18 +1,13 @@
-package me.neobliz1.ecomonitoring.platform.ingestion.service.impl;
+package me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.delivery.grpc;
 
 import static me.neobliz1.ecomonitoring.platform.model.exception.EcoPlatformErrorCode.PIPELINE_TIMEOUT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
-import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
-import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
-import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
@@ -24,44 +19,27 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
-import com.google.common.base.Ticker;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import vector.PushEventsRequest;
 import vector.PushEventsResponse;
 import vector.VectorGrpc;
 
-import java.io.IOException;
-
 @ExtendWith(MockitoExtension.class)
-public class TelemetryIngestionServiceImplUnitTest {
+public class VectorGrpcTelemetryIngestionAdapterUnitTest {
 
     @Mock
     private VectorGrpc.VectorStub asyncStub;
     @Mock
     private VectorGrpc.VectorBlockingStub blockingStub;
     @Mock
-    private SchemaRegistryClient mockSchemaRegistryClient;
+    private VectorPayloadMapper mockVectorPayloadMapper;
     @InjectMocks
-    private TelemetryIngestionServiceImpl service;
+    private VectorGrpcTelemetryIngestionAdapter adapter;
 
     @BeforeEach
-    void setUp() throws RestClientException, IOException {
-        ReflectionTestUtils.setField(service, "schemaRegistryUrl", "http://localhost:8085");
-        ReflectionTestUtils.setField(service, "kafkaIngestionLiveTopic", "environment.weather.telemetry.live");
-        ReflectionTestUtils.setField(service, "schemaRegistryClient", mockSchemaRegistryClient);
-        when(mockSchemaRegistryClient.ticker()).thenReturn(Ticker.systemTicker());
-        RegisterSchemaResponse mockResponse = new RegisterSchemaResponse();
-        mockResponse.setId(1);
-        mockResponse.setVersion(1);
-        mockResponse.setSchema("syntax = \"proto3\"; message Mock {}");
-        when(mockSchemaRegistryClient.registerWithResponse(
-                anyString(),
-                any(io.confluent.kafka.schemaregistry.ParsedSchema.class),
-                anyBoolean(),
-                anyBoolean()
-        )).thenReturn(mockResponse);
+    void setUp() {
+        when(mockVectorPayloadMapper.toPushRequest(any())).thenReturn(PushEventsRequest.newBuilder().build());
     }
 
     @Test
@@ -69,13 +47,13 @@ public class TelemetryIngestionServiceImplUnitTest {
         WeatherPacket packet = WeatherPacket.newBuilder().build();
         PushEventsResponse fakeResponse = PushEventsResponse.newBuilder().build();
         doAnswer(invocation -> {
-            io.grpc.stub.StreamObserver<PushEventsResponse> observer = invocation.getArgument(1);
+            StreamObserver<PushEventsResponse> observer = invocation.getArgument(1);
             observer.onNext(fakeResponse);
             observer.onCompleted();
             return null;
         }).when(asyncStub).pushEvents(any(PushEventsRequest.class), any());
 
-        Mono<Boolean> result = service.processTelemetryPacket(packet);
+        Mono<Boolean> result = adapter.processTelemetryPacket(packet);
 
         StepVerifier.create(result)
                 .expectNext(true)
@@ -88,7 +66,7 @@ public class TelemetryIngestionServiceImplUnitTest {
         PushEventsResponse fakeResponse = PushEventsResponse.newBuilder().build();
         when(blockingStub.pushEvents(any(PushEventsRequest.class))).thenReturn(fakeResponse);
 
-        boolean result = service.processTelemetryPacketVirtual(packet);
+        boolean result = adapter.processTelemetryPacketVirtual(packet);
 
         assertTrue(result);
     }
@@ -102,7 +80,7 @@ public class TelemetryIngestionServiceImplUnitTest {
             return null;
         }).when(asyncStub).pushEvents(any(PushEventsRequest.class), any());
 
-        Mono<Boolean> result = service.processTelemetryPacket(packet);
+        Mono<Boolean> result = adapter.processTelemetryPacket(packet);
 
         StepVerifier.create(result)
                 .expectErrorMatches(throwable -> {
@@ -122,7 +100,7 @@ public class TelemetryIngestionServiceImplUnitTest {
                 new StatusRuntimeException(Status.DEADLINE_EXCEEDED.withDescription("Deadline Exceeded"))
         );
 
-        PipelineTimeoutException exception = assertThrows(PipelineTimeoutException.class, () -> service.processTelemetryPacketVirtual(packet));
+        PipelineTimeoutException exception = assertThrows(PipelineTimeoutException.class, () -> adapter.processTelemetryPacketVirtual(packet));
 
         assertEquals(PIPELINE_TIMEOUT.getCodeStr(), exception.getEcoPlatformErrorCode().getCodeStr());
     }

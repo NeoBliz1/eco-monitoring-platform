@@ -2,8 +2,6 @@ include:
   - ./compose/kafka.yaml
   - ./compose/schema-registry.yaml
   - ./compose/consul.yaml
-  - ./compose/jaeger.yaml
-  - ./compose/redis.yaml
   - ./compose/vector/vector-sidecar.yaml
 
 volumes:
@@ -15,8 +13,6 @@ secrets:
     file: secrets/scram/kafka_server_jaas.conf
   schema_registry_jaas:
     file: secrets/scram/schema_registry_jaas.conf
-  redis_password:
-    file: secrets/redis/redis_password
 
 networks:
   eco-net:
