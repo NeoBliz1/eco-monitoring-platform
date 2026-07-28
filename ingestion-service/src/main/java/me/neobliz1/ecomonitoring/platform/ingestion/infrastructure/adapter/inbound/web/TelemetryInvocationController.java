@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.delivery.web;
+package me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.adapter.inbound.web;
 
 import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.BLOCKING_TELEMETRY_ENDPOINT_URI;
 import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.REACTIVE_TELEMETRY_ENDPOINT_URI;
@@ -7,7 +7,7 @@ import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.TELE
 import io.github.neobliz1.validproto.annotation.ValidProto;
 import io.github.neobliz1.validproto.annotation.ValidatedProto;
 import lombok.RequiredArgsConstructor;
-import me.neobliz1.ecomonitoring.platform.ingestion.domain.service.TelemetryIngestionService;
+import me.neobliz1.ecomonitoring.platform.ingestion.domain.port.inbound.TelemetryIngestionService;
 import me.neobliz1.ecomonitoring.platform.model.exception.PipelineTimeoutException;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import org.springframework.http.HttpStatus;

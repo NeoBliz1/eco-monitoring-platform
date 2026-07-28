@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.ingestion.domain.service;
+package me.neobliz1.ecomonitoring.platform.ingestion.domain.port.inbound;
 
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import reactor.core.publisher.Mono;

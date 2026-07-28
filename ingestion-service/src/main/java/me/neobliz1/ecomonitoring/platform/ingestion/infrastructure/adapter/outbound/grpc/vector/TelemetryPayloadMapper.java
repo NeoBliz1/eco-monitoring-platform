@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.delivery.grpc;
+package me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.adapter.outbound.grpc.vector;
 
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.RAW_PROTOBUF_PACKET;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.SCHEMA_REGISTRY_URL;
@@ -25,7 +25,7 @@ import java.util.Map;
 
 @Slf4j
 @RequiredArgsConstructor
-public class VectorPayloadMapper {
+public class TelemetryPayloadMapper {
 
     private SchemaRegistryClient schemaRegistryClient;
 

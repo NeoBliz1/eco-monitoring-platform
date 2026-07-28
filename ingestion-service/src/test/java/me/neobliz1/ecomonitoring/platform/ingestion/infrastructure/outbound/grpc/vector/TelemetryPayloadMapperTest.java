@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.delivery.grpc;
+package me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.outbound.grpc.vector;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -14,6 +14,7 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
+import me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.adapter.outbound.grpc.vector.TelemetryPayloadMapper;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,18 +28,18 @@ import vector.PushEventsRequest;
 import java.io.IOException;
 
 @ExtendWith(MockitoExtension.class)
-public class VectorPayloadMapperUnitTest {
+public class TelemetryPayloadMapperTest {
 
     @Mock
     private SchemaRegistryClient mockSchemaRegistryClient;
     @InjectMocks
-    private VectorPayloadMapper vectorPayloadMapper;
+    private TelemetryPayloadMapper telemetryPayloadMapper;
 
     @BeforeEach
     void setUp() throws RestClientException, IOException {
-        ReflectionTestUtils.setField(vectorPayloadMapper, "schemaRegistryUrl", "http://localhost:8085");
-        ReflectionTestUtils.setField(vectorPayloadMapper, "kafkaIngestionLiveTopic", "environment.weather.telemetry.live");
-        ReflectionTestUtils.setField(vectorPayloadMapper, "schemaRegistryClient", mockSchemaRegistryClient);
+        ReflectionTestUtils.setField(telemetryPayloadMapper, "schemaRegistryUrl", "http://localhost:8085");
+        ReflectionTestUtils.setField(telemetryPayloadMapper, "kafkaIngestionLiveTopic", "environment.weather.telemetry.live");
+        ReflectionTestUtils.setField(telemetryPayloadMapper, "schemaRegistryClient", mockSchemaRegistryClient);
         when(mockSchemaRegistryClient.ticker()).thenReturn(Ticker.systemTicker());
         RegisterSchemaResponse mockResponse = new RegisterSchemaResponse();
         mockResponse.setId(1);
@@ -59,7 +60,7 @@ public class VectorPayloadMapperUnitTest {
                 .build();
         byte[] expectedProtobufBytes = new byte[]{ 0, 0, 0, 0, 1, 0, 10, 1, 49 };
 
-        PushEventsRequest pushRequest = vectorPayloadMapper.toPushRequest(originalPacket);
+        PushEventsRequest pushRequest = telemetryPayloadMapper.toPushRequest(originalPacket);
         var fieldsMap = pushRequest.getEvents(0)
                 .getLog()
                 .getValue()

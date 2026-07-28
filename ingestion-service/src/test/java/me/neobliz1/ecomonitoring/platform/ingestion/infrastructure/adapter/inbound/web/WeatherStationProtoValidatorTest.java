@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.delivery.web;
+package me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.adapter.inbound.web;
 
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.REACTIVE_MONO_URL;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.SYNC_SINGLE_URL;
@@ -9,14 +9,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import io.github.neobliz1.validproto.config.HttpValidateProtoAutoConfiguration;
-import me.neobliz1.ecomonitoring.platform.ingestion.domain.service.TelemetryIngestionService;
+import me.neobliz1.ecomonitoring.platform.ingestion.domain.port.inbound.TelemetryIngestionService;
+import me.neobliz1.ecomonitoring.platform.ingestion.domain.service.ReactiveValidationWebExceptionHandler;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.AirQualityReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.AmbientReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.SensorReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WindReading;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,7 +30,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Mono;
 
-@Disabled
 @Import(HttpValidateProtoAutoConfiguration.class)
 @TestPropertySource(locations = "classpath:.env.test")
 @WebFluxTest(controllers = TelemetryInvocationController.class)

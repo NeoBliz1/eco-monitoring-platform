@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.delivery.web;
+package me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.adapter.inbound.web;
 
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.SCHEMA_REGISTRY_URL;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.REACTIVE_MONO_URL;
@@ -51,7 +51,7 @@ import java.util.Map;
 @TestPropertySource(locations = "classpath:.env.test")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-public class TelemetryInvocationControllerIntegrationTest {
+public class TelemetryInvocationControllerIT {
 
     @Container
     @SuppressWarnings("unused")

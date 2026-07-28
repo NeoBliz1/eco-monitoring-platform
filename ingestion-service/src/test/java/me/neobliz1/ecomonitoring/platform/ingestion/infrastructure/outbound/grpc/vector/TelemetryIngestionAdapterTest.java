@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.delivery.grpc;
+package me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.outbound.grpc.vector;
 
 import static me.neobliz1.ecomonitoring.platform.model.exception.EcoPlatformErrorCode.PIPELINE_TIMEOUT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -11,6 +11,8 @@ import static org.mockito.Mockito.when;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
+import me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.adapter.outbound.grpc.vector.TelemetryIngestionAdapter;
+import me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.adapter.outbound.grpc.vector.TelemetryPayloadMapper;
 import me.neobliz1.ecomonitoring.platform.model.exception.PipelineTimeoutException;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,20 +28,20 @@ import vector.PushEventsResponse;
 import vector.VectorGrpc;
 
 @ExtendWith(MockitoExtension.class)
-public class VectorGrpcTelemetryIngestionAdapterUnitTest {
+public class TelemetryIngestionAdapterTest {
 
     @Mock
     private VectorGrpc.VectorStub asyncStub;
     @Mock
     private VectorGrpc.VectorBlockingStub blockingStub;
     @Mock
-    private VectorPayloadMapper mockVectorPayloadMapper;
+    private TelemetryPayloadMapper mockTelemetryPayloadMapper;
     @InjectMocks
-    private VectorGrpcTelemetryIngestionAdapter adapter;
+    private TelemetryIngestionAdapter adapter;
 
     @BeforeEach
     void setUp() {
-        when(mockVectorPayloadMapper.toPushRequest(any())).thenReturn(PushEventsRequest.newBuilder().build());
+        when(mockTelemetryPayloadMapper.toPushRequest(any())).thenReturn(PushEventsRequest.newBuilder().build());
     }
 
     @Test

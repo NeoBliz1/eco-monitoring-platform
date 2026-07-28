@@ -9,10 +9,10 @@ import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils;
 import me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils.ServiceAddressRecord;
-import me.neobliz1.ecomonitoring.platform.ingestion.domain.service.TelemetryIngestionService;
-import me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.delivery.grpc.VectorGrpcTelemetryIngestionAdapter;
-import me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.delivery.grpc.VectorPayloadMapper;
-import me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.delivery.web.ReactiveValidationWebExceptionHandler;
+import me.neobliz1.ecomonitoring.platform.ingestion.domain.port.inbound.TelemetryIngestionService;
+import me.neobliz1.ecomonitoring.platform.ingestion.domain.service.ReactiveValidationWebExceptionHandler;
+import me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.adapter.outbound.grpc.vector.TelemetryIngestionAdapter;
+import me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.adapter.outbound.grpc.vector.TelemetryPayloadMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.context.annotation.Bean;
@@ -36,13 +36,13 @@ public class IngestionServiceConfiguration {
     @Bean
     public TelemetryIngestionService telemetryIngestionService(VectorGrpc.VectorStub reactiveStub,
                                                                VectorGrpc.VectorBlockingStub blockingStub,
-                                                               VectorPayloadMapper vectorPayloadMapper) {
-        return new VectorGrpcTelemetryIngestionAdapter(reactiveStub, blockingStub, vectorPayloadMapper);
+                                                               TelemetryPayloadMapper telemetryPayloadMapper) {
+        return new TelemetryIngestionAdapter(reactiveStub, blockingStub, telemetryPayloadMapper);
     }
 
     @Bean
-    public VectorPayloadMapper vectorPayloadMapper() {
-        return new VectorPayloadMapper();
+    public TelemetryPayloadMapper vectorPayloadMapper() {
+        return new TelemetryPayloadMapper();
     }
 
     @Bean(destroyMethod = "shutdown")

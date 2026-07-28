@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.delivery.web;
+package me.neobliz1.ecomonitoring.platform.ingestion.domain.service;
 
 import lombok.NonNull;
 import org.apache.kafka.common.errors.SerializationException;
