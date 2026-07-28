@@ -1,9 +1,8 @@
-package me.neobliz1.ecomonitoring.platform.analysis;
+package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.support;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import lombok.experimental.UtilityClass;
 import lombok.extern.slf4j.Slf4j;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.GridCellLayers;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
@@ -12,8 +11,7 @@ import java.util.Map;
 import java.util.Optional;
 
 @Slf4j
-@UtilityClass
-public class AssertionTestHelpers {
+public abstract class AssertionTestSupport {
 
     public Optional<GridCellLayers> findGridCell(WeatherMap weatherMap, String gridCellKey) {
         return weatherMap.getGridCellsMap().entrySet().stream()

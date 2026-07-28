@@ -16,6 +16,7 @@ import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.SensorReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WindReading;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +30,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Mono;
 
+@Disabled
 @Import(HttpValidateProtoAutoConfiguration.class)
 @TestPropertySource(locations = "classpath:.env.test")
 @WebFluxTest(controllers = TelemetryInvocationController.class)

@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.delivery.web;
+package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.inbound.web;
 
 import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.LATEST_WEATHER_MAP_ENDPOINT;
 import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.WEATHER_MAP_URI;
@@ -7,8 +7,8 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.port.inbound.TelemetryQueryService;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.service.SpatialRequestValidator;
-import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryQueryService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;

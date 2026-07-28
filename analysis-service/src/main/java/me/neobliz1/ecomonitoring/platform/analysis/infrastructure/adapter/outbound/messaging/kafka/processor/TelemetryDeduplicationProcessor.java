@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.messaging.stream;
+package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor;
 
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.DEDUPLICATE_ROCKS_DB;
 

@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.messaging.stream;
+package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka;
 
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.SCHEMA_REGISTRY_URL;
 
@@ -7,8 +7,10 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants;
-import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryAnalysisService;
-import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryPersistentService;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.port.inbound.TelemetryAnalysisService;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryPersistentService;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.TelemetryAggregationProcessor;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.TelemetryDeduplicationProcessor;
 import me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.Location;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
@@ -48,8 +50,9 @@ public class TelemetryTopologyOrchestrator implements TelemetryAnalysisService {
     private Long deduplicationInterval;
     @Value("${spring.kafka.streams.properties.schema.registry.url}")
     private String schemaRegistryUrl;
+    private Serde<WeatherPacket> weatherPacketSerde;
 
-    private static void registerTransactionalStateStores(StreamsBuilder streamsBuilder, Serde<WeatherPacket> weatherPacketSerde) {
+    private static void registerDeduplicationStore(StreamsBuilder streamsBuilder) {
         // Local Deduplication Window Store Builder for Pipeline 1
         StoreBuilder<WindowStore<String, String>> dedupStoreBuilder = Stores.windowStoreBuilder(
                 Stores.persistentWindowStore(
@@ -60,28 +63,35 @@ public class TelemetryTopologyOrchestrator implements TelemetryAnalysisService {
                 ),
                 Serdes.String(), Serdes.String()
         );
-        // Local Accumulation Key-Value Store Builder for Pipeline 2
-        StoreBuilder<KeyValueStore<String, WeatherPacket>> accumStoreBuilder = Stores.keyValueStoreBuilder(
-                Stores.persistentKeyValueStore(AnalysisConstants.ZERO_LOSS_ACCUMULATION_STORE),
-                Serdes.String(), weatherPacketSerde
-        );
         streamsBuilder.addStateStore(dedupStoreBuilder);
-        streamsBuilder.addStateStore(accumStoreBuilder);
     }
 
     @Override
     public KStream<String, WeatherPacket> buildTopology(StreamsBuilder streamsBuilder) {
         Map<String, String> serdeConfig = Map.of(SCHEMA_REGISTRY_URL, schemaRegistryUrl);
-        Serde<WeatherPacket> weatherPacketSerde = new KafkaProtobufSerde<>(WeatherPacket.class);
+        weatherPacketSerde = new KafkaProtobufSerde<>(WeatherPacket.class);
         weatherPacketSerde.configure(serdeConfig, false);
-        registerTransactionalStateStores(streamsBuilder, weatherPacketSerde);
-        KStream<String, WeatherPacket> deduplicatedStream = runTransactionalDeduplicationPipeline(streamsBuilder, weatherPacketSerde);
-        runTransactionalAggregationStream(streamsBuilder, weatherPacketSerde, serdeConfig);
+        registerTransactionalStateStores(streamsBuilder);
+        KStream<String, WeatherPacket> deduplicatedStream = runTransactionalDeduplicationPipeline(streamsBuilder);
+        runTransactionalAggregationStream(streamsBuilder, serdeConfig);
         return deduplicatedStream;
     }
 
-    private @NonNull KStream<String, WeatherPacket> runTransactionalDeduplicationPipeline(StreamsBuilder streamsBuilder,
-                                                                                          Serde<WeatherPacket> weatherPacketSerde) {
+    private void registerTransactionalStateStores(StreamsBuilder streamsBuilder) {
+        registerDeduplicationStore(streamsBuilder);
+        registerAggregationStore(streamsBuilder);
+    }
+
+    private void registerAggregationStore(StreamsBuilder streamsBuilder) {
+        // Local Accumulation Key-Value Store Builder for Pipeline 2
+        StoreBuilder<KeyValueStore<String, WeatherPacket>> accumStoreBuilder = Stores.keyValueStoreBuilder(
+                Stores.persistentKeyValueStore(AnalysisConstants.ZERO_LOSS_ACCUMULATION_STORE),
+                Serdes.String(), weatherPacketSerde
+        );
+        streamsBuilder.addStateStore(accumStoreBuilder);
+    }
+
+    private @NonNull KStream<String, WeatherPacket> runTransactionalDeduplicationPipeline(StreamsBuilder streamsBuilder) {
         KStream<String, WeatherPacket> rawInputStream = streamsBuilder.stream(
                 kafkaIngestionLiveTopic,
                 Consumed.with(Serdes.String(), weatherPacketSerde)
@@ -93,8 +103,9 @@ public class TelemetryTopologyOrchestrator implements TelemetryAnalysisService {
         );
         KStream<String, WeatherPacket> reKeyedStream = deduplicatedStream.selectKey((key, packet) -> {
             Location location = packet.getLocation();
-            double latGrid = Math.round(location.getLatitude()*10.0)/10.0;
-            double lonGrid = Math.round(location.getLongitude()*10.0)/10.0;
+            double roundCoefficient = 10.0;
+            double latGrid = Math.round(location.getLatitude()*roundCoefficient)/roundCoefficient;
+            double lonGrid = Math.round(location.getLongitude()*roundCoefficient)/roundCoefficient;
             return latGrid+PlatformConstants.HASHTAG_DELIMITER+lonGrid;
         });
         // Publish to the raw topic. Kafka automatically funnels matching locations to the SAME partition.
@@ -105,7 +116,7 @@ public class TelemetryTopologyOrchestrator implements TelemetryAnalysisService {
         return deduplicatedStream;
     }
 
-    private void runTransactionalAggregationStream(StreamsBuilder streamsBuilder, Serde<WeatherPacket> weatherPacketSerde,
+    private void runTransactionalAggregationStream(StreamsBuilder streamsBuilder,
                                                    Map<String, String> serdeConfig) {
         // Consume from the raw analysis topic where records have been co-partitioned by location
         KStream<String, WeatherPacket> cleanInputStream = streamsBuilder.stream(

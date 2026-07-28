@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.messaging.stream;
+package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor;
 
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.ZERO_LOSS_ACCUMULATION_STORE;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.HASHTAG_DELIMITER;
@@ -6,7 +6,7 @@ import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstan
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants;
-import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryPersistentService;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryPersistentService;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryUtils;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
@@ -101,7 +101,8 @@ public class TelemetryAggregationProcessor implements Processor<String, WeatherP
         }
         // Forward calculations downstream safely within the active Kafka stream execution runtime task context
         if(!extractionMatrix.isEmpty()) {
-            persistentService.persistAggregatedHistory(extractionMatrix, this.context, currentWindowFloor);
+            persistentService.processAndComputeAggregatedHistory(extractionMatrix)
+                    .forEach(record -> context.forward(new Record<>(record.key(), record.payload(), currentWindowFloor)));
             keysToRemove.forEach(accumStore::delete);
         }
     }

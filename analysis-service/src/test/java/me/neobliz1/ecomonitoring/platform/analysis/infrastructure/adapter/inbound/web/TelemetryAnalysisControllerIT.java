@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.delivery.web;
+package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.inbound.web;
 
 import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.LATEST_WEATHER_MAP_ENDPOINT;
 import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.WEATHER_MAP_URI;
@@ -11,9 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import lombok.extern.slf4j.Slf4j;
-import me.neobliz1.ecomonitoring.platform.analysis.AnalysisBootEngine;
-import me.neobliz1.ecomonitoring.platform.analysis.AssertionTestHelpers;
-import me.neobliz1.ecomonitoring.platform.analysis.domain.service.BaseKafkaIntegrationTest;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.support.IntegrationTestSupport;
 import me.neobliz1.ecomonitoring.platform.model.exception.EcoPlatformErrorCode;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
@@ -21,30 +19,22 @@ import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.test.annotation.DirtiesContext;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.containers.ComposeContainer;
 import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
-@Testcontainers
 @AutoConfigureMockMvc
-@ActiveProfiles({ "dev", "common" })
-@SpringBootTest(classes = AnalysisBootEngine.class)
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
-public class TelemetryAnalysisControllerIntegrationTest extends BaseKafkaIntegrationTest {
+public class TelemetryAnalysisControllerIT extends IntegrationTestSupport {
 
     @Autowired
     private MockMvc mockMvc;
@@ -75,7 +65,7 @@ public class TelemetryAnalysisControllerIntegrationTest extends BaseKafkaIntegra
         // Wait for the WeatherMap to be processed and stored in Redis
         String gridCellKey = calculateGridCellKey(testLat, testLon);
         WeatherMap map = findWeatherMapByGridCellAnBucketFloor(gridCellKey, currentBucketFloor);
-        AssertionTestHelpers.assertGridCellExists(map, gridCellKey);
+        assertGridCellExists(map, gridCellKey);
     }
 
     @Test

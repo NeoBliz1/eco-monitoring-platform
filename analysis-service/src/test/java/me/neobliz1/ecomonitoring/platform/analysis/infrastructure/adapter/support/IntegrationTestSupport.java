@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.analysis.domain.service;
+package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.support;
 
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.SCHEMA_REGISTRY_URL;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.getConsumerConf;
@@ -9,6 +9,8 @@ import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUti
 
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import lombok.extern.slf4j.Slf4j;
+import me.neobliz1.ecomonitoring.platform.analysis.AnalysisBootEngine;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryUtils;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.AirQualityReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.AmbientReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.Location;
@@ -45,12 +47,14 @@ import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.kafka.config.StreamsBuilderFactoryBean;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.util.FileSystemUtils;
 import org.testcontainers.containers.ComposeContainer;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.io.File;
 import java.time.Duration;
@@ -65,10 +69,12 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Slf4j
-@SpringBootTest
-@ActiveProfiles("dev")
+@Testcontainers
+@ActiveProfiles({ "dev", "common" })
+@SpringBootTest(classes = AnalysisBootEngine.class)
 @TestPropertySource(locations = "classpath:.env.test")
-public abstract class BaseKafkaIntegrationTest {
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
+public abstract class IntegrationTestSupport extends AssertionTestSupport {
 
     public static final float FLUSH_PACKET_TEMPERATURE = 20.0f;
     public static final float FLUSH_PACKET_HUMIDITY = 45.0f;
@@ -97,12 +103,12 @@ public abstract class BaseKafkaIntegrationTest {
     @Autowired
     private StreamsBuilderFactoryBean streamsBuilderFactoryBean;
     @Autowired
-    RedisTemplate<String, byte[]> protobufRedisTemplate;
+    protected RedisTemplate<String, byte[]> protobufRedisTemplate;
     @Autowired
-    StringRedisTemplate redisTemplate;
+    protected StringRedisTemplate redisTemplate;
 
     @Value("${spring.kafka.topic.weather-live}")
-    String kafkaIngestionTopic;
+    protected String kafkaIngestionTopic;
     @Value("${spring.kafka.topic.weather-raw}")
     String kafkaAnalysisRawTopic;
     @Value("${spring.kafka.topic.weather-history}")
@@ -112,8 +118,8 @@ public abstract class BaseKafkaIntegrationTest {
     @Value("${spring.kafka.streams.pipeline.name.aggregation-processor.interval}")
     private Integer aggregationSecondsPerInterval;
 
-    Producer<String, WeatherPacket> testProducer;
-    Consumer<String, WeatherPacket> rawTopicConsumer;
+    protected Producer<String, WeatherPacket> testProducer;
+    protected Consumer<String, WeatherPacket> rawTopicConsumer;
     Consumer<String, WeatherMap> historyTopicConsumer;
 
     @BeforeAll
@@ -239,7 +245,7 @@ public abstract class BaseKafkaIntegrationTest {
         return TelemetryUtils.getAggregationBucketFloorInterval(Instant.now().toEpochMilli(), aggregationSecondsPerInterval);
     }
 
-    long getNextBucketFloor(long timestamp) {
+    protected long getNextBucketFloor(long timestamp) {
         return TelemetryUtils.getAggregationBucketFloorInterval(timestamp+BUCKET_SIZE_MS, aggregationSecondsPerInterval);
     }
 
@@ -249,7 +255,7 @@ public abstract class BaseKafkaIntegrationTest {
                 Math.round(longitude*10.0)/10.0);
     }
 
-    double[][] getEdgeCaseCoordinates() {
+    protected double[][] getEdgeCaseCoordinates() {
         return new double[][]{
                 { -90.0, FLUSH_LAT },
                 { 90.0, FLUSH_LAT },
@@ -260,7 +266,7 @@ public abstract class BaseKafkaIntegrationTest {
         };
     }
 
-    WeatherPacket createBasicPacket(String stationId, long timestamp, double lat, double lon) {
+    protected WeatherPacket createBasicPacket(String stationId, long timestamp, double lat, double lon) {
         return WeatherPacket.newBuilder()
                 .setStationId(stationId)
                 .setTimestamp(timestamp)
@@ -278,7 +284,7 @@ public abstract class BaseKafkaIntegrationTest {
                 .build();
     }
 
-    WeatherPacket createPacketWithAmbientReadings(String stationId, long timestamp,
+    protected WeatherPacket createPacketWithAmbientReadings(String stationId, long timestamp,
                                                             double lat, double lon, float temperatureC, float humidityPct, float pressureHpa) {
         return WeatherPacket.newBuilder()
                 .setStationId(stationId)
@@ -297,7 +303,7 @@ public abstract class BaseKafkaIntegrationTest {
                 .build();
     }
 
-    WeatherPacket createPacketWithWindReadings(String stationId, long timestamp,
+    protected WeatherPacket createPacketWithWindReadings(String stationId, long timestamp,
                                                          double lat, double lon, float speedMps, int directionDeg, float gustMps) {
         return WeatherPacket.newBuilder()
                 .setStationId(stationId)
@@ -316,7 +322,7 @@ public abstract class BaseKafkaIntegrationTest {
                 .build();
     }
 
-    WeatherPacket createPacketWithAirQualityReadings(String stationId, long timestamp,
+    protected WeatherPacket createPacketWithAirQualityReadings(String stationId, long timestamp,
                                                                double lat, double lon, float pm100, float pm25, float pm10, float vocIndex, float noiseDb) {
         return WeatherPacket.newBuilder()
                 .setStationId(stationId)
@@ -337,7 +343,7 @@ public abstract class BaseKafkaIntegrationTest {
                 .build();
     }
 
-    WeatherPacket createPacketWithPrecipitationReadings(String stationId, long timestamp,
+    protected WeatherPacket createPacketWithPrecipitationReadings(String stationId, long timestamp,
                                                                   double lat, double lon, float rainRateMmH, float snowDepthCm, float evaporationRate) {
         return WeatherPacket.newBuilder()
                 .setStationId(stationId)
@@ -356,7 +362,7 @@ public abstract class BaseKafkaIntegrationTest {
                 .build();
     }
 
-    WeatherPacket createPacketWithOpticalReadings(String stationId, long timestamp,
+    protected WeatherPacket createPacketWithOpticalReadings(String stationId, long timestamp,
                                                             double lat, double lon, float uvIndex, float solarRadiationWm2, float lux, float visibilityM) {
         return WeatherPacket.newBuilder()
                 .setStationId(stationId)
@@ -436,7 +442,7 @@ public abstract class BaseKafkaIntegrationTest {
         )).get();
     }
 
-    void sendPackets(List<WeatherPacket> packets, long delayMs) throws Exception {
+    protected void sendPackets(List<WeatherPacket> packets, long delayMs) throws Exception {
         for(WeatherPacket packet : packets) {
             sendPacket(packet);
             if(delayMs>0) {
@@ -446,7 +452,7 @@ public abstract class BaseKafkaIntegrationTest {
         testProducer.flush();
     }
 
-    List<WeatherPacket> generateMockPackets(int count, String stationId, long startTimeFloor, double lat, double lon) {
+    protected List<WeatherPacket> generateMockPackets(int count, String stationId, long startTimeFloor, double lat, double lon) {
         List<WeatherPacket> packets = new ArrayList<>(count);
         for(int i = 0; i<count; i++) {
             WeatherPacket packet = WeatherPacket.newBuilder()
@@ -466,7 +472,7 @@ public abstract class BaseKafkaIntegrationTest {
         return packets;
     }
 
-    List<WeatherPacket> generateMockPacketsWithKnownValues(String stationId,
+    protected List<WeatherPacket> generateMockPacketsWithKnownValues(String stationId,
                                                                      long startTimeFloor, double lat, double lon) {
         List<WeatherPacket> packets = new ArrayList<>(10);
         for(int i = 0; i<10; i++) {
@@ -486,7 +492,8 @@ public abstract class BaseKafkaIntegrationTest {
         }
         return packets;
     }
-    <T> ConsumerRecord<String, T> pollSingleRecord(Consumer<String, T> consumer) {
+
+    protected <T> ConsumerRecord<String, T> pollSingleRecord(Consumer<String, T> consumer) {
         ConsumerRecords<String, T> records = consumer.poll(Duration.ofSeconds(40));
         if (records.isEmpty()) {
             return null;
@@ -494,7 +501,7 @@ public abstract class BaseKafkaIntegrationTest {
         return records.iterator().next();
     }
 
-    List<WeatherMap> collectHistoryRecords(int targetRecordsNum) {
+    protected List<WeatherMap> collectHistoryRecords(int targetRecordsNum) {
         AtomicReference<List<WeatherMap>> matchedMap = new AtomicReference<>();
         Awaitility.await()
                 .atMost(Duration.ofMinutes(1))
@@ -509,7 +516,7 @@ public abstract class BaseKafkaIntegrationTest {
         return matchedMap.get();
     }
 
-    List<WeatherPacket> collectRawRecords() {
+    protected List<WeatherPacket> collectRawRecords() {
         List<WeatherPacket> results = new ArrayList<>();
         for(int i = 0; i<3; i++) {
             ConsumerRecord<String, WeatherPacket> record = pollSingleRecord(rawTopicConsumer);
@@ -560,7 +567,7 @@ public abstract class BaseKafkaIntegrationTest {
         testProducer.flush();
     }
 
-    void sendWarmupPackage(long currentBucketFloor) throws Exception {
+    protected void sendWarmupPackage(long currentBucketFloor) throws Exception {
         WeatherPacket basicPacket = createBasicPacket("1", currentBucketFloor, FLUSH_LAT, FLUSH_LAT);
         sendPacket(basicPacket);
         testProducer.flush();

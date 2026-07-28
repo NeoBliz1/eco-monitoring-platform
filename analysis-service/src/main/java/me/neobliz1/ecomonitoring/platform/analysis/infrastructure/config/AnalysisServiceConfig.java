@@ -5,12 +5,16 @@ import static me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryAnalysisService;
-import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryPersistentService;
-import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryQueryService;
-import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.messaging.stream.TelemetryTopologyOrchestrator;
-import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.persistence.TelemetryStatePersister;
-import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.query.TelemetryStateQueryResolver;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.port.inbound.TelemetryAnalysisService;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.port.inbound.TelemetryQueryService;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryPersistenceRepository;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryPersistentService;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryQueryRepository;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryStatePersister;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryStateQueryResolver;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.TelemetryTopologyOrchestrator;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.persistence.redis.TelemetryPersistenceRepositoryAdapter;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.persistence.redis.TelemetryQueryRepositoryAdapter;
 import me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils;
 import me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils.ServiceAddressRecord;
 import me.neobliz1.ecomonitoring.platform.model.exception.RedisPasswordNotSetException;
@@ -52,14 +56,24 @@ public class AnalysisServiceConfig {
     private String kafkaServiceName;
 
     @Bean
-    public TelemetryPersistentService telemetryPersistentService(RedisTemplate<String, byte[]> protobufRedisTemplate,
-                                                                 StringRedisTemplate redisTemplate) {
-        return new TelemetryStatePersister(protobufRedisTemplate, redisTemplate);
+    public TelemetryPersistentService telemetryPersistentService(TelemetryPersistenceRepository telemetryRepository) {
+        return new TelemetryStatePersister(telemetryRepository);
     }
 
     @Bean
-    public TelemetryQueryService telemetryQueryService(RedisTemplate<String, byte[]> protobufRedisTemplate) {
-        return new TelemetryStateQueryResolver(protobufRedisTemplate);
+    public TelemetryPersistenceRepository telemetryPersistenceRepository(RedisTemplate<String, byte[]> protobufRedisTemplate,
+                                                                 StringRedisTemplate redisTemplate) {
+        return new TelemetryPersistenceRepositoryAdapter(protobufRedisTemplate, redisTemplate);
+    }
+
+    @Bean
+    public TelemetryQueryRepository telemetryQueryRepository(RedisTemplate<String, byte[]> protobufRedisTemplate) {
+        return new TelemetryQueryRepositoryAdapter(protobufRedisTemplate);
+    }
+
+    @Bean
+    public TelemetryQueryService telemetryQueryService(TelemetryQueryRepository telemetryQueryRepository) {
+        return new TelemetryStateQueryResolver(telemetryQueryRepository);
     }
 
     @Bean

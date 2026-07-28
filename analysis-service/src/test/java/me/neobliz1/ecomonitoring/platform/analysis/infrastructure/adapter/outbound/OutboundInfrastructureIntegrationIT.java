@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.analysis.domain.service;
+package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound;
 
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.HOT_WINDOW_PREFIX;
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.WEATHER_HOTWINDOW;
@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import lombok.extern.slf4j.Slf4j;
-import me.neobliz1.ecomonitoring.platform.analysis.AssertionTestHelpers;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.support.IntegrationTestSupport;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.GridCellLayers;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
@@ -19,7 +19,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.annotation.DirtiesContext;
+import org.testcontainers.containers.ComposeContainer;
+import org.testcontainers.junit.jupiter.Container;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,13 +29,15 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
-//@Testcontainers
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
-public class TelemetryAnalysisServiceIntegrationTest extends BaseKafkaIntegrationTest {
+public class OutboundInfrastructureIntegrationIT extends IntegrationTestSupport {
 
-//    @Container
-//    @SuppressWarnings("unused")
-//    public static final ComposeContainer ENVIRONMENT = getComposeContainer();
+    @Container
+    @SuppressWarnings("unused")
+    public static final ComposeContainer ENVIRONMENT = getComposeContainer();
+
+    private static @NotNull String getReadingsAssertMessages(int expectedReadingsNum) {
+        return "Total readings across buckets should be "+expectedReadingsNum;
+    }
 
     @Test
     public void shouldProcessCustomAmbientReadings_whenPacketContainsSpecificTemperatureHumidityPressure() throws Exception {
@@ -51,11 +54,11 @@ public class TelemetryAnalysisServiceIntegrationTest extends BaseKafkaIntegratio
         sendFlushPackage(stationId, currentBucketFloor, lat, lon);
         WeatherMap map = findWeatherMapByGridCellAnBucketFloor(gridCellKey, currentBucketFloor);
 
-        AssertionTestHelpers.assertGridCellExists(map, gridCellKey);
-        AssertionTestHelpers.assertAverageTemperature(map, gridCellKey, FLUSH_PACKET_TEMPERATURE, 0.01);
-        AssertionTestHelpers.assertAverageHumidity(map, gridCellKey, FLUSH_PACKET_HUMIDITY, 0.01);
-        AssertionTestHelpers.assertAveragePressure(map, gridCellKey, FLUSH_PACKET_PRESSURE, 0.01);
-        AssertionTestHelpers.assertGridCellReadingCount(map, gridCellKey, 1);
+        assertGridCellExists(map, gridCellKey);
+        assertAverageTemperature(map, gridCellKey, FLUSH_PACKET_TEMPERATURE, 0.01);
+        assertAverageHumidity(map, gridCellKey, FLUSH_PACKET_HUMIDITY, 0.01);
+        assertAveragePressure(map, gridCellKey, FLUSH_PACKET_PRESSURE, 0.01);
+        assertGridCellReadingCount(map, gridCellKey, 1);
     }
 
     @Test
@@ -79,11 +82,11 @@ public class TelemetryAnalysisServiceIntegrationTest extends BaseKafkaIntegratio
         sendFlushPackage(stationId, currentBucketFloor, lat, lon);
         WeatherMap map = findWeatherMapByGridCellAnBucketFloor(gridCellKey, currentBucketFloor);
 
-        AssertionTestHelpers.assertGridCellExists(map, gridCellKey);
-        AssertionTestHelpers.assertAirQualityReadings(map, gridCellKey,
+        assertGridCellExists(map, gridCellKey);
+        assertAirQualityReadings(map, gridCellKey,
                 expectedPm25, expectedPm10, expectedPm100, 0.01);
-        AssertionTestHelpers.assertVocAndNoise(map, gridCellKey, expectedVocIndex, expectedNoiseDb, 0.01);
-        AssertionTestHelpers.assertGridCellReadingCount(map, gridCellKey, 1);
+        assertVocAndNoise(map, gridCellKey, expectedVocIndex, expectedNoiseDb, 0.01);
+        assertGridCellReadingCount(map, gridCellKey, 1);
     }
 
     @Test
@@ -104,10 +107,10 @@ public class TelemetryAnalysisServiceIntegrationTest extends BaseKafkaIntegratio
         sendFlushPackage(stationId, currentBucketFloor, lat, lon);
         WeatherMap map = findWeatherMapByGridCellAnBucketFloor(gridCellKey, currentBucketFloor);
 
-        AssertionTestHelpers.assertGridCellExists(map, gridCellKey);
-        AssertionTestHelpers.assertPrecipitationReadings(map, gridCellKey,
+        assertGridCellExists(map, gridCellKey);
+        assertPrecipitationReadings(map, gridCellKey,
                 expectedRainRateMmH, expectedSnowDepthCm, expectedEvaporationRate, 0.01);
-        AssertionTestHelpers.assertGridCellReadingCount(map, gridCellKey, 1);
+        assertGridCellReadingCount(map, gridCellKey, 1);
     }
 
     @Test
@@ -130,11 +133,11 @@ public class TelemetryAnalysisServiceIntegrationTest extends BaseKafkaIntegratio
         sendFlushPackage(stationId, currentBucketFloor, lat, lon);
         WeatherMap map = findWeatherMapByGridCellAnBucketFloor(gridCellKey, currentBucketFloor);
 
-        AssertionTestHelpers.assertGridCellExists(map, gridCellKey);
-        AssertionTestHelpers.assertOpticalReadings(map, gridCellKey,
+        assertGridCellExists(map, gridCellKey);
+        assertOpticalReadings(map, gridCellKey,
                 expectedUvIndex, expectedSolarRadiationWm2,
                 expectedLux, expectedVisibilityM, 0.01);
-        AssertionTestHelpers.assertGridCellReadingCount(map, gridCellKey, 1);
+        assertGridCellReadingCount(map, gridCellKey, 1);
     }
 
     @Test
@@ -160,15 +163,15 @@ public class TelemetryAnalysisServiceIntegrationTest extends BaseKafkaIntegratio
         sendFlushPackage(stationId, currentBucketFloor, lat, lon);
         WeatherMap map = findWeatherMapByGridCellAnBucketFloor(gridCellKey, currentBucketFloor);
 
-        AssertionTestHelpers.assertGridCellExists(map, gridCellKey);
-        AssertionTestHelpers.assertGridCellReadingCount(map, gridCellKey, 4);
-        AssertionTestHelpers.assertAverageTemperature(map, gridCellKey, 22.0, 0.01);
-        AssertionTestHelpers.assertAverageHumidity(map, gridCellKey, 55.0, 0.01);
-        AssertionTestHelpers.assertAveragePressure(map, gridCellKey, 1013.0, 0.01);
-        AssertionTestHelpers.assertAirQualityReadings(map, gridCellKey, 20.0, 30.0, 40.0, 0.01);
-        AssertionTestHelpers.assertVocAndNoise(map, gridCellKey, 1.5, 50.0, 0.01);
-        AssertionTestHelpers.assertPrecipitationReadings(map, gridCellKey, 5.0, 0.0, 1.5, 0.01);
-        AssertionTestHelpers.assertOpticalReadings(map, gridCellKey, 6.0, 700.0, 50000.0, 12.0, 0.01);
+        assertGridCellExists(map, gridCellKey);
+        assertGridCellReadingCount(map, gridCellKey, 4);
+        assertAverageTemperature(map, gridCellKey, 22.0, 0.01);
+        assertAverageHumidity(map, gridCellKey, 55.0, 0.01);
+        assertAveragePressure(map, gridCellKey, 1013.0, 0.01);
+        assertAirQualityReadings(map, gridCellKey, 20.0, 30.0, 40.0, 0.01);
+        assertVocAndNoise(map, gridCellKey, 1.5, 50.0, 0.01);
+        assertPrecipitationReadings(map, gridCellKey, 5.0, 0.0, 1.5, 0.01);
+        assertOpticalReadings(map, gridCellKey, 6.0, 700.0, 50000.0, 12.0, 0.01);
     }
 
     @Test
@@ -200,11 +203,11 @@ public class TelemetryAnalysisServiceIntegrationTest extends BaseKafkaIntegratio
         sendFlushPackage(stationId, currentBucketFloor, lat, lon);
         WeatherMap map = findWeatherMapByGridCellAnBucketFloor(gridCellKey, currentBucketFloor);
 
-        AssertionTestHelpers.assertGridCellExists(map, gridCellKey);
-        AssertionTestHelpers.assertGridCellReadingCount(map, gridCellKey, 4);
-        AssertionTestHelpers.assertAverageTemperature(map, gridCellKey, -100.0, 0.01);
-        AssertionTestHelpers.assertAverageHumidity(map, gridCellKey, 100.0, 0.01);
-        AssertionTestHelpers.assertAveragePressure(map, gridCellKey, 1500.0, 0.01);
+        assertGridCellExists(map, gridCellKey);
+        assertGridCellReadingCount(map, gridCellKey, 4);
+        assertAverageTemperature(map, gridCellKey, -100.0, 0.01);
+        assertAverageHumidity(map, gridCellKey, 100.0, 0.01);
+        assertAveragePressure(map, gridCellKey, 1500.0, 0.01);
     }
 
     @Test
@@ -221,11 +224,11 @@ public class TelemetryAnalysisServiceIntegrationTest extends BaseKafkaIntegratio
         sendFlushPackage(stationId, currentBucketFloor, lat, lon);
         WeatherMap map = findWeatherMapByGridCellAnBucketFloor(gridCellKey, currentBucketFloor);
 
-        AssertionTestHelpers.assertGridCellExists(map, gridCellKey);
-        AssertionTestHelpers.assertAverageTemperature(map, gridCellKey, 24.5, 0.1);
-        AssertionTestHelpers.assertAverageHumidity(map, gridCellKey, 45.0, 0.1);
-        AssertionTestHelpers.assertAveragePressure(map, gridCellKey, 1013.25, 0.1);
-        AssertionTestHelpers.assertGridCellReadingCount(map, gridCellKey, 10);
+        assertGridCellExists(map, gridCellKey);
+        assertAverageTemperature(map, gridCellKey, 24.5, 0.1);
+        assertAverageHumidity(map, gridCellKey, 45.0, 0.1);
+        assertAveragePressure(map, gridCellKey, 1013.25, 0.1);
+        assertGridCellReadingCount(map, gridCellKey, 10);
     }
 
     @Test
@@ -241,8 +244,8 @@ public class TelemetryAnalysisServiceIntegrationTest extends BaseKafkaIntegratio
         sendFlushPackage(stationId, currentBucketFloor, lat, lon);
         WeatherMap map = findWeatherMapByGridCellAnBucketFloor(gridCellKey, currentBucketFloor);
 
-        AssertionTestHelpers.assertGridCellExists(map, gridCellKey);
-        AssertionTestHelpers.assertGridCellHasAllSensorTypes(map, gridCellKey);
+        assertGridCellExists(map, gridCellKey);
+        assertGridCellHasAllSensorTypes(map, gridCellKey);
     }
 
     @Test
@@ -270,36 +273,9 @@ public class TelemetryAnalysisServiceIntegrationTest extends BaseKafkaIntegratio
                 .map(WeatherMap::getTimestampBucket)
                 .toList();
 
-        assertEquals(expectedReadingsNum, totalReadingsMap, getReadingsAssertMessgs(expectedReadingsNum));
-        assertEquals(1, totalReadingsNextMap, getReadingsAssertMessgs(1));
+        assertEquals(expectedReadingsNum, totalReadingsMap, getReadingsAssertMessages(expectedReadingsNum));
+        assertEquals(1, totalReadingsNextMap, getReadingsAssertMessages(1));
         assertEquals(2, bucketTimestamps.size(), "Total timestamps across buckets should be 2");
-    }
-
-    @Test
-    public void shouldDropDuplicatePackets_whenSamePacketSentTwiceWithinDedupWindow() throws Exception {
-        long currentBucketFloor = getCurrentBucketFloor();
-        String stationId = "1";
-        double lat = 55.123;
-        double lon = -61.345;
-        long timestamp = currentBucketFloor+1000;
-        String gridCellKey = calculateGridCellKey(lat, lon);
-        WeatherPacket packet = createBasicPacket(stationId, timestamp, lat, lon);
-
-        sendPacket(packet);
-        Thread.sleep(100);
-        sendPacket(packet);
-        sendFlushPackage(stationId, currentBucketFloor, lat, lon);
-        Optional<WeatherMap> targetMap = collectHistoryRecords(2).stream()
-                .filter(m -> m.getTimestampBucket()==currentBucketFloor)
-                .findFirst();
-        List<WeatherPacket> weatherPackets = collectRawRecords();
-
-        assertTrue(targetMap.isPresent(), "Should have history record for current bucket");
-        AssertionTestHelpers.assertGridCellExists(targetMap.get(), gridCellKey);
-        AssertionTestHelpers.assertGridCellReadingCount(targetMap.get(), gridCellKey, 1);
-        assertNotNull(weatherPackets);
-        assertEquals(1, weatherPackets.size());
-        assertEquals(stationId, weatherPackets.getFirst().getStationId());
     }
 
     @Test
@@ -332,22 +308,30 @@ public class TelemetryAnalysisServiceIntegrationTest extends BaseKafkaIntegratio
     }
 
     @Test
-    public void shouldCombineDataForMultipleStations_whenStationsSendSimultaneousPackets() throws Exception {
-        String[] stationIds = { "11", "15", "30" };
-        double lat = 55.0;
-        double lon = -61.0;
-        String gridCellKey = calculateGridCellKey(lat, lon);
+    public void shouldDropDuplicatePackets_whenSamePacketSentTwiceWithinDedupWindow() throws Exception {
         long currentBucketFloor = getCurrentBucketFloor();
+        String stationId = "1";
+        double lat = 55.123;
+        double lon = -61.345;
+        long timestamp = currentBucketFloor+1000;
+        String gridCellKey = calculateGridCellKey(lat, lon);
+        WeatherPacket packet = createBasicPacket(stationId, timestamp, lat, lon);
 
-        sendWarmupPackage(currentBucketFloor);
-        for(String stationId : stationIds) {
-            sendPacket(createBasicPacket(stationId, currentBucketFloor, lat, lon));
-        }
-        sendFlushPackage("11", currentBucketFloor, lat, lon);
-        WeatherMap map = findWeatherMapByGridCellAnBucketFloor(gridCellKey, currentBucketFloor);
+        sendPacket(packet);
+        Thread.sleep(100);
+        sendPacket(packet);
+        sendFlushPackage(stationId, currentBucketFloor, lat, lon);
+        Optional<WeatherMap> targetMap = collectHistoryRecords(2).stream()
+                .filter(m -> m.getTimestampBucket()==currentBucketFloor)
+                .findFirst();
+        List<WeatherPacket> weatherPackets = collectRawRecords();
 
-        AssertionTestHelpers.assertGridCellExists(map, gridCellKey);
-        AssertionTestHelpers.assertGridCellReadingCount(map, gridCellKey, 3);
+        assertTrue(targetMap.isPresent(), "Should have history record for current bucket");
+        assertGridCellExists(targetMap.get(), gridCellKey);
+        assertGridCellReadingCount(targetMap.get(), gridCellKey, 1);
+        assertNotNull(weatherPackets);
+        assertEquals(1, weatherPackets.size());
+        assertEquals(stationId, weatherPackets.getFirst().getStationId());
     }
 
     @Test
@@ -429,6 +413,25 @@ public class TelemetryAnalysisServiceIntegrationTest extends BaseKafkaIntegratio
     }
 
     @Test
+    public void shouldCombineDataForMultipleStations_whenStationsSendSimultaneousPackets() throws Exception {
+        String[] stationIds = { "11", "15", "30" };
+        double lat = 55.0;
+        double lon = -61.0;
+        String gridCellKey = calculateGridCellKey(lat, lon);
+        long currentBucketFloor = getCurrentBucketFloor();
+
+        sendWarmupPackage(currentBucketFloor);
+        for(String stationId : stationIds) {
+            sendPacket(createBasicPacket(stationId, currentBucketFloor, lat, lon));
+        }
+        sendFlushPackage("11", currentBucketFloor, lat, lon);
+        WeatherMap map = findWeatherMapByGridCellAnBucketFloor(gridCellKey, currentBucketFloor);
+
+        assertGridCellExists(map, gridCellKey);
+        assertGridCellReadingCount(map, gridCellKey, 3);
+    }
+
+    @Test
     public void shouldAcceptValidStationIdsAtBoundaries_whenStationIdIs1Or30() throws Exception {
         long currentWindowTimeFloor = getCurrentBucketFloor();
         String[] stationIds = { "1", "30" };
@@ -444,8 +447,8 @@ public class TelemetryAnalysisServiceIntegrationTest extends BaseKafkaIntegratio
         sendFlushPackage("1", currentWindowTimeFloor, lat, lon);
         WeatherMap weatherMap = findWeatherMapByGridCellAnBucketFloor(gridCellKey, currentWindowTimeFloor);
 
-        AssertionTestHelpers.assertGridCellExists(weatherMap, gridCellKey);
-        AssertionTestHelpers.assertGridCellReadingCount(weatherMap, gridCellKey, 2);
+        assertGridCellExists(weatherMap, gridCellKey);
+        assertGridCellReadingCount(weatherMap, gridCellKey, 2);
     }
 
     @Test
@@ -463,13 +466,9 @@ public class TelemetryAnalysisServiceIntegrationTest extends BaseKafkaIntegratio
         sendFlushPackage("1", currentWindowTimeFloor, lat, lon);
         WeatherMap weatherMap = findWeatherMapByGridCellAnBucketFloor(gridCellKey, currentWindowTimeFloor);
 
-        AssertionTestHelpers.assertGridCellExists(weatherMap, gridCellKey);
-        AssertionTestHelpers.assertVectorWindDirectionAveraging(weatherMap, gridCellKey, 0.0, 1.0);
-        AssertionTestHelpers.assertAverageWindSpeed(weatherMap, gridCellKey, 15.0, 0.1);
-    }
-
-    private static @NotNull String getReadingsAssertMessgs(int expectedReadingsNum) {
-        return "Total readings across buckets should be "+expectedReadingsNum;
+        assertGridCellExists(weatherMap, gridCellKey);
+        assertVectorWindDirectionAveraging(weatherMap, gridCellKey, 0.0, 1.0);
+        assertAverageWindSpeed(weatherMap, gridCellKey, 15.0, 0.1);
     }
 
     private static long getReadingsNum(List<WeatherMap> weatherMaps, String gridCellKey, long bucketFloor) {

@@ -7,7 +7,10 @@ import java.time.Duration;
 @UtilityClass
 public class TelemetryUtils {
 
-    public long getAggregationBucketFloorInterval(long packetTimestampInMillis, int aggregationSecondsPerInterval) {
+    public static long getAggregationBucketFloorInterval(long packetTimestampInMillis, int aggregationSecondsPerInterval) {
+        if(packetTimestampInMillis<0 || aggregationSecondsPerInterval<0) {
+            return 0L;
+        }
         long aggIntervalMillis = TelemetryUtils.getMillis(aggregationSecondsPerInterval);
         return packetTimestampInMillis/aggIntervalMillis*aggIntervalMillis;
     }

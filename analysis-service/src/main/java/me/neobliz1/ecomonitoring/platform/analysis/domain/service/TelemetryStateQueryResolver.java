@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.query;
+package me.neobliz1.ecomonitoring.platform.analysis.domain.service;
 
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.HASHTAG_DELIMITER;
 
@@ -6,8 +6,8 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.util.JsonFormat;
 import lombok.RequiredArgsConstructor;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants;
-import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryQueryService;
-import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryUtils;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.port.inbound.TelemetryQueryService;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryQueryRepository;
 import me.neobliz1.ecomonitoring.platform.model.exception.InvalidCoordinatesSquareException;
 import me.neobliz1.ecomonitoring.platform.model.exception.ProtocolBufferTranslationException;
 import me.neobliz1.ecomonitoring.platform.model.exception.WeatherMapDataNotFoundException;
@@ -15,7 +15,6 @@ import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.GridCellLay
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.data.redis.core.RedisTemplate;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -25,7 +24,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class TelemetryStateQueryResolver implements TelemetryQueryService {
 
-    private final RedisTemplate<String, byte[]> protobufRedisTemplate;
+    private final TelemetryQueryRepository telemetryQueryRepositoryAdapter;
 
     @Value("${spring.kafka.streams.pipeline.name.aggregation-processor.interval}")
     private Integer aggregationSecondsPerInterval;
@@ -43,11 +42,8 @@ public class TelemetryStateQueryResolver implements TelemetryQueryService {
         boolean isSquare = (maxLat>minLat && maxLon>minLon);
         if(!isSquare) throw new InvalidCoordinatesSquareException();
         long activeBucketFloor = TelemetryUtils.getAggregationBucketFloorInterval(targetTimestamp, aggregationSecondsPerInterval);
-        String redisHistoryKey = AnalysisConstants.WEATHER_MAP_KEY+activeBucketFloor;
-        Map<Object, Object> rawHashDataMatrix = protobufRedisTemplate.opsForHash().entries(redisHistoryKey);
-        if(rawHashDataMatrix==null || rawHashDataMatrix.isEmpty()) {
-            throw new WeatherMapDataNotFoundException();
-        }
+        String historyKey = AnalysisConstants.WEATHER_MAP_KEY+activeBucketFloor;
+        Map<Object, Object> rawHashDataMatrix = telemetryQueryRepositoryAdapter.findRawGridDataByBucketFloor(historyKey);
         WeatherMap.Builder weatherMapBuilder = WeatherMap.newBuilder()
                 .setTimestampBucket(activeBucketFloor)
                 .setIntervalMinutes((int) Duration.ofSeconds(aggregationSecondsPerInterval).toMinutes());
