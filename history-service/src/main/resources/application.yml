@@ -1,0 +1,62 @@
+spring:
+  profiles:
+    # profile for include common configs from common-core module
+    include: common
+  application:
+    name: ${SPRING_HISTORY_APPLICATION_NAME}
+  config:
+    import: "optional:consul:${SPRING_CLOUD_CONSUL_HOST}:${SPRING_CLOUD_CONSUL_PORT}/"
+  cloud:
+    consul:
+      host: ${SPRING_CLOUD_CONSUL_HOST}
+      port: ${SPRING_CLOUD_CONSUL_PORT}
+      discovery:
+        enabled: true
+        prefer-ip-address: true
+        ip-address: ${SERVER_HOST}
+        port: ${HISTORY_APPLICATION_SERVER_PORT}
+        service-name: ${SPRING_HISTORY_APPLICATION_NAME}
+        health-check-path: /actuator/health
+        health-check-interval: 10s
+      config:
+        enabled: true
+        format: yaml
+        prefixes: config
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    service-name: ${SPRING_DATA_SERVICE_NAME}
+    username: ${SPRING_DATA_POSTGRES_USER_NAME}
+    password: ${SPRING_DATA_POSTGRES_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    database: ${SPRING_DATA_DB_NAME}
+    schema-name: ${POSTGRES_DB_SCHEMA}
+  kafka:
+    service-name: ${KAFKA_SERVICE_NAME}
+    consumer:
+      group-id: "eco-history-consumer-group"
+      auto-offset-reset: "earliest"
+      isolation-level: "read_committed"
+      enable-auto-commit: false
+      key-deserializer: "org.apache.kafka.common.serialization.StringDeserializer"
+      value-deserializer: "org.springframework.kafka.support.serializer.ErrorHandlingDeserializer"
+      ack-mode: manual_immediate
+      properties:
+        spring.deserializer.value.delegate.class: "me.neobliz1.ecomonitoring.platform.common.serialization.WeatherPacketDeserializer"
+    properties:
+      # The new group.protocol KIP-848. Client-Side Rebalance Protocol eliminates these latency spikes completely:
+      #  - Zero Group Freezes: Partitions are safely re-assigned on the fly without halting adjacent active threads.
+      #  - Server-Assigned Load Balancing: The Kafka broker handles the heavy lifting, reducing the complex background
+      #    calculations required by your Spring Boot Java Virtual Machine.
+      #  - Lightning Fast Failover: If an instance crashes, its partitions are instantly rerouted to sibling instances
+      #     without triggering a cascading rebalance loop.
+      group.protocol: "consumer"
+      security.protocol: "SASL_PLAINTEXT"
+      sasl.mechanism: "SCRAM-SHA-512"
+      sasl.jaas.config: "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"${KAFKA_CLIENT}\" password=\"${KAFKA_CLIENT_PASSWORD}\";"
+  jpa:
+    hibernate:
+      ddl-auto: validate
+server:
+  port: ${HISTORY_APPLICATION_SERVER_PORT}

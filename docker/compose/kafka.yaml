@@ -286,7 +286,24 @@ services:
               "Interval": "10s",
               "Timeout": "5s"
             }
-          }'  
+          }'
+        
+        echo "📡 Announcing PostgreSQL Matrix Instance to Consul Discovery catalog..."
+        curl --request PUT \
+          --url "${CONSUL_URL}" \
+          --header 'Content-Type: application/json' \
+          --data '{
+            "ID": "postgres-matrix-1",
+            "Name": "postgres",
+            "Tags": ["timeseries-optimized", "history-backend", "acid-storage"],
+            "Address": "pg-db",
+            "Port": 5432,
+            "Check": {
+              "TCP": "pg-db:5432",
+              "Interval": "10s",
+              "Timeout": "5s"
+            }
+          }'
 
         echo "✅ Infrastructure discovery sync sequence complete."
 

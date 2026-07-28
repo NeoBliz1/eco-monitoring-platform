@@ -1,11 +1,8 @@
 include:
   - ./compose/kafka.yaml
   - ./compose/schema-registry.yaml
-  - ./compose/consul.yaml
-  - ./compose/jaeger.yaml
-  - ./compose/redis.yaml
-  - ./compose/postgres.yaml
-  - ./compose/vector/vector-sidecar.yaml
+  - ./compose/history-test/consul.yaml
+  - ./compose/history-test/postgres.yaml
 
 volumes:
   vector_disk_buffer:
@@ -16,12 +13,8 @@ secrets:
     file: secrets/scram/kafka_server_jaas.conf
   schema_registry_jaas:
     file: secrets/scram/schema_registry_jaas.conf
-  redis_password:
-    file: secrets/redis/redis_password
   postgres_password:
-    file: secrets/postgres/postgres_password
-  eco_user_password:
-    file: secrets/postgres/eco_user_password
+    file: secrets/redis/postgres_password
 
 networks:
   eco-net:

@@ -1,0 +1,155 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-initialize-weather-map-storage
+      author: neobliz1
+      comment: Consolidated initial layout for sparse spatial-temporal WeatherMap tracking buckets
+      changes:
+        # Create Master Time Bucket Table
+        - createTable:
+            tableName: weather_map_buckets
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_weather_map_buckets
+              - column:
+                  name: timestamp_bucket
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: interval_minutes
+                  type: INT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+
+        # Time-bucket validation check
+        - sql:
+            dbms: postgresql
+            endDelimiter: ;
+            splitStatements: true
+            sql: ALTER TABLE weather_map_buckets ADD CONSTRAINT chk_bucket_timestamp_positive CHECK (timestamp_bucket > 0);
+
+        # Index to rapidly sort time windows descending
+        - createIndex:
+            indexName: idx_bucket_time_desc
+            tableName: weather_map_buckets
+            columns:
+              - column:
+                  name: timestamp_bucket
+                  descending: true
+
+        # Create Child Normalized Grid Cell Metrics Table
+        - createTable:
+            tableName: weather_grid_cell_metrics
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_grid_cell_metrics
+              - column:
+                  name: bucket_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_metrics_to_bucket
+                    referencedTableName: weather_map_buckets
+                    referencedColumnNames: id
+                    deleteCascade: true
+              - column:
+                  name: geohash
+                  type: VARCHAR(12)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reading_count
+                  type: INT
+                  constraints:
+                    nullable: false
+
+              # Sparse Metrics Columns (Nullable to allow partial/absent readings)
+              - column: { name: avg_temperature, type: DOUBLE PRECISION }
+              - column: { name: avg_humidity, type: DOUBLE PRECISION }
+              - column: { name: avg_pressure, type: DOUBLE PRECISION }
+              - column: { name: avg_leaf_wetness_pct, type: DOUBLE PRECISION }
+              - column: { name: avg_wind_speed, type: DOUBLE PRECISION }
+              - column: { name: avg_wind_direction, type: DOUBLE PRECISION }
+              - column: { name: avg_pm25, type: DOUBLE PRECISION }
+              - column: { name: avg_pm10, type: DOUBLE PRECISION }
+              - column: { name: avg_pm100, type: DOUBLE PRECISION }
+              - column: { name: avg_voc, type: DOUBLE PRECISION }
+              - column: { name: avg_noise_db, type: DOUBLE PRECISION }
+              - column: { name: avg_rain_mm, type: DOUBLE PRECISION }
+              - column: { name: avg_snow_cm, type: DOUBLE PRECISION }
+              - column: { name: avg_evap_rate, type: DOUBLE PRECISION }
+              - column: { name: avg_uv_index, type: DOUBLE PRECISION }
+              - column: { name: avg_solar_radiation_wm2, type: DOUBLE PRECISION }
+              - column: { name: avg_lux, type: DOUBLE PRECISION }
+              - column: { name: avg_visibility_m, type: DOUBLE PRECISION }
+
+        - sql:
+            dbms: postgresql
+            endDelimiter: ;
+            splitStatements: true
+            sql: |
+              ALTER TABLE weather_grid_cell_metrics ADD CONSTRAINT chk_reading_count_positive CHECK (reading_count >= 1);
+              
+              ALTER TABLE weather_grid_cell_metrics ADD CONSTRAINT chk_ambient_sparse_bounds CHECK (
+                (avg_temperature IS NULL OR avg_temperature BETWEEN -100.0 AND 100.0)
+                AND (avg_humidity IS NULL OR avg_humidity BETWEEN 0.0 AND 100.0)
+                AND (avg_pressure IS NULL OR avg_pressure BETWEEN 0.0 AND 1500.0)
+                AND (avg_leaf_wetness_pct IS NULL OR avg_leaf_wetness_pct BETWEEN 0.0 AND 100.0)
+              );
+              
+              ALTER TABLE weather_grid_cell_metrics ADD CONSTRAINT chk_wind_sparse_bounds CHECK (
+                (avg_wind_speed IS NULL OR avg_wind_speed >= 0.0)
+                AND (avg_wind_direction IS NULL OR avg_wind_direction BETWEEN 0.0 AND 360.0)
+              );
+              
+              ALTER TABLE weather_grid_cell_metrics ADD CONSTRAINT chk_air_quality_sparse_bounds CHECK (
+                (avg_pm25 IS NULL OR avg_pm25 >= 0.0) AND (avg_pm10 IS NULL OR avg_pm10 >= 0.0) 
+                AND (avg_pm100 IS NULL OR avg_pm100 >= 0.0) AND (avg_voc IS NULL OR avg_voc >= 0.0) 
+                AND (avg_noise_db IS NULL OR avg_noise_db >= 0.0)
+              );
+              
+              ALTER TABLE weather_grid_cell_metrics ADD CONSTRAINT chk_precipitation_sparse_bounds CHECK (
+                (avg_rain_mm IS NULL OR avg_rain_mm >= 0.0) AND (avg_snow_cm IS NULL OR avg_snow_cm >= 0.0) 
+                AND (avg_evap_rate IS NULL OR avg_evap_rate >= 0.0)
+              );
+              
+              ALTER TABLE weather_grid_cell_metrics ADD CONSTRAINT chk_optical_sparse_bounds CHECK (
+                (avg_uv_index IS NULL OR avg_uv_index >= 0.0) AND (avg_solar_radiation_wm2 IS NULL OR avg_solar_radiation_wm2 >= 0.0) 
+                AND (avg_lux IS NULL OR avg_lux >= 0.0) AND (avg_visibility_m IS NULL OR avg_visibility_m >= 0.0)
+              );
+              
+              ALTER TABLE weather_grid_cell_metrics ADD CONSTRAINT chk_at_least_one_metric_group_present CHECK (
+                avg_temperature IS NOT NULL 
+                OR avg_wind_speed IS NOT NULL 
+                OR avg_pm25 IS NOT NULL 
+                OR avg_rain_mm IS NOT NULL 
+                OR avg_uv_index IS NOT NULL
+              );
+
+        # Spatial-temporal optimization indexing
+        - createIndex:
+            indexName: idx_geohash_bucket_lookup
+            tableName: weather_grid_cell_metrics
+            columns:
+              - column: { name: geohash }
+              - column: { name: bucket_id }
+
+      rollback:
+        - dropTable: { tableName: weather_grid_cell_metrics }
+        - dropTable: { tableName: weather_map_buckets }

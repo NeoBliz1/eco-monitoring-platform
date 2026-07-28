@@ -60,7 +60,9 @@ public class TelemetryAggregationProcessor implements Processor<String, WeatherP
         String uniqueTxId = packet.getStationId()+":"+packet.getTimestamp();
         String storageKey = String.format("%017d", TelemetryUtils.getAggregationBucketFloorInterval(packet.getTimestamp(), secondsPerInterval))
                 +HASHTAG_DELIMITER+record.key()+HASHTAG_DELIMITER+uniqueTxId;
-        log.debug("Storing taskId {}", this.context.taskId().toString());
+        if(log.isDebugEnabled()) {
+            log.debug("Storing taskId {}", this.context.taskId().toString());
+        }
         // Persist records inside the transactional boundary local state store
         accumStore.put(storageKey, packet);
         double latGrid = Math.round(packet.getLocation().getLatitude()*10.0)/10.0;
@@ -92,7 +94,9 @@ public class TelemetryAggregationProcessor implements Processor<String, WeatherP
                 }
                 //UTS timestamp + latitude + longitude
                 String spatialKey = parts[0]+HASHTAG_DELIMITER+parts[1]+HASHTAG_DELIMITER+parts[2];
-                log.debug("Run flushAccumulatedWindows {}", spatialKey);
+                if(log.isDebugEnabled()) {
+                    log.debug("Run flushAccumulatedWindows {}", spatialKey);
+                }
                 extractionMatrix.computeIfAbsent(bucketTime, k -> new HashMap<>())
                         .computeIfAbsent(spatialKey, k -> new ArrayList<>())
                         .add(entry.value);
