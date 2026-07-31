@@ -21,7 +21,12 @@ public class HistoricalTelemetryListener {
     )
     public void consumeHistoricalWeatherMap(ConsumerRecord<String, WeatherMap> record, Acknowledgment ack) {
         WeatherMap weatherMap = record.value();
-
+        if(weatherMap==null) {
+            log.warn("⚠️ Received null WeatherMap payload from partition {} at offset {}. Skipping corrupt record.",
+                    record.partition(), record.offset());
+            ack.acknowledge();
+            return;
+        }
         if(log.isDebugEnabled()) {
             log.debug("📡 Received aggregated WeatherMap stream chunk from Kafka. Bucket: [{}], Cells size: [{}]",
                     weatherMap.getTimestampBucket(), weatherMap.getGridCellsCount());

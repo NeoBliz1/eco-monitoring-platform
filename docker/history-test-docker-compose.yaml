@@ -1,7 +1,7 @@
 include:
   - ./compose/kafka.yaml
   - ./compose/schema-registry.yaml
-  - ./compose/history-test/consul.yaml
+  - ./compose/consul.yaml
   - ./compose/history-test/postgres.yaml
 
 volumes:
@@ -14,7 +14,9 @@ secrets:
   schema_registry_jaas:
     file: secrets/scram/schema_registry_jaas.conf
   postgres_password:
-    file: secrets/redis/postgres_password
+    file: secrets/postgres/postgres_password
+  eco_user_password:
+    file: secrets/postgres/eco_user_password
 
 networks:
   eco-net:

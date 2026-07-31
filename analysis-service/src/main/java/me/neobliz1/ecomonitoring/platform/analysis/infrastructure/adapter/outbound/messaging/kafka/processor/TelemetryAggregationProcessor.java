@@ -24,7 +24,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -79,7 +78,7 @@ public class TelemetryAggregationProcessor implements Processor<String, WeatherP
         long currentWindowFloor = TelemetryUtils.getAggregationBucketFloorInterval(currentStreamTimeInMillis, secondsPerInterval);
         String startRangeKey = String.format(AnalysisConstants.UTC_TIMESTAMP_FORMAT, 0);
         String endRangeKey = String.format(AnalysisConstants.UTC_TIMESTAMP_FORMAT, currentWindowFloor)+"\uFFFF";
-        List<String> keysToRemove = new CopyOnWriteArrayList<>();
+        List<String> keysToRemove = new ArrayList<>();
         Map<Long, Map<String, List<WeatherPacket>>> extractionMatrix = new HashMap<>();
         try(KeyValueIterator<String, WeatherPacket> iterator = accumStore.range(startRangeKey, endRangeKey)) {
             while(iterator.hasNext()) {

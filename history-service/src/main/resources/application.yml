@@ -43,7 +43,8 @@ spring:
       value-deserializer: "org.springframework.kafka.support.serializer.ErrorHandlingDeserializer"
       ack-mode: manual_immediate
       properties:
-        spring.deserializer.value.delegate.class: "me.neobliz1.ecomonitoring.platform.common.serialization.WeatherPacketDeserializer"
+        spring.deserializer.value.delegate.class: "io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer"
+        specific.protobuf.value.type: "me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap"
     properties:
       # The new group.protocol KIP-848. Client-Side Rebalance Protocol eliminates these latency spikes completely:
       #  - Zero Group Freezes: Partitions are safely re-assigned on the fly without halting adjacent active threads.

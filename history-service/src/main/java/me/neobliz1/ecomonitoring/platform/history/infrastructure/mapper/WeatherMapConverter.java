@@ -1,5 +1,6 @@
 package me.neobliz1.ecomonitoring.platform.history.infrastructure.mapper;
 
+import lombok.NonNull;
 import me.neobliz1.ecomonitoring.platform.history.domain.inbound.HistoricalService;
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherGridCellMetric;
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherMapBucket;
@@ -7,18 +8,21 @@ import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.GridCellLay
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 
 import java.util.Map;
-import java.util.UUID;
 
 public class WeatherMapConverter implements HistoricalService {
 
     @Override
-    public void extractTelemetryFromWeatherMap(WeatherMap weatherMap, WeatherMapBucket bucket) {
+    public void extractTelemetryFromWeatherMap(@NonNull WeatherMap weatherMap, @NonNull WeatherMapBucket bucket) {
         for(Map.Entry<String, GridCellLayers> entry : weatherMap.getGridCellsMap().entrySet()) {
             String geohashKey = entry.getKey();
             GridCellLayers layers = entry.getValue();
 
+            if(layers==null) {
+                continue;
+            }
+
             WeatherGridCellMetric cellMetric = new WeatherGridCellMetric();
-            cellMetric.setId(UUID.randomUUID());
+            cellMetric.setBucketId(bucket.getId());
             cellMetric.setGeohash(geohashKey);
             cellMetric.setReadingCount(layers.getReadingCount());
 

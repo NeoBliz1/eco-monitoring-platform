@@ -1,22 +1,102 @@
 services:
-  pg-db-test:
+  pg-db:
     image: postgres:18.4-alpine3.24
     ports:
       - "5432:5432"
     networks:
       - eco-net
-    environment:
-      POSTGRES_DB: ecomonitoring_test
-      POSTGRES_USER: eco_user
-      PGDATA: /var/lib/postgresql/data/pgdata
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
     secrets:
       - postgres_password
-    volumes:
-      - /var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_PASSWORD_FILE: ${POSTGRES_PASSWORD_FILE}
+      PGDATA: ${PGDATA}
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U eco_user -d ecomonitoring_test" ]
-      interval: 5s
+      test: [ "CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d postgres" ]
+      interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 3
     restart: "no"
+
+  pg-db-init:
+    image: postgres:18.4-alpine3.24
+    depends_on:
+      pg-db:
+        condition: service_healthy
+    networks:
+      - eco-net
+    secrets:
+      - postgres_password
+      - eco_user_password
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_DB_SCHEMA: ${POSTGRES_DB_SCHEMA}
+      POSTGRES_PASSWORD_FILE: ${POSTGRES_PASSWORD_FILE}
+      PGDATA: ${PGDATA}
+      ECO_USER_NAME: ${ECO_USER_NAME}
+      ECO_USER_PASSWORD_FILE: ${ECO_USER_PASSWORD_FILE}
+    entrypoint: [ "sh", "-c" ]
+    command:
+      - |
+        echo "⚡ Initialize the cluster storage layout if it does not exist..."
+        if [ ! -d "${PGDATA}/base" ]; then
+          echo "Initializing fresh PostgreSQL database storage layout..."
+          mkdir -p "${PGDATA}"
+          chown -R postgres:postgres /var/lib/postgresql/data
+        
+          ROOT_PASS=$(cat ${POSTGRES_PASSWORD_FILE})
+          echo $$ROOT_PASS > /tmp/pg_pass
+          chown postgres:postgres /tmp/pg_pass
+        
+          gosu postgres initdb --username="postgres" --pwfile=/tmp/pg_pass --auth=scram-sha-256
+          rm -f /tmp/pg_pass
+        
+          echo "host all all 0.0.0.0/0 scram-sha-256" >> "${PGDATA}/pg_hba.conf"
+          echo "host all all ::/0 scram-sha-256" >> "${PGDATA}/pg_hba.conf"
+          echo "⚡ Cluster storage layout does not exist, it was created"
+        fi
+        
+        echo "⚡ Boot the engine safely under unprivileged execution rules..."
+        gosu postgres postgres -h '*' -c shared_buffers=512MB -c synchronous_commit=off -c max_connections=200 &
+        echo "⏳ Waiting for PostgreSQL database core to become healthy..."
+        export PGPASSWORD=$(cat ${POSTGRES_PASSWORD_FILE})
+        until psql -U postgres -d postgres -c 'SELECT 1;' > /dev/null 2>&1; do
+          sleep 1
+        done
+        
+        echo "⚡ Configuring application-tier database security and storage layers..."
+        ECO_PASS=$(cat ${ECO_USER_PASSWORD_FILE})
+        DB_EXISTS=$(psql -h pg-db -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='${POSTGRES_DB}'")
+        if [ "$$DB_EXISTS" != "1" ]; then
+          echo "Database ${POSTGRES_DB} is missing. Provisioning target storage catalog..."
+          psql -h pg-db -U postgres -d postgres -c "CREATE DATABASE ${POSTGRES_DB};"
+        fi
+        echo "⚡ Provisioning dedicated schema architecture within ${POSTGRES_DB}..."
+        psql -h pg-db -U postgres -d ${POSTGRES_DB} -c "CREATE SCHEMA IF NOT EXISTS ${POSTGRES_DB_SCHEMA} AUTHORIZATION postgres;"
+        echo "⚡ Create User Role postgres if it does not exist and assign dynamic database privileges"
+        psql -h pg-db -U postgres -d ${POSTGRES_DB} <<-EOF
+          DO '
+          BEGIN
+            IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = ''${ECO_USER_NAME}'') THEN
+              EXECUTE format(''CREATE USER %I WITH PASSWORD %L'', ''${ECO_USER_NAME}'', ''$${ECO_PASS}'');
+              EXECUTE format(''GRANT ALL PRIVILEGES ON DATABASE %I TO %I'', current_database(), ''${ECO_USER_NAME}'');
+              RAISE NOTICE ''✅ SUCCESS: Role % created and privileges granted!'', ''${ECO_USER_NAME}'';
+              EXECUTE format(''GRANT ALL PRIVILEGES ON DATABASE %I TO %I'', current_database(), ''${ECO_USER_NAME}'');
+              EXECUTE format(''GRANT ALL PRIVILEGES ON SCHEMA ${POSTGRES_DB_SCHEMA} TO %I'', ''${ECO_USER_NAME}'');
+              EXECUTE format(''ALTER DEFAULT PRIVILEGES IN SCHEMA ${POSTGRES_DB_SCHEMA} GRANT ALL PRIVILEGES ON TABLES TO %I'', ''${ECO_USER_NAME}'');
+              EXECUTE format(''ALTER DEFAULT PRIVILEGES IN SCHEMA ${POSTGRES_DB_SCHEMA} GRANT ALL PRIVILEGES ON SEQUENCES TO %I'', ''${ECO_USER_NAME}'');
+            ELSE
+              EXECUTE format(''ALTER USER %I WITH PASSWORD %L'', ''${ECO_USER_NAME}'', ''$${ECO_PASS}'');
+              RAISE NOTICE ''Role % already exists. Password synchronized.'', ''${ECO_USER_NAME}'';
+            END IF;
+          END
+          ';
+        EOF
+        # Clear it immediately afterwards so it doesn't linger in memory
+        unset PGPASSWORD
+        
+        echo "🛑 Gracefully shutting down temporary background database cluster..."
+        # 🌟 THE CLEAN SHUTDOWN SIGNAL: Safely flushes memory write caches to the virtual disk volume
+        gosu postgres pg_ctl -D "${PGDATA}" stop -m fast
+        
+        echo "✅ Initialization task complete. Exiting container wrapper cleanly."

@@ -23,6 +23,7 @@ services:
     volumes:
       - ./platform-global-properties.yaml:/tmp/platform-global-properties.yaml:ro
       - ./platform-analysis-properties.yaml:/tmp/platform-analysis-properties.yaml:ro
+      - ./platform-history-properties.yaml:/tmp/platform-history-properties.yaml:ro
     entrypoint: [ "sh", "-c" ]
     command:
       - |
@@ -32,7 +33,11 @@ services:
 
         echo "📡 Uploading service-specific properties for Analysis Service..."
         ANALYSIS_CONTENT=$$(cat /tmp/platform-analysis-properties.yaml)
-        consul kv put -http-addr="http://consul-server:8500" "config/eco-monitoring-analysis/data" "$$ANALYSIS_CONTENT"
+        consul kv put -http-addr="http://consul-server:8500" "config/eco-monitoring-analysis/data" "$$ANALYSIS_CONTENT"        
+        
+        echo "📡 Uploading service-specific properties for History Service..."
+        HISTORY_CONTENT=$$(cat /tmp/platform-history-properties.yaml)
+        consul kv put -http-addr="http://consul-server:8500" "config/eco-monitoring-history/data" "$$HISTORY_CONTENT"
 
         echo "✅ All configurations loaded successfully into Consul KV."
   

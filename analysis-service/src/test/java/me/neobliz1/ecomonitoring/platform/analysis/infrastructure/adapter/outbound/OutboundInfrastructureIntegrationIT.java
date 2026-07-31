@@ -3,6 +3,7 @@ package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbo
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.HOT_WINDOW_PREFIX;
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.WEATHER_HOTWINDOW;
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.WEATHER_MAP_KEY;
+import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.waitForConsulServicesToBeHealthy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hibernate.validator.internal.util.Contracts.assertNotEmpty;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -18,6 +19,7 @@ import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.jetbrains.annotations.NotNull;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.ComposeContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -37,6 +39,16 @@ public class OutboundInfrastructureIntegrationIT extends IntegrationTestSupport 
 
     private static @NotNull String getReadingsAssertMessages(int expectedReadingsNum) {
         return "Total readings across buckets should be "+expectedReadingsNum;
+    }
+
+    @BeforeAll
+    static void beforeAll() {
+        waitForConsulServicesToBeHealthy(List.of(
+                "kafka",
+                "schema-registry",
+                "consul",
+                "redis"
+        ));
     }
 
     @Test

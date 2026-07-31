@@ -25,6 +25,7 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.core.env.ConfigurableEnvironment;
 
 import javax.sql.DataSource;
+import java.time.Duration;
 import java.util.List;
 
 @Slf4j
@@ -44,6 +45,16 @@ public class HistoryServiceConfig {
     private String dbName;
     @Value("${spring.datasource.schema-name}")
     private String dbSchemaName;
+    @Value("${spring.datasource.data-pool.name}")
+    private String poolName;
+    @Value("${spring.datasource.data-pool.max-pool-size}")
+    private int maxPoolSize;
+    @Value("${spring.datasource.data-pool.min-idle}")
+    private int minIdle;
+    @Value("${spring.datasource.data-pool.idle-timeout}")
+    private int idleTimeout;
+    @Value("${spring.datasource.data-pool.connection-timeout}")
+    private int connectionTimeout;
 
     @Bean
     public HistoricalQueryRepository historicalQueryRepository(HistoricalQueryJpaRepository jpaRepository) {
@@ -80,11 +91,11 @@ public class HistoryServiceConfig {
         HikariDataSource hikariDataSource = properties.initializeDataSourceBuilder()
                 .type(HikariDataSource.class)
                 .build();
-        hikariDataSource.setPoolName("EcoHistoryTelemetry-HikariPool");
-        hikariDataSource.setMaximumPoolSize(20);
-        hikariDataSource.setMinimumIdle(5);
-        hikariDataSource.setIdleTimeout(30000);
-        hikariDataSource.setConnectionTimeout(10000);
+        hikariDataSource.setPoolName(poolName);
+        hikariDataSource.setMaximumPoolSize(maxPoolSize);
+        hikariDataSource.setMinimumIdle(minIdle);
+        hikariDataSource.setIdleTimeout(Duration.ofSeconds(idleTimeout).toMillis());
+        hikariDataSource.setConnectionTimeout(Duration.ofSeconds(connectionTimeout).toMillis());
         log.info("✅ HikariCP Concurrency Connection Pool instantiated successfully targeting: {}", computedJdbcUrl);
         return hikariDataSource;
     }

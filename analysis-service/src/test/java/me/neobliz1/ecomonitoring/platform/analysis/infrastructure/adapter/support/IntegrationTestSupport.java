@@ -5,7 +5,6 @@ import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUti
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.getProducerConf;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.getTestKafkaAdminConf;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.loadEnvironmentMap;
-import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.waitForConsulServicesToBeHealthy;
 
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import lombok.extern.slf4j.Slf4j;
@@ -37,7 +36,6 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -94,9 +92,9 @@ public abstract class IntegrationTestSupport extends AssertionTestSupport {
     @DynamicPropertySource
     static void dynamicPropertySet(DynamicPropertyRegistry registry) {
         registry.add("spring.kafka.streams.application-id",
-                () -> "eco-analysis-topology-test-" + java.util.UUID.randomUUID());
+                () -> "eco-analysis-topology-test-"+java.util.UUID.randomUUID());
     }
-    
+
     @Autowired
     private KafkaProperties kafkaProperties;
     TestKafkaListener<WeatherMap> kafkaHistoryListener;
@@ -122,14 +120,9 @@ public abstract class IntegrationTestSupport extends AssertionTestSupport {
     protected Consumer<String, WeatherPacket> rawTopicConsumer;
     Consumer<String, WeatherMap> historyTopicConsumer;
 
-    @BeforeAll
-    static void beforeAll() {
-        waitForConsulServicesToBeHealthy();
-    }
-
     @BeforeEach
     public void setupEcosystem() {
-        setupKafkaClients();
+        setupKafkaProducer();
         setupConsumersWithRebalanceListeners();
         kafkaHistoryListener = new TestKafkaListener<>(historyTopicConsumer);
     }
@@ -144,7 +137,7 @@ public abstract class IntegrationTestSupport extends AssertionTestSupport {
         kafkaHistoryListener.close();
     }
 
-    private void setupKafkaClients() {
+    private void setupKafkaProducer() {
         String bootstrapServersCsv = String.join(",", kafkaProperties.getBootstrapServers());
         Map<String, Object> producerProps = getProducerConf("client", "client-secret-pass", bootstrapServersCsv, schemaRegistryUrl);
         testProducer = new KafkaProducer<>(producerProps);
@@ -154,7 +147,7 @@ public abstract class IntegrationTestSupport extends AssertionTestSupport {
         String bootstrapServersCsv = String.join(",", kafkaProperties.getBootstrapServers());
         String executionRunId = String.valueOf(Instant.now().toEpochMilli());
         Map<String, Object> baseConsumerProps = createBaseConsumerProps(bootstrapServersCsv, schemaRegistryUrl);
-        
+
         rawTopicConsumer = createRawConsumer(baseConsumerProps, executionRunId);
         historyTopicConsumer = createHistoryConsumer(baseConsumerProps, executionRunId);
     }
@@ -169,12 +162,12 @@ public abstract class IntegrationTestSupport extends AssertionTestSupport {
 
     private Consumer<String, WeatherPacket> createRawConsumer(Map<String, Object> baseConsumerProps, String executionRunId) {
         Map<String, Object> rawConsumerProps = new HashMap<>(baseConsumerProps);
-        rawConsumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-raw-group-" + executionRunId);
-        
+        rawConsumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-raw-group-"+executionRunId);
+
         Map<String, Object> rawSrConfig = createSchemaRegistryConfig(schemaRegistryUrl, WeatherPacket.class);
         KafkaProtobufDeserializer<WeatherPacket> rawDeserializer = new KafkaProtobufDeserializer<>();
         rawDeserializer.configure(rawSrConfig, false);
-        
+
         Consumer<String, WeatherPacket> consumer = new KafkaConsumer<>(rawConsumerProps, new StringDeserializer(), rawDeserializer);
         consumer.subscribe(Collections.singletonList(kafkaAnalysisRawTopic), createRebalanceListener(consumer));
         return consumer;
@@ -182,12 +175,12 @@ public abstract class IntegrationTestSupport extends AssertionTestSupport {
 
     private Consumer<String, WeatherMap> createHistoryConsumer(Map<String, Object> baseConsumerProps, String executionRunId) {
         Map<String, Object> historyConsumerProps = new HashMap<>(baseConsumerProps);
-        historyConsumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-history-group-" + executionRunId);
-        
+        historyConsumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-history-group-"+executionRunId);
+
         Map<String, Object> historySrConfig = createSchemaRegistryConfig(schemaRegistryUrl, WeatherMap.class);
         KafkaProtobufDeserializer<WeatherMap> historyDeserializer = new KafkaProtobufDeserializer<>();
         historyDeserializer.configure(historySrConfig, false);
-        
+
         Consumer<String, WeatherMap> consumer = new KafkaConsumer<>(historyConsumerProps, new StringDeserializer(), historyDeserializer);
         consumer.subscribe(Collections.singletonList(kafkaAnalysisHistoryTopic), createRebalanceListener(consumer));
         return consumer;
@@ -208,7 +201,7 @@ public abstract class IntegrationTestSupport extends AssertionTestSupport {
 
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                if (consumer instanceof Consumer) {
+                if(consumer instanceof Consumer) {
                     ((Consumer<?, ?>) consumer).seekToBeginning(partitions);
                 }
             }
@@ -495,7 +488,7 @@ public abstract class IntegrationTestSupport extends AssertionTestSupport {
 
     protected <T> ConsumerRecord<String, T> pollSingleRecord(Consumer<String, T> consumer) {
         ConsumerRecords<String, T> records = consumer.poll(Duration.ofSeconds(40));
-        if (records.isEmpty()) {
+        if(records.isEmpty()) {
             return null;
         }
         return records.iterator().next();
@@ -508,7 +501,7 @@ public abstract class IntegrationTestSupport extends AssertionTestSupport {
                 .pollInterval(Duration.ofMillis(200))
                 .until(() -> {
                     List<WeatherMap> weatherMaps = new ArrayList<>(kafkaHistoryListener.getReceivedPackets());
-                    if(weatherMaps.size() >= targetRecordsNum) {
+                    if(weatherMaps.size()>=targetRecordsNum) {
                         matchedMap.set(weatherMaps);
                         return true;
                     } else return false;
@@ -534,7 +527,7 @@ public abstract class IntegrationTestSupport extends AssertionTestSupport {
         String bootstrapServersCsv = String.join(",", bootstrapServersList);
         Map<String, Object> adminConf = getTestKafkaAdminConf("admin", "admin-password", bootstrapServersCsv);
 
-        try (AdminClient adminClient = AdminClient.create(adminConf)) {
+        try(AdminClient adminClient = AdminClient.create(adminConf)) {
             List<String> topicsToClear = List.of(kafkaIngestionTopic, kafkaAnalysisRawTopic, kafkaAnalysisHistoryTopic);
             adminClient.deleteTopics(topicsToClear).all().get();
             Thread.sleep(300);

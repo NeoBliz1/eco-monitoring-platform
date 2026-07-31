@@ -24,7 +24,6 @@ public class TelemetryIngestionAdapter implements TelemetryIngestionService {
     @Override
     public Mono<Boolean> processTelemetryPacket(WeatherPacket packet) {
         PushEventsRequest request = telemetryPayloadMapper.toPushRequest(packet);
-
         return Mono.create(sink ->
                 asyncStub.pushEvents(request, new StreamObserver<>() {
                     @Override
@@ -39,6 +38,9 @@ public class TelemetryIngestionAdapter implements TelemetryIngestionService {
 
                     @Override
                     public void onCompleted() {
+                        if(log.isDebugEnabled()) {
+                            log.debug("Mono request sent successfully");
+                        }
                     }
                 })
         );
@@ -49,6 +51,9 @@ public class TelemetryIngestionAdapter implements TelemetryIngestionService {
     public boolean processTelemetryPacketVirtual(WeatherPacket packet) {
         try {
             blockingStub.pushEvents(telemetryPayloadMapper.toPushRequest(packet));
+            if(log.isDebugEnabled()) {
+                log.debug("Virtual request sent successfully");
+            }
             return true;
         } catch(StatusRuntimeException e) {
             if(Status.Code.DEADLINE_EXCEEDED.equals(e.getStatus().getCode())) {

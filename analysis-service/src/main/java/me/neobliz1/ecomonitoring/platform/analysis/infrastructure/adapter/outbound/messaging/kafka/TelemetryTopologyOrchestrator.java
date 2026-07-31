@@ -52,20 +52,6 @@ public class TelemetryTopologyOrchestrator implements TelemetryAnalysisService {
     private String schemaRegistryUrl;
     private Serde<WeatherPacket> weatherPacketSerde;
 
-    private static void registerDeduplicationStore(StreamsBuilder streamsBuilder) {
-        // Local Deduplication Window Store Builder for Pipeline 1
-        StoreBuilder<WindowStore<String, String>> dedupStoreBuilder = Stores.windowStoreBuilder(
-                Stores.persistentWindowStore(
-                        AnalysisConstants.DEDUPLICATE_ROCKS_DB,
-                        Duration.ofMinutes(10),
-                        Duration.ofMinutes(10),
-                        false
-                ),
-                Serdes.String(), Serdes.String()
-        );
-        streamsBuilder.addStateStore(dedupStoreBuilder);
-    }
-
     @Override
     public KStream<String, WeatherPacket> buildTopology(StreamsBuilder streamsBuilder) {
         Map<String, String> serdeConfig = Map.of(SCHEMA_REGISTRY_URL, schemaRegistryUrl);
@@ -80,6 +66,20 @@ public class TelemetryTopologyOrchestrator implements TelemetryAnalysisService {
     private void registerTransactionalStateStores(StreamsBuilder streamsBuilder) {
         registerDeduplicationStore(streamsBuilder);
         registerAggregationStore(streamsBuilder);
+    }
+
+    private static void registerDeduplicationStore(StreamsBuilder streamsBuilder) {
+        // Local Deduplication Window Store Builder for Pipeline 1
+        StoreBuilder<WindowStore<String, String>> dedupStoreBuilder = Stores.windowStoreBuilder(
+                Stores.persistentWindowStore(
+                        AnalysisConstants.DEDUPLICATE_ROCKS_DB,
+                        Duration.ofMinutes(10),
+                        Duration.ofMinutes(10),
+                        false
+                ),
+                Serdes.String(), Serdes.String()
+        );
+        streamsBuilder.addStateStore(dedupStoreBuilder);
     }
 
     private void registerAggregationStore(StreamsBuilder streamsBuilder) {

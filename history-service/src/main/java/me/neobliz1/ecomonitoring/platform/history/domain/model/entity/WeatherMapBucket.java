@@ -26,15 +26,14 @@ public class WeatherMapBucket {
     private UUID id;
 
     @Column(name = "timestamp_bucket", nullable = false)
-    private Long timestampBucket;
+    private long timestampBucket;
 
     @Column(name = "interval_minutes", nullable = false)
-    private Integer intervalMinutes;
+    private int intervalMinutes;
 
-    // 🌟 THE OPTIMISTIC LOCK GATEKEEPER
     @Version
     @Column(name = "version", nullable = false)
-    private Long version;
+    private int version;
 
     @OneToMany(mappedBy = "bucket", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<WeatherGridCellMetric> gridCells = new ArrayList<>();
@@ -43,6 +42,7 @@ public class WeatherMapBucket {
         this.id = id;
         this.timestampBucket = timestampBucket;
         this.intervalMinutes = intervalMinutes;
+        this.version = 0;
     }
 
     public void addCellMetric(WeatherGridCellMetric cell) {

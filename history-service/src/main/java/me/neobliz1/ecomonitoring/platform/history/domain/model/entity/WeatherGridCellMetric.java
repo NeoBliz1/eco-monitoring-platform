@@ -1,12 +1,14 @@
 package me.neobliz1.ecomonitoring.platform.history.domain.model.entity;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.MapsId;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -14,24 +16,24 @@ import lombok.Setter;
 import java.util.UUID;
 
 @Entity
-@Table(name = "weather_grid_cell_metrics")
 @Getter
 @Setter
 @NoArgsConstructor
+@Table(name = "weather_grid_cell_metrics")
 public class WeatherGridCellMetric {
 
-    @Id
-    private UUID id;
+    @EmbeddedId
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private WeatherGridCellMetricId id = new WeatherGridCellMetricId();
 
+    @MapsId("bucketId")
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "bucket_id", nullable = false)
     private WeatherMapBucket bucket;
 
-    @Column(nullable = false, length = 12)
-    private String geohash;
-
     @Column(name = "reading_count", nullable = false)
-    private Integer readingCount;
+    private int readingCount;
 
     // Sparse Environmental Attributes (Using Boxed Double to safely store NULL values)
     @Column(name = "avg_temperature")
@@ -75,5 +77,21 @@ public class WeatherGridCellMetric {
     private Double avgLux;
     @Column(name = "avg_visibility_m")
     private Double avgVisibilityM;
+
+    public String getGeohash() {
+        return id.getGeohash();
+    }
+
+    public void setGeohash(String geohash) {
+        id.setGeohash(geohash);
+    }
+
+    public UUID getBucketId() {
+        return id.getBucketId();
+    }
+
+    public void setBucketId(UUID uuid) {
+        id.setBucketId(uuid);
+    }
 }
 

@@ -2,6 +2,7 @@ package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.inbou
 
 import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.LATEST_WEATHER_MAP_ENDPOINT;
 import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.WEATHER_MAP_URI;
+import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.waitForConsulServicesToBeHealthy;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -16,6 +17,7 @@ import me.neobliz1.ecomonitoring.platform.model.exception.EcoPlatformErrorCode;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 import org.jspecify.annotations.NonNull;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,6 +51,16 @@ public class TelemetryAnalysisControllerIT extends IntegrationTestSupport {
     private long currentBucketFloor;
     private final double testLat = 55.0;
     private final double testLon = -61.0;
+
+    @BeforeAll
+    static void beforeAll() {
+        waitForConsulServicesToBeHealthy(List.of(
+                "kafka",
+                "schema-registry",
+                "consul",
+                "redis"
+        ));
+    }
 
     @BeforeEach
     public void setup() throws Exception {

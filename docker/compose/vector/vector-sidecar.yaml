@@ -6,7 +6,6 @@ services:
     volumes:
       - ./vector.yaml:/etc/vector/vector.yaml:ro
       - vector_disk_buffer:/var/lib/vector/buffer
-      - ../../../platform-common-contracts/src/main/proto:/etc/vector/proto:ro
     networks:
       - eco-net
     depends_on:

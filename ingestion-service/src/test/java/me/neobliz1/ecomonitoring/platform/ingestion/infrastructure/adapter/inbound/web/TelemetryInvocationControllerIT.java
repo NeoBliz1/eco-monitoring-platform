@@ -10,13 +10,12 @@ import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUti
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
+import lombok.extern.slf4j.Slf4j;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import me.neobliz1.ecomonitoring.platform.test.common.listener.TestKafkaListener;
 import me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
@@ -39,12 +38,12 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.io.File;
 import java.time.Duration;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Testcontainers
 @ActiveProfiles("dev")
 @AutoConfigureWebTestClient
@@ -55,7 +54,7 @@ public class TelemetryInvocationControllerIT {
 
     @Container
     @SuppressWarnings("unused")
-    public static final ComposeContainer ENVIRONMENT = new ComposeContainer(new File("../docker/docker-compose.yaml"))
+    public static final ComposeContainer ENVIRONMENT = new ComposeContainer(new File("../docker/ingestion-test-docker-compose.yaml"))
             .withEnv(loadEnvironmentMap())
             .withRemoveVolumes(true)
             .withTailChildContainers(true);
@@ -68,7 +67,6 @@ public class TelemetryInvocationControllerIT {
 
     @Autowired
     private WebTestClient webTestClient;
-    private Consumer<String, WeatherPacket> consumer;
     private TestKafkaListener<WeatherPacket> kafkaListener;
 
     @Value("${KAFKA_BOOTSTRAP_SERVERS}")
@@ -85,7 +83,12 @@ public class TelemetryInvocationControllerIT {
 
     @BeforeAll
     static void beforeAll() {
-        waitForConsulServicesToBeHealthy();
+        waitForConsulServicesToBeHealthy(List.of(
+                "kafka",
+                "schema-registry",
+                "consul",
+                "vector-sidecar"
+        ));
     }
 
     @BeforeEach
@@ -96,18 +99,12 @@ public class TelemetryInvocationControllerIT {
         rawSrConfig.put("specific.protobuf.value.type", WeatherPacket.class);
         KafkaProtobufDeserializer<WeatherPacket> rawDeserializer = new KafkaProtobufDeserializer<>();
         rawDeserializer.configure(rawSrConfig, false);
-        consumer = new KafkaConsumer<>(conf, new StringDeserializer(), rawDeserializer);
-        consumer.subscribe(Collections.singletonList(kafkaIngestionLiveTopic),
-                new ConsumerRebalanceListener() {
-                    @Override
-                    public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-                    }
-
-                    @Override
-                    public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                        consumer.seekToBeginning(partitions);
-                    }
-                });
+        Consumer<String, WeatherPacket> consumer = new KafkaConsumer<>(conf, new StringDeserializer(), rawDeserializer);
+        consumer.subscribe(Collections.singletonList(kafkaIngestionLiveTopic));
+        consumer.poll(Duration.ofSeconds(5));
+        consumer.seekToBeginning(consumer.assignment());
+        log.info("Consumer ready. Assigned partitions: {}, beginning offsets: {}",
+                consumer.assignment(), consumer.beginningOffsets(consumer.assignment()));
         kafkaListener = new TestKafkaListener<>(consumer);
     }
 

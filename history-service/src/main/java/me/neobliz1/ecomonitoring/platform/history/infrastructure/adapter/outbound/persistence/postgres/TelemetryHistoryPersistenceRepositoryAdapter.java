@@ -1,5 +1,6 @@
 package me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres;
 
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import me.neobliz1.ecomonitoring.platform.history.domain.inbound.HistoricalService;
@@ -7,8 +8,6 @@ import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherMap
 import me.neobliz1.ecomonitoring.platform.history.domain.outbound.HistoricalPersistenceRepository;
 import me.neobliz1.ecomonitoring.platform.history.domain.outbound.HistoricalQueryRepository;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
-import org.jspecify.annotations.NonNull;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,35 +23,17 @@ public class TelemetryHistoryPersistenceRepositoryAdapter implements HistoricalP
 
     @Override
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public void persistTelemetryRecord(WeatherMap weatherMap) {
+    public void persistTelemetryRecord(@NonNull WeatherMap weatherMap) {
         if(log.isDebugEnabled()) {
             log.debug("Processing persistence loop for WeatherMap timestamp bucket: {}", weatherMap.getTimestampBucket());
         }
-        try {
-            WeatherMapBucket bucket = getOrCreateWeatherBucket(weatherMap);
-            weatherMapConverter.extractTelemetryFromWeatherMap(weatherMap, bucket);
-            jpaRepository.save(allEntityFlusher(bucket));
-            if(log.isDebugEnabled()) {
-                log.debug("✅ Successfully persisted WeatherMap snapshot bucket: {}", bucket.getTimestampBucket());
-            }
-        } catch(ObjectOptimisticLockingFailureException e) {
-            log.warn("⚠️ Optimistic Lock Conflict caught for bucket: {}. Transaction will be rolled back safely.",
-                    weatherMap.getTimestampBucket());
-            throw e;
+        WeatherMapBucket bucket = queryRepositoryAdapter.upsertBucket(UUID.randomUUID(),
+                weatherMap.getTimestampBucket(),
+                weatherMap.getIntervalMinutes());
+        weatherMapConverter.extractTelemetryFromWeatherMap(weatherMap, bucket);
+        jpaRepository.saveAndFlush(bucket);
+        if(log.isDebugEnabled()) {
+            log.debug("✅ Successfully persisted WeatherMap snapshot bucket: {}", bucket.getTimestampBucket());
         }
-    }
-
-    private @NonNull WeatherMapBucket getOrCreateWeatherBucket(WeatherMap weatherMap) {
-        return queryRepositoryAdapter
-                .findByTimestampBucketAndIntervalMinutes(weatherMap.getTimestampBucket(), weatherMap.getIntervalMinutes())
-                .orElseGet(() -> new WeatherMapBucket(
-                        UUID.randomUUID(),
-                        weatherMap.getTimestampBucket(),
-                        weatherMap.getIntervalMinutes()
-                ));
-    }
-
-    private WeatherMapBucket allEntityFlusher(WeatherMapBucket bucket) {
-        return jpaRepository.saveAndFlush(bucket);
     }
 }

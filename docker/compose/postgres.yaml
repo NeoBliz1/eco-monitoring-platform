@@ -7,11 +7,32 @@ services:
       - eco-net
     secrets:
       - postgres_password
-      - eco_user_password
-    #    volumes:
-    #      - postgres_persistece_file:/var/lib/postgresql/data
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_PASSWORD_FILE: ${POSTGRES_PASSWORD_FILE}
+      PGDATA: ${PGDATA}
+    volumes:
+      - postgres_persistece_file:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: "no"
+
+  pg-db-init:
+    image: postgres:18.4-alpine3.24
+    depends_on:
+      pg-db:
+        condition: service_healthy
+    networks:
+      - eco-net
+    secrets:
+      - postgres_password
+      - eco_user_password
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_DB_SCHEMA: ${POSTGRES_DB_SCHEMA}
       POSTGRES_PASSWORD_FILE: ${POSTGRES_PASSWORD_FILE}
       PGDATA: ${PGDATA}
       ECO_USER_NAME: ${ECO_USER_NAME}
@@ -47,15 +68,15 @@ services:
         
         echo "⚡ Configuring application-tier database security and storage layers..."
         ECO_PASS=$(cat ${ECO_USER_PASSWORD_FILE})
-        DB_EXISTS=$(psql -h 127.0.0.1 -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='${POSTGRES_DB}'")
+        DB_EXISTS=$(psql -h pg-db -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='${POSTGRES_DB}'")
         if [ "$$DB_EXISTS" != "1" ]; then
           echo "Database ${POSTGRES_DB} is missing. Provisioning target storage catalog..."
-          psql -h 127.0.0.1 -U postgres -d postgres -c "CREATE DATABASE ${POSTGRES_DB};"
+          psql -h pg-db -U postgres -d postgres -c "CREATE DATABASE ${POSTGRES_DB};"
         fi
         echo "⚡ Provisioning dedicated schema architecture within ${POSTGRES_DB}..."
-        psql -h 127.0.0.1 -U postgres -d ${POSTGRES_DB} -c "CREATE SCHEMA IF NOT EXISTS history_service AUTHORIZATION postgres;"
+        psql -h pg-db -U postgres -d ${POSTGRES_DB} -c "CREATE SCHEMA IF NOT EXISTS ${POSTGRES_DB_SCHEMA} AUTHORIZATION postgres;"
         echo "⚡ Create User Role postgres if it does not exist and assign dynamic database privileges"
-        psql -h 127.0.0.1 -U postgres -d ${POSTGRES_DB} <<-EOF
+        psql -h pg-db -U postgres -d ${POSTGRES_DB} <<-EOF
           DO '
           BEGIN
             IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = ''${ECO_USER_NAME}'') THEN
@@ -63,9 +84,9 @@ services:
               EXECUTE format(''GRANT ALL PRIVILEGES ON DATABASE %I TO %I'', current_database(), ''${ECO_USER_NAME}'');
               RAISE NOTICE ''✅ SUCCESS: Role % created and privileges granted!'', ''${ECO_USER_NAME}'';
               EXECUTE format(''GRANT ALL PRIVILEGES ON DATABASE %I TO %I'', current_database(), ''${ECO_USER_NAME}'');
-              EXECUTE format(''GRANT ALL PRIVILEGES ON SCHEMA history_service TO %I'', ''${ECO_USER_NAME}'');
-              EXECUTE format(''ALTER DEFAULT PRIVILEGES IN SCHEMA history_service GRANT ALL PRIVILEGES ON TABLES TO %I'', ''${ECO_USER_NAME}'');
-              EXECUTE format(''ALTER DEFAULT PRIVILEGES IN SCHEMA history_service GRANT ALL PRIVILEGES ON SEQUENCES TO %I'', ''${ECO_USER_NAME}'');
+              EXECUTE format(''GRANT ALL PRIVILEGES ON SCHEMA ${POSTGRES_DB_SCHEMA} TO %I'', ''${ECO_USER_NAME}'');
+              EXECUTE format(''ALTER DEFAULT PRIVILEGES IN SCHEMA ${POSTGRES_DB_SCHEMA} GRANT ALL PRIVILEGES ON TABLES TO %I'', ''${ECO_USER_NAME}'');
+              EXECUTE format(''ALTER DEFAULT PRIVILEGES IN SCHEMA ${POSTGRES_DB_SCHEMA} GRANT ALL PRIVILEGES ON SEQUENCES TO %I'', ''${ECO_USER_NAME}'');
             ELSE
               EXECUTE format(''ALTER USER %I WITH PASSWORD %L'', ''${ECO_USER_NAME}'', ''$${ECO_PASS}'');
               RAISE NOTICE ''Role % already exists. Password synchronized.'', ''${ECO_USER_NAME}'';
@@ -75,10 +96,9 @@ services:
         EOF
         # Clear it immediately afterwards so it doesn't linger in memory
         unset PGPASSWORD
-        wait
-    healthcheck:
-      test: [ "CMD", "pg_isready", "-h", "127.0.0.1", "-p", "5432" ]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    restart: "no"
+        
+        echo "🛑 Gracefully shutting down temporary background database cluster..."
+        # 🌟 THE CLEAN SHUTDOWN SIGNAL: Safely flushes memory write caches to the virtual disk volume
+        gosu postgres pg_ctl -D "${PGDATA}" stop -m fast
+        
+        echo "✅ Initialization task complete. Exiting container wrapper cleanly."

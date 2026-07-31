@@ -1,15 +1,19 @@
 package me.neobliz1.ecomonitoring.platform.test.common.util;
 
 import static java.util.Map.entry;
+import static java.util.Objects.isNull;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.SCHEMA_REGISTRY_URL;
 import static org.apache.kafka.common.security.scram.internals.ScramMechanism.SCRAM_SHA_512;
 
+import jakarta.annotation.Nullable;
 import lombok.experimental.UtilityClass;
 import lombok.extern.slf4j.Slf4j;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.AmbientReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.Location;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.SensorReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
+import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.GridCellLayers;
+import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy.StrategyType;
@@ -21,6 +25,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.awaitility.Awaitility;
+import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.Assertions;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -38,7 +43,6 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 @Slf4j
 @UtilityClass
@@ -47,6 +51,27 @@ public class WeatherTestUtils {
     public static final String STATION_ID = "15";
     public static final String SYNC_SINGLE_URL = "/api/v1/telemetry/virtual";
     public static final String REACTIVE_MONO_URL = "/api/v1/telemetry/mono";
+    public static final String GEOHASH_ALPHA = "55.123#37.456";
+    public static final float VAL_TEMP = 23.5f;
+    public static final float VAL_HUMIDITY = 60.0f;
+    public static final float VAL_PRESSURE = 1012.0f;
+    public static final float VAL_LEAF = 5.0f;
+    public static final float VAL_WIND_SPEED = 4.2f;
+    public static final int VAL_WIND_DIR = 180;
+    public static final float VAL_PM25 = 12.0f;
+    public static final float VAL_PM10 = 25.0f;
+    public static final float VAL_PM100 = 45.0f;
+    public static final float VAL_VOC = 1.2f;
+    public static final float VAL_NOISE = 35.5f;
+    public static final float VAL_RAIN = 0.0f;
+    public static final float VAL_SNOW = 2.1f;
+    public static final float VAL_EVAP = 0.4f;
+    public static final float VAL_UV = 1.0f;
+    public static final float VAL_SOLAR = 320.0f;
+    public static final float VAL_LUX = 4500.0f;
+    public static final float VAL_VIS = 8000.0f;
+    public static final int VAL_COUNT = 15;
+    public static final int INTERVAL_MINUTES = 10;
 
     public static void performValidPost(WebTestClient webTestClient, String uri, WeatherPacket.Builder builder) {
         byte[] rawProtoBytes = builder.build().toByteArray();
@@ -177,14 +202,8 @@ public class WeatherTestUtils {
         return envMap;
     }
 
-    public static void waitForConsulServicesToBeHealthy() {
+    public static void waitForConsulServicesToBeHealthy(List<String> requiredServices) {
         log.info("⏳ Waiting for all specific Consul discovery nodes to pass healthchecks...");
-        List<String> requiredServices = List.of(
-                "kafka",
-                "redis",
-                "schema-registry",
-                "consul"
-        );
         try(HttpClient client = HttpClient.newHttpClient()) {
             Awaitility.await()
                     .atMost(Duration.ofMinutes(5))
@@ -199,7 +218,7 @@ public class WeatherTestUtils {
 
                             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
                             String body = response.body();
-                            if(Objects.isNull(body)) {
+                            if(isNull(body)) {
                                 log.info("▶️ Service '{}' status is unknow, response body is null", service);
                                 return false;
                             }
@@ -222,5 +241,47 @@ public class WeatherTestUtils {
         }
 
         log.info("✅ All requested cluster services are verified healthy in Consul!");
+    }
+
+    public static @NonNull WeatherMap getWeatherMap() {
+        GridCellLayers cellLayers = getGridCellLayers(null);
+        return WeatherMap.newBuilder()
+                .setTimestampBucket(Instant.now().toEpochMilli())
+                .setIntervalMinutes(INTERVAL_MINUTES)
+                .putGridCells(GEOHASH_ALPHA, cellLayers)
+                .build();
+    }
+
+    private static @NonNull GridCellLayers getGridCellLayers(@Nullable Float temp) {
+        return GridCellLayers.newBuilder()
+                .setReadingCount(VAL_COUNT)
+                .setAvgTemperature(isNull(temp)?VAL_TEMP:temp)
+                .setAvgHumidity(VAL_HUMIDITY)
+                .setAvgPressure(VAL_PRESSURE)
+                .setAvgLeafWetnessPct(VAL_LEAF)
+                .setAvgWindSpeed(VAL_WIND_SPEED)
+                .setAvgWindDirection(VAL_WIND_DIR)
+                .setAvgPm25(VAL_PM25)
+                .setAvgPm10(VAL_PM10)
+                .setAvgPm100(VAL_PM100)
+                .setAvgVoc(VAL_VOC)
+                .setAvgNoiseDb(VAL_NOISE)
+                .setAvgRainMm(VAL_RAIN)
+                .setAvgSnowCm(VAL_SNOW)
+                .setAvgEvapRate(VAL_EVAP)
+                .setAvgUvIndex(VAL_UV)
+                .setAvgSolarRadiationWm2(VAL_SOLAR)
+                .setAvgLux(VAL_LUX)
+                .setAvgVisibilityM(VAL_VIS)
+                .build();
+    }
+
+    public static @NonNull WeatherMap getCustomWeatherMap(long timestamp, String geohash, float temp) {
+        GridCellLayers cellLayers = getGridCellLayers(temp);
+        return WeatherMap.newBuilder()
+                .setTimestampBucket(timestamp)
+                .setIntervalMinutes(INTERVAL_MINUTES)
+                .putGridCells(geohash, cellLayers)
+                .build();
     }
 }

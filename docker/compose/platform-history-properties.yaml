@@ -1,0 +1,12 @@
+spring:
+  kafka:
+    consumer:
+      backoff:
+        interval: 2 # seconds
+  datasource:
+    data-pool:
+      name: "EcoHistoryTelemetry-HikariPool"
+      max-pool-size: 24
+      min-idle: 5
+      idle-timeout: 30 # seconds
+      connection-timeout: 10 # seconds
