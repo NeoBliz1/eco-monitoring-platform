@@ -1,32 +1,191 @@
 #!/usr/bin/env bash
-
-# 🛑 Exit immediately if any command fails, treats unset variables as an error
 set -euo pipefail
 
-echo "🚀 Step 1: Spinning up core Docker infrastructure stacks..."
-# Boots up the container mesh (-d flags it to run safely in the background)
-cd "$(dirname "$0")/.."
-docker compose down
-docker compose up -d
+# Default option flags
+SKIP_TESTS=false
+DEPLOY_HISTORY=false
+DEPLOY_INGESTION=false
+DEPLOY_ANALYSIS=false
+DEPLOY_GATEWAY=false
+DEBUG_INGESTION=false
+DEBUG_ANALYSIS=false
+DEBUG_HISTORY=false
 
-echo "📡 Step 2: Waiting for database provisioning to finish..."
-# 🔄 Loops cleanly until 'docker-pg-db-init-1' transitions to the lowercase 'exited' state
-while [ "$(docker inspect --format='{{.State.Status}}' docker-pg-db-init-1 2>/dev/null)" != "exited" ]; do
-    printf "."
-    sleep 1
+# Manual argument parsing supporting custom modular target flags
+for arg in "$@"; do
+    case $arg in
+        -st)  SKIP_TESTS=true ;;
+        -dhs) DEPLOY_HISTORY=true ;;
+        -dis) DEPLOY_INGESTION=true ;;
+        -das) DEPLOY_ANALYSIS=true ;;
+        -dgs) DEPLOY_GATEWAY=true ;;
+        -xis) DEBUG_INGESTION=true ;;
+        -xas) DEBUG_ANALYSIS=true ;;
+        -xhs) DEBUG_HISTORY=true ;;
+        *)    echo "Unknown option: $arg" && exit 1 ;;
+    esac
 done
 
-# 🚨 Safety check: verify the container exited with code 0 (Success) instead of crashing
-INIT_EXIT_CODE=$(docker inspect --format='{{.State.ExitCode}}' docker-pg-db-init-1)
-if [ "$INIT_EXIT_CODE" != "0" ]; then
-    echo -e "\n❌ FATAL: pg-db-init failed with exit code $INIT_EXIT_CODE. Check container logs!"
+# If no specific module deploy flag is passed, compile everything by default
+if [ "$DEPLOY_HISTORY" = false ] && [ "$DEPLOY_INGESTION" = false ] && [ "$DEPLOY_ANALYSIS" = false ] && [ "$DEPLOY_GATEWAY" = false ]; then
+    DEPLOY_HISTORY=true
+    DEPLOY_INGESTION=true
+    DEPLOY_ANALYSIS=true
+    DEPLOY_GATEWAY=true
+fi
+
+SCRIPT_DIR="$(dirname "$0")"
+CURR_DIR="$(pwd)"
+cd "$SCRIPT_DIR/../.."
+PROJECT_ROOT="$(pwd)"
+cd "$CURR_DIR"
+
+cleanup_gracefully() {
+    # shellcheck disable=SC2317
+    bash "$SCRIPT_DIR/stop-platform.sh"
+    # shellcheck disable=SC2317
+    exit 130
+}
+trap cleanup_gracefully SIGINT SIGTERM
+
+echo "⚡ Starting Asynchronous Infrastructure Provisioning and Service Compilation..."
+
+# ----------------------------------------------------
+# THREAD 1: Start Docker infrastructure + Liquibase migrations
+# ----------------------------------------------------
+echo "🐳 [BACKGROUND] Booting Docker container infrastructure mesh via infra.sh..."
+bash "$SCRIPT_DIR/infra.sh" &
+INFRA_PID=$!
+
+# ----------------------------------------------------
+# THREAD 2: Start Service Compilation in background wrapper
+# ----------------------------------------------------
+echo "⚙️ [BACKGROUND] Launching Maven and Go compilation sequence..."
+(
+    if [ "$DEPLOY_INGESTION" = true ]; then bash "$SCRIPT_DIR/service-java.sh" "ingestion-service" "$SKIP_TESTS"; fi
+    if [ "$DEPLOY_ANALYSIS" = true ]; then bash "$SCRIPT_DIR/service-java.sh" "analysis-service" "$SKIP_TESTS"; fi
+    if [ "$DEPLOY_HISTORY" = true ]; then bash "$SCRIPT_DIR/service-java.sh" "history-service" "$SKIP_TESTS"; fi
+    if [ "$DEPLOY_GATEWAY" = true ]; then bash "$SCRIPT_DIR/service-go.sh"; fi
+) &
+BUILD_PID=$!
+
+# ----------------------------------------------------
+# SYNCHRONIZATION POINT: Safe verification of background thread lifecycles
+# ----------------------------------------------------
+echo "⏳ Waiting for concurrent compilation and container setup threads to complete..."
+wait $INFRA_PID || { echo "❌ FATAL: Infrastructure initialization or migrations failed!"; exit 1; }
+wait $BUILD_PID || { echo "❌ FATAL: Compilation pipeline failed!"; exit 1; }
+
+# ----------------------------------------------------
+# Global deployment artifact verification check
+# ----------------------------------------------------
+echo "🔍 Verifying deployment artifact existence..."
+MISSING_ARTIFACTS=0
+
+INGESTION_JAR=$(find "$PROJECT_ROOT/ingestion-service/target" -maxdepth 1 -name "ingestion-service-*.jar" ! -name "*.original" 2>/dev/null | head -n 1 || echo "")
+ANALYSIS_JAR=$(find "$PROJECT_ROOT/analysis-service/target" -maxdepth 1 -name "analysis-service-*.jar" ! -name "*.original" 2>/dev/null | head -n 1 || echo "")
+HISTORY_JAR=$(find "$PROJECT_ROOT/history-service/target" -maxdepth 1 -name "history-service-*.jar" ! -name "*.original" 2>/dev/null | head -n 1 || echo "")
+
+if [ -z "$INGESTION_JAR" ] || [ ! -f "$INGESTION_JAR" ]; then echo "❌ ERROR: ingestion-service build artifact is missing!" && MISSING_ARTIFACTS=1; fi
+if [ -z "$ANALYSIS_JAR" ] || [ ! -f "$ANALYSIS_JAR" ]; then echo "❌ ERROR: analysis-service build artifact is missing!" && MISSING_ARTIFACTS=1; fi
+if [ -z "$HISTORY_JAR" ] || [ ! -f "$HISTORY_JAR" ]; then echo "❌ ERROR: history-service build artifact is missing!" && MISSING_ARTIFACTS=1; fi
+if [ ! -f "$PROJECT_ROOT/bin/go-service" ]; then echo "❌ ERROR: gateway binary artifact is missing!" && MISSING_ARTIFACTS=1; fi
+
+if [ "$MISSING_ARTIFACTS" -eq 1 ]; then
+    echo "🚨 Execution halted due to missing artifacts."
     exit 1
 fi
 
-echo -e "\n✅ PostgreSQL application data layer and users are fully provisioned!"
+echo "✅ All ecosystem platform artifacts validated successfully."
 
-echo "⚙️ Step 3: Executing Liquibase schema migrations via host Maven reactor..."
-cd ../
-mvn liquibase:update -pl history-service
+cp "$INGESTION_JAR" "$PROJECT_ROOT/bin/ingestion-service.jar"
+cp "$ANALYSIS_JAR" "$PROJECT_ROOT/bin/analysis-service.jar"
+cp "$HISTORY_JAR" "$PROJECT_ROOT/bin/history-service.jar"
+# ==============================================================================
+# Spawning polyglot execution runtime concurrently
+# ==============================================================================
+echo "🚀 Launching eco platform runtime context..."
+cd "$PROJECT_ROOT/bin" || exit 1
 
-echo "🌟 Platform infrastructure initialization completed successfully!"
+JVM_MEM_OPTS="-Xms256m -Xmx512m"
+
+# 🗜️ Read configurations line-by-line safely
+ENV_PAYLOAD=""
+while IFS= read -r line || [ -n "$line" ]; do
+    line=$(echo "$line" | tr -d '\r')
+    if [[ -z "$line" || "$line" =~ ^# ]]; then continue; fi
+    ENV_PAYLOAD="$ENV_PAYLOAD $line"
+done < "$PROJECT_ROOT/.env"
+
+INGESTION_DEBUG_OPTS=""
+ANALYSIS_DEBUG_OPTS=""
+HISTORY_DEBUG_OPTS=""
+
+if [ "$DEBUG_INGESTION" = true ]; then INGESTION_DEBUG_OPTS="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5005"; fi
+if [ "$DEBUG_ANALYSIS" = true ]; then ANALYSIS_DEBUG_OPTS="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5006"; fi
+if [ "$DEBUG_HISTORY" = true ]; then HISTORY_DEBUG_OPTS="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5007"; fi
+
+# 🏢 Spawn services and capture their discrete Process IDs immediately
+echo "📡 Spawning background processes..."
+
+# shellcheck disable=SC2086
+env $ENV_PAYLOAD java $INGESTION_DEBUG_OPTS $JVM_MEM_OPTS -Dspring.profiles.active="prod,local" -jar ingestion-service.jar > ingestion.log 2>&1 &
+PID_INGESTION=$!
+
+# shellcheck disable=SC2086
+env $ENV_PAYLOAD java $ANALYSIS_DEBUG_OPTS  $JVM_MEM_OPTS -Dspring.profiles.active="prod,local" -jar analysis-service.jar  > analysis.log  2>&1 &
+PID_ANALYSIS=$!
+
+# shellcheck disable=SC2086
+env $ENV_PAYLOAD java $HISTORY_DEBUG_OPTS   $JVM_MEM_OPTS -Dspring.profiles.active="prod,local" -jar history-service.jar   > history.log   2>&1 &
+PID_HISTORY=$!
+
+# shellcheck disable=SC2086
+env $ENV_PAYLOAD ./go-service > gateway.log 2>&1 &
+PID_GATEWAY=$!
+
+# ⏳ Warm-up window to catch instant startup crashes (port conflicts, bad syntax, etc.)
+echo "⏳ Waiting for initial process warmup validation..."
+sleep 2
+
+# 🔍 VERIFICATION MATRIX ENGINE
+CRITICAL_FAILURE=0
+
+if kill -0 "$PID_INGESTION" 2>/dev/null; then
+    echo "✅ INGESTION SERVICE is active (PID: $PID_INGESTION)"
+else
+    echo "❌ ERROR: INGESTION SERVICE failed to start! Check bin/ingestion.log"
+    CRITICAL_FAILURE=1
+fi
+
+if kill -0 "$PID_ANALYSIS" 2>/dev/null; then
+    echo "✅ ANALYSIS SERVICE is active (PID: $PID_ANALYSIS)"
+else
+    echo "❌ ERROR: ANALYSIS SERVICE failed to start! Check bin/analysis.log"
+    CRITICAL_FAILURE=1
+fi
+
+if kill -0 "$PID_HISTORY" 2>/dev/null; then
+    echo "✅ HISTORY SERVICE is active (PID: $PID_HISTORY)"
+else
+    echo "❌ ERROR: HISTORY SERVICE failed to start! Check bin/history.log"
+    CRITICAL_FAILURE=1
+fi
+
+if kill -0 "$PID_GATEWAY" 2>/dev/null; then
+    echo "✅ GO GATEWAY SERVICE is active (PID: $PID_GATEWAY)"
+else
+    echo "❌ ERROR: GO GATEWAY SERVICE failed to start! Check bin/gateway.log"
+    CRITICAL_FAILURE=1
+fi
+
+# 🚨 Handle validation failures cleanly before exiting
+if [ "$CRITICAL_FAILURE" -eq 1 ]; then
+    echo "🚨 Execution halted due to background service crashes. Triggering cleanup script..."
+    bash "$CURR_DIR/cleanup.sh"
+    exit 1
+fi
+
+echo "✨ Core ecosystem launched successfully with verified active processes. Main orchestrator closing now..."
+exit 0
+

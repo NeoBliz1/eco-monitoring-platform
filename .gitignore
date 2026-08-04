@@ -24,7 +24,7 @@ release.properties
 dependency-reduced-pom.xml
 
 ### IntelliJ IDEA ###
-.idea
+.idea/
 *.iws
 *.iml
 *.ipr
@@ -52,3 +52,5 @@ hs_err_pid*
 replay_pid*
 
 .env
+.data/
+bin/

@@ -3,6 +3,7 @@ services:
     image: timberio/vector:0.56.0-alpine
     ports:
       - "6000:6000"
+      - "6001:6001"
     volumes:
       - ./vector.yaml:/etc/vector/vector.yaml:ro
       - vector_disk_buffer:/var/lib/vector/buffer
@@ -16,3 +17,6 @@ services:
       KAFKA_USER: ${KAFKA_ADMIN}
       KAFKA_PASSWORD: ${KAFKA_ADMIN_PASSWORD}
       VECTOR_LOG: "info"
+      CH_USER: ${CLICKHOUSE_USER}
+      CH_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CH_DB: ${CLICKHOUSE_DB}

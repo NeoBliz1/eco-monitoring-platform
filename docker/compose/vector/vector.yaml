@@ -6,6 +6,12 @@ sources:
   grpc_sensor_in:
     type: "vector"
     address: "0.0.0.0:6000"
+  host_jar_logs_stream:
+    type: "socket"
+    address: "0.0.0.0:6001"
+    mode: "tcp"
+    decoding:
+      codec: "json"
 
 transforms:
   extract_pure_bytes:
@@ -13,6 +19,26 @@ transforms:
     inputs: [ "grpc_sensor_in" ]
     source: |
       .message = .raw_protobuf_packet
+  format_spring_logs:
+    type: "remap"
+    inputs: [ "host_jar_logs_stream" ]
+    source: |
+      # 🏢 RE-MAPPING MATRIX ENGINE (HANDLES BOTH SPRING AND GO STRUCTURALS)
+      .thread_name = del(.threadName) || .thread_name || "main"
+      .logger_name = del(.loggerName) || .logger_name || "gateway.proxy"
+      .level = del(.logLevel) || .level || "INFO"
+      
+      # Handle time standardization
+      .timestamp = .timestamp || now()
+      
+      # Extract tracing context if generated
+      .trace_id = .mdc.trace_id || .traceId || ""
+      .span_id = .mdc.span_id || .spanId || ""
+      .stack_trace = del(.stackTrace) || .stack_trace || ""
+      
+      # Extract the service tracking identifier
+      .service_name = del(.service_name) || .service_name || "unknown-service"
+
 sinks:
   console_debug:
     type: "console"
@@ -49,3 +75,14 @@ sinks:
       "log.thread.name": "true"                        # Show thread names
       "log.connection.close": "true"                   # Log disconnections
       "log.queue": "false"                             # Don't queue logs, output immediately
+
+  clickhouse_log_storage:
+    type: "clickhouse"
+    inputs: [ "host_jar_logs_stream" ]
+    endpoint: "http://clickhouse-db:8123"
+    database: "${CH_DB}"
+    auth:
+      strategy: "basic"
+      user: "${CH_USER}"
+      password: "${CH_PASSWORD}"
+    table: "application_logs"

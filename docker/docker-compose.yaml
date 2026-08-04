@@ -6,10 +6,13 @@ include:
   - ./compose/redis.yaml
   - ./compose/postgres.yaml
   - ./compose/vector/vector-sidecar.yaml
+  - ./compose/clickhouse.yaml
+  - ./compose/grafana.yaml
 
 volumes:
   vector_disk_buffer:
     driver: local
+  postgres_persistence_file:
 
 secrets:
   kafka_server_jaas:

@@ -49,7 +49,7 @@ spring:
       # The new group.protocol KIP-848. Client-Side Rebalance Protocol eliminates these latency spikes completely:
       #  - Zero Group Freezes: Partitions are safely re-assigned on the fly without halting adjacent active threads.
       #  - Server-Assigned Load Balancing: The Kafka broker handles the heavy lifting, reducing the complex background
-      #    calculations required by your Spring Boot Java Virtual Machine.
+      #    calculations required by Spring Boot Java Virtual Machine.
       #  - Lightning Fast Failover: If an instance crashes, its partitions are instantly rerouted to sibling instances
       #     without triggering a cascading rebalance loop.
       group.protocol: "consumer"

@@ -43,9 +43,7 @@
         <module>security-service</module>
         <module>ingestion-service</module>
         <module>analysis-service</module>
-        <module>raw-storage-service</module>
         <module>history-service</module>
-        <module>notification-service</module>
     </modules>
 
     <dependencyManagement>

@@ -1,7 +1,7 @@
 <component name="ProjectRunConfigurationManager">
-    <configuration default="false" name="HistoryBootEngine" type="SpringBootApplicationConfigurationType"
+    <configuration default="false" name="HistoricalBootEngine" type="SpringBootApplicationConfigurationType"
                    factoryName="Spring Boot" nameIsGenerated="true">
-        <option name="ACTIVE_PROFILES" value="dev"/>
+        <option name="ACTIVE_PROFILES" value="dev,local"/>
         <option name="FRAME_DEACTIVATION_UPDATE_POLICY" value="UnknownPolicyInFreeMode"/>
         <module name="history-service"/>
         <option name="SPRING_BOOT_MAIN_CLASS" value="me.neobliz1.ecomonitoring.platform.history.HistoricalBootEngine"/>

@@ -19,7 +19,7 @@ import java.util.Map;
 public class PlatformCommonUtils {
 
     public static final String LOCAL_HOST = "127.0.0.1";
-    public static final String DEVELOPMENT_PROFILE = "dev";
+    public static final String LOCAL_PROFILE = "local";
 
     public static ServiceAddressRecord discoverServiceAddressFromConsulServerByName(DiscoveryClient discoveryClient,
                                                                              ConfigurableEnvironment environment,
@@ -31,7 +31,7 @@ public class PlatformCommonUtils {
 
         if(!instances.isEmpty()) {
             ServiceInstance redisInstance = instances.getFirst();
-            if(!environment.acceptsProfiles(Profiles.of(DEVELOPMENT_PROFILE))) {
+            if(!environment.acceptsProfiles(Profiles.of(LOCAL_PROFILE))) {
                 resolvedHost = redisInstance.getHost();
             }
             resolvedPort = redisInstance.getPort();
@@ -52,7 +52,7 @@ public class PlatformCommonUtils {
             throw new ServiceInstanceNotFoundException(serviceName);
         }
 
-        boolean isDevelopment = environment.acceptsProfiles(Profiles.of(DEVELOPMENT_PROFILE));
+        boolean isDevelopment = environment.acceptsProfiles(Profiles.of(LOCAL_PROFILE));
 
         return instances.stream()
                 .map(instance -> {

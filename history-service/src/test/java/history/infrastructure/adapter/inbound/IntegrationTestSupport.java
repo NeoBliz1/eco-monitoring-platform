@@ -102,7 +102,7 @@ public class IntegrationTestSupport {
                 Liquibase liquibaseEngine = new Liquibase(masterChangelogFilename, resourceAccessor, database);
                 log.info("🚀 Updating target integration tables layout: {}.{}", dbName, schemaName);
                 liquibaseEngine.update(new Contexts("test"), new LabelExpression());
-                log.info("🌟 SUCCESS: All Liquibase database migrations applied cleanly to your Compose stack!");
+                log.info("🌟 SUCCESS: All Liquibase database migrations applied cleanly to Compose stack!");
             }
         } catch(Exception e) {
             log.error("❌ Testcontainers Compose migration step collapsed! Integration pipeline aborted.", e);

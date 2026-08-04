@@ -29,7 +29,12 @@
         </root>
     </springProfile>
     <springProfile name="prod">
-        <appender name="STRUCTURED_JSON" class="ch.qos.logback.core.ConsoleAppender">
+        <property name="TCP_DESTINATION" value="${LOGSTASH_TCP_DESTINATION}"/>
+        <springProperty scope="context" name="APP_NAME" source="spring.application.name"
+                        defaultValue="unknown-spring-service"/>
+
+        <appender name="STRUCTURED_JSON" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+            <destination>${TCP_DESTINATION}</destination>
             <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
                 <providers>
                     <timestamp/>
@@ -39,13 +44,28 @@
                     <loggerName/>
                     <message/>
                     <mdc/> <!-- Automatically captures OpenTelemetry Trace IDs and Span IDs! -->
+                    <pattern>
+                        <pattern>
+                            {
+                            "service_name": "${APP_NAME}"
+                            }
+                        </pattern>
+                    </pattern>
                     <stackTrace/>
                 </providers>
             </encoder>
         </appender>
-        <root level="WARN">
+        <appender name="ASYNC_STRUCTURED_JSON" class="ch.qos.logback.classic.AsyncAppender">
             <appender-ref ref="STRUCTURED_JSON"/>
+            <queueSize>1024</queueSize>
+            <discardingThreshold>0</discardingThreshold>
+            <neverBlock>true</neverBlock>
+        </appender>
+        <root level="INFO">
+            <appender-ref ref="ASYNC_STRUCTURED_JSON"/>
         </root>
+        <logger name="org.springframework" level="WARN"/>
+        <logger name="org.apache.kafka" level="WARN"/>
         <logger name="me.neobliz1.ecomonitoring" level="INFO"/>
     </springProfile>
 </included>
