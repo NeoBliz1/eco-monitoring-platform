@@ -1,0 +1,73 @@
+services:
+  clickhouse-storage-init:
+    image: hashicorp/vault:2.0.0
+    user: "0:0"
+    volumes:
+      - ./../../../.data/clickhouse:/mnt/storage:rw
+    entrypoint: [ "sh", "-c" ]
+    command:
+      - |
+        mkdir -p /mnt/storage/data
+        mkdir -p /mnt/storage/logs
+        chown -R 101:101 /mnt/storage
+        chmod -R 0700 /mnt/storage
+        echo "🔒 Host local persistent storage layer successfully hardened to 0700 (101:101)!"
+
+  clickhouse-vault-init:
+    image: hashicorp/vault:2.0.0
+    user: "100:1000"
+    depends_on:
+      vault-server:
+        condition: service_healthy
+      vault-init:
+        condition: service_completed_successfully
+    networks:
+      - eco-net
+    volumes:
+      - ../vault/config/clickhouse-agent.hcl:/etc/vault/agent.hcl:ro
+      - vault_tokens:/tmp/vault_input:rw
+      - ram_secrets_clickhouse:/run/secrets:rw
+    entrypoint: [ "sh", "-c" ]
+    command: [ "vault agent -exit-after-auth -config=/etc/vault/agent.hcl" ]
+
+  clickhouse-db:
+    image: clickhouse:26.7
+    user: "101:1000"
+    depends_on:
+      clickhouse-storage-init:
+        condition: service_completed_successfully
+      clickhouse-vault-init:
+        condition: service_completed_successfully
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    volumes:
+      - ./../../../.data/clickhouse/data:/var/lib/clickhouse
+      - ./../../../.data/clickhouse/logs:/var/log/clickhouse-server
+      - ./clickhouse-config-override.xml:/etc/clickhouse-server/config.d/override.xml:ro
+      - ./clickhouse-db-pre-init.sh:/clickhouse-db-pre-init.sh:ro
+      - ram_secrets_clickhouse:/run/secrets:ro
+    networks:
+      - eco-net
+    restart: "no"
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:8123/ping" ]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+    entrypoint: [ "/bin/bash", "/clickhouse-db-pre-init.sh" ]
+
+  clickhouse-db-init:
+    image: clickhouse:26.7
+    user: "101:1000"
+    networks:
+      - eco-net
+    volumes:
+      - ./clickhouse-db-init.sh:/docker-entrypoint-initdb.d/clickhouse-db-init.sh:ro
+      - ram_secrets_clickhouse:/run/secrets:rw
+    entrypoint: [ "sh", "-c" ]
+    command: [ "/docker-entrypoint-initdb.d/clickhouse-db-init.sh" ]

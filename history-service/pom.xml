@@ -75,6 +75,10 @@
             <scope>runtime</scope>
         </dependency>
         <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
@@ -128,7 +132,9 @@
                     <propertyFile>liquibase.properties</propertyFile>
                     <changeLogFile>db.changelog-master.yaml</changeLogFile>
                     <searchPath>${project.parent.basedir}/docker/deployments/liquibase</searchPath>
+                    <!--suppress UnresolvedMavenProperty -->
                     <username>${env.LIQUIBASE_COMMAND_USERNAME}</username>
+                    <!--suppress UnresolvedMavenProperty -->
                     <password>${env.LIQUIBASE_COMMAND_PASSWORD}</password>
                     <defaultSchemaName>history_service</defaultSchemaName>
                     <verbose>true</verbose>

@@ -47,7 +47,7 @@ public class OutboundInfrastructureIntegrationIT extends IntegrationTestSupport 
                 "kafka",
                 "schema-registry",
                 "consul",
-                "redis"
+                "redis-cache"
         ));
     }
 

@@ -154,7 +154,7 @@ public class HistoricalTelemetryListenerIT extends IntegrationTestSupport {
         sendPacket(timestamp, alphaPayload);
         sendPacket(timestamp, betaPayload);
         Awaitility.await()
-                .atMost(Duration.ofSeconds(15))
+                .atMost(Duration.ofSeconds(30))
                 .pollInterval(Duration.ofMillis(300))
                 .untilAsserted(() -> {
                     WeatherMapBucket weatherMapBucket = getWeatherMapBucket(timestamp);

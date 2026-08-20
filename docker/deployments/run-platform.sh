@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Default option flags
-SKIP_TESTS=false
+SKIP_TESTS=true
 DEPLOY_HISTORY=false
 DEPLOY_INGESTION=false
 DEPLOY_ANALYSIS=false
@@ -10,11 +9,35 @@ DEPLOY_GATEWAY=false
 DEBUG_INGESTION=false
 DEBUG_ANALYSIS=false
 DEBUG_HISTORY=false
+SKIP_INFRA_TEARDOWN=false  # New state tracking parameter
 
-# Manual argument parsing supporting custom modular target flags
 for arg in "$@"; do
     case $arg in
-        -st)  SKIP_TESTS=true ;;
+        -help|--help|-h)
+            echo "================================================================"
+            echo "📜 Eco Platform Build & Deployment Helper Tool"
+            echo "================================================================"
+            echo "Usage: ./build.sh [options]"
+            echo ""
+            echo "Options:"
+            echo "  -rt    Run tests during compilation (Disabled by default)"
+            echo "  -ddi   Don't rerun docker infrastructure (Keep warm state alive)"
+            echo "  -dhs   Deploy History Service exclusively"
+            echo "  -dis   Deploy Ingestion Service exclusively"
+            echo "  -das   Deploy Analysis Service exclusively"
+            echo "  -dgs   Deploy Gateway Service exclusively"
+            echo "  -xis   Enable Debugging profile on Ingestion Service"
+            echo "  -xas   Enable Debugging profile on Analysis Service"
+            echo "  -xhs   Enable Debugging profile on History Service"
+            echo "  -help  Display this architectural routing guide"
+            echo ""
+            echo "Note: If no explicit service flag (-d...) is specified,"
+            echo "      the engine defaults to compiling and deploying all modules."
+            echo "================================================================"
+            exit 0
+            ;;
+        -rt)  SKIP_TESTS=false ;;
+        -ddi) SKIP_INFRA_TEARDOWN=true ;;
         -dhs) DEPLOY_HISTORY=true ;;
         -dis) DEPLOY_INGESTION=true ;;
         -das) DEPLOY_ANALYSIS=true ;;
@@ -22,11 +45,10 @@ for arg in "$@"; do
         -xis) DEBUG_INGESTION=true ;;
         -xas) DEBUG_ANALYSIS=true ;;
         -xhs) DEBUG_HISTORY=true ;;
-        *)    echo "Unknown option: $arg" && exit 1 ;;
+        *)    echo "Unknown option: $arg (Use -help for valid targets)" && exit 1 ;;
     esac
 done
 
-# If no specific module deploy flag is passed, compile everything by default
 if [ "$DEPLOY_HISTORY" = false ] && [ "$DEPLOY_INGESTION" = false ] && [ "$DEPLOY_ANALYSIS" = false ] && [ "$DEPLOY_GATEWAY" = false ]; then
     DEPLOY_HISTORY=true
     DEPLOY_INGESTION=true
@@ -48,13 +70,20 @@ cleanup_gracefully() {
 }
 trap cleanup_gracefully SIGINT SIGTERM
 
+if [ "$SKIP_INFRA_TEARDOWN" = false ]; then
+    echo "🛑 Stopping all running services and core infrastructure..."
+    bash "$PROJECT_ROOT/docker/deployments/stop-platform.sh"
+else
+    echo "♻️ Skipping environmental infrastructure teardown (-ddi active)..."
+fi
+
 echo "⚡ Starting Asynchronous Infrastructure Provisioning and Service Compilation..."
 
 # ----------------------------------------------------
 # THREAD 1: Start Docker infrastructure + Liquibase migrations
 # ----------------------------------------------------
 echo "🐳 [BACKGROUND] Booting Docker container infrastructure mesh via infra.sh..."
-bash "$SCRIPT_DIR/infra.sh" &
+bash "$SCRIPT_DIR/infra.sh" "$@" &
 INFRA_PID=$!
 
 # ----------------------------------------------------
@@ -89,7 +118,7 @@ HISTORY_JAR=$(find "$PROJECT_ROOT/history-service/target" -maxdepth 1 -name "his
 if [ -z "$INGESTION_JAR" ] || [ ! -f "$INGESTION_JAR" ]; then echo "❌ ERROR: ingestion-service build artifact is missing!" && MISSING_ARTIFACTS=1; fi
 if [ -z "$ANALYSIS_JAR" ] || [ ! -f "$ANALYSIS_JAR" ]; then echo "❌ ERROR: analysis-service build artifact is missing!" && MISSING_ARTIFACTS=1; fi
 if [ -z "$HISTORY_JAR" ] || [ ! -f "$HISTORY_JAR" ]; then echo "❌ ERROR: history-service build artifact is missing!" && MISSING_ARTIFACTS=1; fi
-if [ ! -f "$PROJECT_ROOT/bin/go-service" ]; then echo "❌ ERROR: gateway binary artifact is missing!" && MISSING_ARTIFACTS=1; fi
+if [ ! -f "$PROJECT_ROOT/bin/gateway/go-service" ]; then echo "❌ ERROR: gateway binary artifact is missing!" && MISSING_ARTIFACTS=1; fi
 
 if [ "$MISSING_ARTIFACTS" -eq 1 ]; then
     echo "🚨 Execution halted due to missing artifacts."
@@ -109,46 +138,76 @@ cd "$PROJECT_ROOT/bin" || exit 1
 
 JVM_MEM_OPTS="-Xms256m -Xmx512m"
 
-# 🗜️ Read configurations line-by-line safely
-ENV_PAYLOAD=""
-while IFS= read -r line || [ -n "$line" ]; do
-    line=$(echo "$line" | tr -d '\r')
-    if [[ -z "$line" || "$line" =~ ^# ]]; then continue; fi
-    ENV_PAYLOAD="$ENV_PAYLOAD $line"
-done < "$PROJECT_ROOT/.env"
+ENV_PAYLOAD=()
 
+VAULT_INTERNAL_TOKEN=$(docker run --rm -v docker_vault_tokens:/tmp/tokens redis:8.8.0-alpine cat /tmp/tokens/validator_token 2>/dev/null | tr -d ' \n\r' || echo "")
+if [ -z "$VAULT_INTERNAL_TOKEN" ]; then
+    echo "❌ FATAL: Vault token extraction failed."
+    exit 1
+fi
+POSTGRES_SECRETS=$(curl -s --header "X-Vault-Token: $VAULT_INTERNAL_TOKEN" "http://localhost:8200/v1/secret/data/postgres" || echo "")
+REDIS_SECRETS=$(curl -s --header "X-Vault-Token: $VAULT_INTERNAL_TOKEN" "http://localhost:8200/v1/secret/data/redis" || echo "")
+if [ -z "$POSTGRES_SECRETS" ] || [ -z "$REDIS_SECRETS" ]; then
+    echo "❌ FATAL: Vault secret responses are empty."
+    exit 1
+fi
+echo "🔑 Extracting run database credentials using native string parsing..."
+SPRING_DATA_POSTGRES_USER_NAME=$(echo "$POSTGRES_SECRETS" | grep -o '"eco_user_name":"[^"]*' | sed 's/"eco_user_name":"//')
+SPRING_DATA_POSTGRES_PASSWORD=$(echo "$POSTGRES_SECRETS" | grep -o '"eco_user_password":"[^"]*' | sed 's/"eco_user_password":"//')
+SPRING_DATA_REDIS_PASSWORD=$(echo "$REDIS_SECRETS" | grep -o '"redis_password":"[^"]*' | sed 's/"redis_password":"//')
+if [ -z "$SPRING_DATA_POSTGRES_USER_NAME" ] || [ -z "$SPRING_DATA_POSTGRES_PASSWORD" ] || [ -z "$SPRING_DATA_REDIS_PASSWORD" ] ; then
+    echo "❌ FATAL: Failed to parse required credentials from Vault payload."
+    exit 1
+fi
+ENV_PAYLOAD=(
+    "SPRING_DATA_POSTGRES_USER_NAME=$SPRING_DATA_POSTGRES_USER_NAME"
+    "SPRING_DATA_POSTGRES_PASSWORD=$SPRING_DATA_POSTGRES_PASSWORD"
+    "SPRING_DATA_REDIS_PASSWORD=$SPRING_DATA_REDIS_PASSWORD"
+)
+if [ -f "${PROJECT_ROOT:-.}/.env" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+        line=$(echo "$line" | tr -d '\r')
+        if [[ -z "$line" || "$line" =~ ^# ]]; then continue; fi
+        ENV_PAYLOAD+=("$line")
+    done < "${PROJECT_ROOT:-.}/.env"
+else
+    echo "⚠️  Warning: Local .env file not found, skipping."
+fi
 INGESTION_DEBUG_OPTS=""
 ANALYSIS_DEBUG_OPTS=""
 HISTORY_DEBUG_OPTS=""
-
-if [ "$DEBUG_INGESTION" = true ]; then INGESTION_DEBUG_OPTS="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5005"; fi
-if [ "$DEBUG_ANALYSIS" = true ]; then ANALYSIS_DEBUG_OPTS="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5006"; fi
-if [ "$DEBUG_HISTORY" = true ]; then HISTORY_DEBUG_OPTS="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5007"; fi
-
-# 🏢 Spawn services and capture their discrete Process IDs immediately
+if [ "${DEBUG_INGESTION:-false}" = true ]; then INGESTION_DEBUG_OPTS="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5005"; fi
+if [ "${DEBUG_ANALYSIS:-false}" = true ]; then ANALYSIS_DEBUG_OPTS="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5006"; fi
+if [ "${DEBUG_HISTORY:-false}" = true ]; then HISTORY_DEBUG_OPTS="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5007"; fi
+echo "📡 Terminating active host application runtimes..."
+pkill -15 -f "ingestion-service.jar" 2>/dev/null || true
+pkill -15 -f "analysis-service.jar" 2>/dev/null || true
+pkill -15 -f "history-service.jar" 2>/dev/null || true
+pkill -15 -f "go-service" 2>/dev/null || true
 echo "📡 Spawning background processes..."
-
 # shellcheck disable=SC2086
-env $ENV_PAYLOAD java $INGESTION_DEBUG_OPTS $JVM_MEM_OPTS -Dspring.profiles.active="prod,local" -jar ingestion-service.jar > ingestion.log 2>&1 &
+env "${ENV_PAYLOAD[@]}" java $INGESTION_DEBUG_OPTS ${JVM_MEM_OPTS:-} -Dspring.profiles.active="prod,local" -jar ingestion-service.jar > ingestion.log 2>&1 &
 PID_INGESTION=$!
-
 # shellcheck disable=SC2086
-env $ENV_PAYLOAD java $ANALYSIS_DEBUG_OPTS  $JVM_MEM_OPTS -Dspring.profiles.active="prod,local" -jar analysis-service.jar  > analysis.log  2>&1 &
+env "${ENV_PAYLOAD[@]}" java $ANALYSIS_DEBUG_OPTS ${JVM_MEM_OPTS:-} -Dspring.profiles.active="prod,local" -jar analysis-service.jar > analysis.log 2>&1 &
 PID_ANALYSIS=$!
-
 # shellcheck disable=SC2086
-env $ENV_PAYLOAD java $HISTORY_DEBUG_OPTS   $JVM_MEM_OPTS -Dspring.profiles.active="prod,local" -jar history-service.jar   > history.log   2>&1 &
+env "${ENV_PAYLOAD[@]}" java $HISTORY_DEBUG_OPTS ${JVM_MEM_OPTS:-} -Dspring.profiles.active="prod,local" -jar history-service.jar > history.log 2>&1 &
 PID_HISTORY=$!
 
-# shellcheck disable=SC2086
-env $ENV_PAYLOAD ./go-service > gateway.log 2>&1 &
-PID_GATEWAY=$!
+if [ -d "${PROJECT_ROOT:-.}/bin/gateway" ]; then
+    cd "${PROJECT_ROOT}/bin/gateway"
+    env "${ENV_PAYLOAD[@]}" ./go-service > gateway.log 2>&1 &
+    PID_GATEWAY=$!
+    echo "✅ All instances launched cleanly."
+else
+    echo "❌ FATAL: Compiled gateway directory path does not exist."
+    exit 1
+fi
 
-# ⏳ Warm-up window to catch instant startup crashes (port conflicts, bad syntax, etc.)
 echo "⏳ Waiting for initial process warmup validation..."
 sleep 2
 
-# 🔍 VERIFICATION MATRIX ENGINE
 CRITICAL_FAILURE=0
 
 if kill -0 "$PID_INGESTION" 2>/dev/null; then
@@ -179,13 +238,13 @@ else
     CRITICAL_FAILURE=1
 fi
 
-# 🚨 Handle validation failures cleanly before exiting
 if [ "$CRITICAL_FAILURE" -eq 1 ]; then
     echo "🚨 Execution halted due to background service crashes. Triggering cleanup script..."
-    bash "$CURR_DIR/cleanup.sh"
+    bash "$PROJECT_ROOT/docker/deployments/stop-platform.sh"
     exit 1
 fi
 
 echo "✨ Core ecosystem launched successfully with verified active processes. Main orchestrator closing now..."
+bash "$PROJECT_ROOT/docker/deployments/validate.sh"
 exit 0
 

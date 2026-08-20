@@ -1,0 +1,332 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "eco-ingestion-service-performance",
+    "title": "🌱 Eco Platform Ingestion Service Performance Matrix",
+    "tags": [
+      "telemetry",
+      "ingestion",
+      "metrics",
+      "prometheus"
+    ],
+    "timezone": "browser",
+    "schemaVersion": 39,
+    "panels": [
+      {
+        "id": 1,
+        "type": "timeseries",
+        "title": "⚡ Inbound Ingestion Throughput (RPS)",
+        "gridPos": {
+          "h": 7,
+          "w": 8,
+          "x": 0,
+          "y": 0
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(rate(http_server_requests_seconds_count{instance=\"host.docker.internal:8080\"}[1m]))",
+            "legendFormat": "Requests / Sec",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth"
+            },
+            "unit": "reqps"
+          }
+        }
+      },
+      {
+        "id": 2,
+        "type": "timeseries",
+        "title": "⏱️ Average API Handling Latency",
+        "gridPos": {
+          "h": 7,
+          "w": 8,
+          "x": 8,
+          "y": 0
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(rate(http_server_requests_seconds_sum{instance=\"host.docker.internal:8080\"}[1m])) / sum(rate(http_server_requests_seconds_count{instance=\"host.docker.internal:8080\"}[1m])) * 1000",
+            "legendFormat": "Avg Latency (ms)",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "area",
+              "fillOpacity": 20
+            },
+            "unit": "ms"
+          }
+        }
+      },
+      {
+        "id": 3,
+        "type": "timeseries",
+        "title": "📉 Tail Latency Max Spikes",
+        "gridPos": {
+          "h": 7,
+          "w": 8,
+          "x": 16,
+          "y": 0
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "http_server_requests_seconds_max{instance=\"host.docker.internal:8080\"} * 1000",
+            "legendFormat": "Max Latency Spike (ms)",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line"
+            },
+            "unit": "ms"
+          }
+        }
+      },
+      {
+        "id": 4,
+        "type": "timeseries",
+        "title": "🧠 JVM Heap Memory Saturation vs Vector Buffer Data",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 7
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(jvm_memory_used_bytes{instance=\"host.docker.internal:8080\", area=\"heap\"})",
+            "legendFormat": "App Used Heap",
+            "range": true
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(jvm_memory_committed_bytes{instance=\"host.docker.internal:8080\", area=\"heap\"})",
+            "legendFormat": "App Committed Heap",
+            "range": true
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(rate(vector_component_received_bytes_total{instance=\"vector-sidecar:9598\"}[1m]))",
+            "legendFormat": "Vector Ingestion Rate",
+            "range": true
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(vector_buffer_byte_size{instance=\"vector-sidecar:9598\"})",
+            "legendFormat": "Vector Buffer Size",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth"
+            },
+            "unit": "bytes"
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Vector Ingestion Rate"
+              },
+              "properties": [
+                {
+                  "id": "unit",
+                  "value": "Bps"
+                },
+                {
+                  "id": "custom.axisPlacement",
+                  "value": "right"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Vector Buffer Size"
+              },
+              "properties": [
+                {
+                  "id": "custom.axisPlacement",
+                  "value": "right"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": 5,
+        "type": "timeseries",
+        "title": "⏳ JVM Garbage Collection Pause Cumulative Time",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 7
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(increase(jvm_gc_pause_seconds_sum{instance=\"host.docker.internal:8080\"}[5m]))",
+            "legendFormat": "GC Total Pause (sec)",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "bar",
+              "fillOpacity": 40
+            },
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "id": 6,
+        "type": "timeseries",
+        "title": "⚙️ Ingestion CPU Utilization Profile",
+        "gridPos": {
+          "h": 7,
+          "w": 12,
+          "x": 0,
+          "y": 15
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "process_cpu_usage{instance=\"host.docker.internal:8080\"} * 100",
+            "legendFormat": "CPU %",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line"
+            },
+            "unit": "percent"
+          }
+        }
+      },
+      {
+        "id": 7,
+        "type": "timeseries",
+        "title": "🧵 Concurrent JVM Live Threads count",
+        "gridPos": {
+          "h": 7,
+          "w": 12,
+          "x": 12,
+          "y": 15
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "jvm_threads_live_threads{instance=\"host.docker.internal:8080\"}",
+            "legendFormat": "Active Threads",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line"
+            },
+            "unit": "none"
+          }
+        }
+      },
+      {
+        "id": 9,
+        "type": "timeseries",
+        "title": "🛸 Vector Sidecar Routing Pipeline Matrix",
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 22
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(rate(vector_component_received_events_total{instance=\"vector-sidecar:9598\"}[1m])) by (component_id)",
+            "legendFormat": "Inbound Rate: {{component_id}}",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth"
+            },
+            "unit": "pps"
+          }
+        }
+      }
+    ]
+  },
+  "overwrite": true,
+  "folderId": 0
+}

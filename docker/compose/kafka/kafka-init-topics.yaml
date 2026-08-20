@@ -1,0 +1,50 @@
+services:
+  kafka-init-topics-vault-init:
+    extends:
+      file: ./kafka-template.yaml
+      service: vault-init-base
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
+        condition: service_healthy
+      consul-server:
+        condition: service_healthy
+    volumes:
+      - ../vault/config/kafka-agent.hcl:/etc/vault/agent.hcl:ro
+      - vault_tokens:/tmp/vault_input:ro
+      - ram_secrets_kafka_1:/run/secrets:rw
+    environment:
+      - KAFKA_ROLE_ID_FILE=/tmp/vault_input/kafka_topics_role_id
+      - KAFKA_SECRET_ID_FILE=/tmp/vault_input/kafka_topics_secret_id
+
+  kafka-init-topics:
+    image: confluentinc/cp-kafka:8.2.0
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
+        condition: service_healthy
+      consul-server:
+        condition: service_healthy
+    networks:
+      - eco-net
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - ./init-kafka-topics.sh:/opt/kafka/bin/init-kafka-topics.sh:ro
+      - ram_secrets_kafka_1:/run/secrets:rw
+    environment:
+      KAFKA_WEATHER_LIVE_TOPIC: environment.weather.telemetry.live
+      KAFKA_WEATHER_RAW_TOPIC: environment.weather.telemetry.raw
+      KAFKA_WEATHER_HISTORY_TOPIC: environment.weather.telemetry.history
+      CONSUL_URL: http://consul-server:8500/v1/agent/service/register
+    entrypoint: [ "bash" ]
+    command: [ "/opt/kafka/bin/init-kafka-topics.sh" ]

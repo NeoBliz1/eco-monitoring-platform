@@ -51,7 +51,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 
 @Slf4j
-@ActiveProfiles({ "dev", "common" })
+@ActiveProfiles({ "dev", "common", "local" })
 @SpringBootTest(classes = HistoricalBootEngine.class)
 @TestPropertySource(locations = "classpath:.env.test")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
@@ -79,7 +79,7 @@ public class IntegrationTestSupport {
                 "kafka",
                 "schema-registry",
                 "consul",
-                "postgres"
+                "pg-db"
         ));
     }
 

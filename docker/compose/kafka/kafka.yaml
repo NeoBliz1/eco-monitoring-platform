@@ -1,0 +1,99 @@
+services:
+  kafka-1-vault-init:
+    networks:
+      - eco-net
+    extends:
+      file: ./kafka-template.yaml
+      service: vault-init-base
+    environment:
+      - KAFKA_ROLE_ID_FILE=/tmp/vault_input/kafka_1_role_id
+      - KAFKA_SECRET_ID_FILE=/tmp/vault_input/kafka_1_secret_id
+    volumes:
+      - ../vault/config/kafka-agent.hcl:/etc/vault/agent.hcl:ro
+      - vault_tokens:/tmp/vault_input:rw
+      - ram_secrets_kafka_1:/run/secrets:rw
+
+  kafka-1:
+    networks:
+      - eco-net
+    extends:
+      file: ./kafka-template.yaml
+      service: kafka-base
+    ports:
+      - "9094:9094"
+    volumes:
+      - kafka_data_1:/var/lib/kafka/data
+      - ram_secrets_kafka_1:/run/secrets:rw
+    environment:
+      NODE_ID: 1
+      KAFKA_NODE_ID: 1
+      LISTENERS_CONFIG: "INTERNAL://:9093,CLIENT://:9092,EXTERNAL://:9094,CONTROLLER://:19093"
+      ADVERTISED_LISTENERS_CONFIG: "INTERNAL://kafka-1:9093,CLIENT://kafka-1:9092,EXTERNAL://localhost:9094"
+      KAFKA_LISTENERS: 'INTERNAL://:9093,CLIENT://:9092,EXTERNAL://:9094,CONTROLLER://:19093'
+      KAFKA_ADVERTISED_LISTENERS: 'INTERNAL://kafka-1:9093,CLIENT://kafka-1:9092,EXTERNAL://localhost:9094'
+
+  kafka-2-vault-init:
+    networks:
+      - eco-net
+    extends:
+      file: ./kafka-template.yaml
+      service: vault-init-base
+    environment:
+      - KAFKA_ROLE_ID_FILE=/tmp/vault_input/kafka_2_role_id
+      - KAFKA_SECRET_ID_FILE=/tmp/vault_input/kafka_2_secret_id
+    volumes:
+      - ../vault/config/kafka-agent.hcl:/etc/vault/agent.hcl:ro
+      - vault_tokens:/tmp/vault_input:rw
+      - ram_secrets_kafka_2:/run/secrets:rw
+
+  kafka-2:
+    networks:
+      - eco-net
+    extends:
+      file: ./kafka-template.yaml
+      service: kafka-base
+    ports:
+      - "9194:9194"
+    volumes:
+      - ram_secrets_kafka_2:/run/secrets:rw
+      - kafka_data_2:/var/lib/kafka/data
+    environment:
+      NODE_ID: 2
+      KAFKA_NODE_ID: 2
+      LISTENERS_CONFIG: "INTERNAL://:9093,CLIENT://:9092,EXTERNAL://:9194,CONTROLLER://:19093"
+      ADVERTISED_LISTENERS_CONFIG: "INTERNAL://kafka-2:9093,CLIENT://kafka-2:9092,EXTERNAL://localhost:9194"
+      KAFKA_LISTENERS: 'INTERNAL://:9093,CLIENT://:9092,EXTERNAL://:9194,CONTROLLER://:19093'
+      KAFKA_ADVERTISED_LISTENERS: 'INTERNAL://kafka-2:9093,CLIENT://kafka-2:9092,EXTERNAL://localhost:9194'
+
+  kafka-3-vault-init:
+    networks:
+      - eco-net
+    extends:
+      file: ./kafka-template.yaml
+      service: vault-init-base
+    environment:
+      - KAFKA_ROLE_ID_FILE=/tmp/vault_input/kafka_3_role_id
+      - KAFKA_SECRET_ID_FILE=/tmp/vault_input/kafka_3_secret_id
+    volumes:
+      - ../vault/config/kafka-agent.hcl:/etc/vault/agent.hcl:ro
+      - vault_tokens:/tmp/vault_input:rw
+      - ram_secrets_kafka_3:/run/secrets:rw
+
+  kafka-3:
+    networks:
+      - eco-net
+    extends:
+      file: ./kafka-template.yaml
+      service: kafka-base
+    ports:
+      - "9294:9294"
+    volumes:
+      - ram_secrets_kafka_3:/run/secrets:rw
+      - kafka_data_3:/var/lib/kafka/data
+    environment:
+      NODE_ID: 3
+      KAFKA_NODE_ID: 3
+      LISTENERS_CONFIG: "INTERNAL://:9093,CLIENT://:9092,EXTERNAL://:9294,CONTROLLER://:19093"
+      ADVERTISED_LISTENERS_CONFIG: "INTERNAL://kafka-3:9093,CLIENT://kafka-3:9092,EXTERNAL://localhost:9294"
+      KAFKA_LISTENERS: 'INTERNAL://:9093,CLIENT://:9092,EXTERNAL://:9294,CONTROLLER://:19093'
+      KAFKA_ADVERTISED_LISTENERS: 'INTERNAL://kafka-3:9093,CLIENT://kafka-3:9092,EXTERNAL://localhost:9294'

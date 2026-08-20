@@ -1,0 +1,44 @@
+services:
+  redis-vault-init:
+    image: hashicorp/vault:2.0.0
+    user: "100:1000"
+    depends_on:
+      vault-server:
+        condition: service_healthy
+      vault-init:
+        condition: service_completed_successfully
+    networks:
+      - eco-net
+    volumes:
+      - ./../vault/config/redis-agent.hcl:/etc/vault/agent.hcl:ro
+      - vault_tokens:/tmp/vault_input:rw
+      - ram_secrets_redis:/run/secrets
+    entrypoint: [ "sh", "-c" ]
+    command: [ "vault agent -exit-after-auth -config=/etc/vault/agent.hcl" ]
+
+  redis-cache:
+    image: redis:8.8.0-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - eco-net
+    user: "999:999"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      SKIP_FIX_PERMS: 1
+    volumes:
+      - ./run-redis.sh:/usr/local/bin/run-redis.sh:ro
+      - ram_secrets_redis:/run/secrets:rw
+      - redis_persistence_file:/data:rw
+    healthcheck:
+      test: [ "CMD-SHELL", "nc -z -w 1 127.0.0.1 6379 || exit 1" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    entrypoint: [ "sh", "-c" ]
+    command: [ "/usr/local/bin/run-redis.sh" ]

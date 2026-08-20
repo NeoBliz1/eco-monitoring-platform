@@ -1,0 +1,281 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "eco-analysis-redis-rocks-performance",
+    "title": "📜 Eco Platform Analysis Service - Cache & Stream Engine Performance Matrix",
+    "tags": [
+      "telemetry",
+      "analysis-service",
+      "metrics",
+      "prometheus",
+      "redis",
+      "kafka-streams"
+    ],
+    "timezone": "browser",
+    "version": 1,
+    "refresh": "5s",
+    "panels": [
+      {
+        "id": 1,
+        "type": "timeseries",
+        "title": "⚡ HTTP Ingestion & Request Throughput (RPS)",
+        "gridPos": {
+          "h": 7,
+          "w": 8,
+          "x": 0,
+          "y": 0
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(rate(http_server_requests_seconds_count{instance=\"host.docker.internal:8081\"}[1m]))",
+            "legendFormat": "HTTP Requests / Sec",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth"
+            },
+            "unit": "reqps"
+          }
+        }
+      },
+      {
+        "id": 2,
+        "type": "timeseries",
+        "title": "🎯 Spring 'weatherMaps' Cache Hit vs Miss Velocity",
+        "gridPos": {
+          "h": 7,
+          "w": 8,
+          "x": 8,
+          "y": 0
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(rate(cache_gets_total{instance=\"host.docker.internal:8081\", cache=\"weatherMaps\", result=\"hit\"}[1m]))",
+            "legendFormat": "Cache Hits / Sec",
+            "range": true
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(rate(cache_gets_total{instance=\"host.docker.internal:8081\", cache=\"weatherMaps\", result=\"miss\"}[1m]))",
+            "legendFormat": "Cache Misses / Sec",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line"
+            },
+            "unit": "ops"
+          }
+        }
+      },
+      {
+        "id": 3,
+        "type": "timeseries",
+        "title": "💾 'weatherMaps' Active Cache Size Track",
+        "gridPos": {
+          "h": 7,
+          "w": 8,
+          "x": 16,
+          "y": 0
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(cache_size{instance=\"host.docker.internal:8081\", cache=\"weatherMaps\"})",
+            "legendFormat": "Buffered Keys Count",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "area",
+              "fillOpacity": 15
+            },
+            "unit": "none"
+          }
+        }
+      },
+      {
+        "id": 4,
+        "type": "timeseries",
+        "title": "🧠 JVM Memory Profile vs Cache Eviction Actions",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 7
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(jvm_memory_used_bytes{instance=\"host.docker.internal:8081\", area=\"heap\"})",
+            "legendFormat": "Used Heap Space",
+            "range": true
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(rate(cache_evictions_total{instance=\"host.docker.internal:8081\", cache=\"weatherMaps\"}[1m]))",
+            "legendFormat": "Cache Forced Evictions / Sec",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth"
+            },
+            "unit": "bytes"
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Cache Forced Evictions / Sec"
+              },
+              "properties": [
+                {
+                  "id": "unit",
+                  "value": "ops"
+                },
+                {
+                  "id": "custom.axisPlacement",
+                  "value": "right"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": 5,
+        "type": "timeseries",
+        "title": "⚙️ Kafka Stream Pipeline RocksDB Block Cache Hit Rates",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 7
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "avg(kafka_stream_state_block_cache_data_hit_ratio{instance=\"host.docker.internal:8081\"}) * 100",
+            "legendFormat": "Avg RocksDB Block Cache Hit Ratio",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line"
+            },
+            "unit": "percent",
+            "min": 0,
+            "max": 100
+          }
+        }
+      },
+      {
+        "id": 6,
+        "type": "timeseries",
+        "title": "📊 Analysis System Workload Core CPU Engine Allocation",
+        "gridPos": {
+          "h": 7,
+          "w": 12,
+          "x": 0,
+          "y": 15
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "process_cpu_usage{instance=\"host.docker.internal:8081\"} * 100",
+            "legendFormat": "Active Core Load %",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line"
+            },
+            "unit": "percent"
+          }
+        }
+      },
+      {
+        "id": 7,
+        "type": "timeseries",
+        "title": "🧵 Active Engine Thread Count Profile",
+        "gridPos": {
+          "h": 7,
+          "w": 12,
+          "x": 12,
+          "y": 15
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "jvm_threads_live_threads{instance=\"host.docker.internal:8081\"}",
+            "legendFormat": "Active System JVM Threads",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line"
+            },
+            "unit": "none"
+          }
+        }
+      }
+    ]
+  },
+  "overwrite": true
+}

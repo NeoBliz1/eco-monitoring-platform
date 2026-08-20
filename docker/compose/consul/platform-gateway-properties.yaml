@@ -1,0 +1,5 @@
+port: "8000"
+log_level: "DEBUG"
+host: "10.10.5.253"
+logstash_destination: "localhost:6001"
+routes: "/api/v1/telemetry/:eco-monitoring-ingestion,/api/v1/analysis/:eco-monitoring-analysis"

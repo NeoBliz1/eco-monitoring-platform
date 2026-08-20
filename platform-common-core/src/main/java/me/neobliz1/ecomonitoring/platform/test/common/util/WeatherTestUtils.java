@@ -48,7 +48,7 @@ import java.util.Map;
 @UtilityClass
 public class WeatherTestUtils {
 
-    public static final String STATION_ID = "15";
+    public static final String STATION_ID = "00000100001";
     public static final String SYNC_SINGLE_URL = "/api/v1/telemetry/virtual";
     public static final String REACTIVE_MONO_URL = "/api/v1/telemetry/mono";
     public static final String GEOHASH_ALPHA = "55.123#37.456";

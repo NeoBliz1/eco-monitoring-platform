@@ -1,0 +1,290 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "eco-platform-go-gateway-edge-performance",
+    "title": "⚡ Eco Platform API Gateway - High Throughput & Edge Proxy Matrix",
+    "tags": [
+      "telemetry",
+      "api-gateway",
+      "metrics",
+      "prometheus",
+      "go-runtime",
+      "reverse-proxy"
+    ],
+    "timezone": "browser",
+    "version": 4,
+    "refresh": "5s",
+    "panels": [
+      {
+        "id": 1,
+        "type": "timeseries",
+        "title": "📈 Gateway Ingestion & Request Throughput (RPS)",
+        "gridPos": {
+          "h": 7,
+          "w": 8,
+          "x": 0,
+          "y": 0
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(rate(gateway_http_requests_total{instance=\"host.docker.internal:8000\"}[1m]))",
+            "legendFormat": "Gateway Total Volume / Sec",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth"
+            },
+            "unit": "reqps"
+          }
+        }
+      },
+      {
+        "id": 2,
+        "type": "timeseries",
+        "title": "🎯 Dynamic Endpoint Routing Breakdown Velocity",
+        "gridPos": {
+          "h": 7,
+          "w": 8,
+          "x": 8,
+          "y": 0
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(rate(gateway_http_requests_total{instance=\"host.docker.internal:8000\"}[1m])) by (method)",
+            "legendFormat": "HTTP Method: {{method}}",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line"
+            },
+            "unit": "ops"
+          }
+        }
+      },
+      {
+        "id": 3,
+        "type": "timeseries",
+        "title": "⚠️ HTTP Edge Error Profiling Rates",
+        "gridPos": {
+          "h": 7,
+          "w": 8,
+          "x": 16,
+          "y": 0
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(rate(gateway_http_requests_total{instance=\"host.docker.internal:8000\", status=~\"5.*\"}[1m]))",
+            "legendFormat": "5xx Gateway Faults / Sec",
+            "range": true
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(rate(gateway_http_requests_total{instance=\"host.docker.internal:8000\", status=~\"4.*\"}[1m]))",
+            "legendFormat": "4xx Client Errors / Sec",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "area",
+              "fillOpacity": 15
+            },
+            "unit": "ops"
+          }
+        }
+      },
+      {
+        "id": 4,
+        "type": "timeseries",
+        "title": "🧠 Go Heap Allocation vs Garbage Collector Latency Strikes",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 7
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "go_memstats_alloc_bytes{instance=\"host.docker.internal:8000\"}",
+            "legendFormat": "Active Allocated Heap Memory",
+            "range": true
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "histogram_quantile(0.99, sum(rate(go_gc_duration_seconds_bucket{instance=\"host.docker.internal:8000\"}[1m])) by (le))",
+            "legendFormat": "P99 GC Stop-the-World Duration",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth"
+            },
+            "unit": "bytes"
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "P99 GC Stop-the-World Duration"
+              },
+              "properties": [
+                {
+                  "id": "unit",
+                  "value": "s"
+                },
+                {
+                  "id": "custom.axisPlacement",
+                  "value": "right"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": 5,
+        "type": "timeseries",
+        "title": "⏱️ Gateway Proxy Edge Latency Percentiles (P95 / P99)",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 7
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "histogram_quantile(0.99, sum(rate(gateway_http_request_duration_seconds_bucket{instance=\"host.docker.internal:8000\"}[1m])) by (le))",
+            "legendFormat": "P99 Proxy Latency",
+            "range": true
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "histogram_quantile(0.95, sum(rate(gateway_http_request_duration_seconds_bucket{instance=\"host.docker.internal:8000\"}[1m])) by (le))",
+            "legendFormat": "P95 Proxy Latency",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line"
+            },
+            "unit": "s",
+            "min": 0
+          }
+        }
+      },
+      {
+        "id": 6,
+        "type": "timeseries",
+        "title": "📊 Gateway Core Engine CPU Compute Consumption",
+        "gridPos": {
+          "h": 7,
+          "w": 12,
+          "x": 0,
+          "y": 15
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "rate(process_cpu_seconds_total{instance=\"host.docker.internal:8000\"}[1m]) * 100",
+            "legendFormat": "Active Gateway Core System Load %",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line"
+            },
+            "unit": "percent"
+          }
+        }
+      },
+      {
+        "id": 7,
+        "type": "timeseries",
+        "title": "🧵 Concurrent Virtual Goroutines Cluster Density",
+        "gridPos": {
+          "h": 7,
+          "w": 12,
+          "x": 12,
+          "y": 15
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "go_goroutines{instance=\"host.docker.internal:8000\"}",
+            "legendFormat": "Active Concurrent Goroutines Volume",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line"
+            },
+            "unit": "none"
+          }
+        }
+      }
+    ]
+  },
+  "overwrite": true
+}

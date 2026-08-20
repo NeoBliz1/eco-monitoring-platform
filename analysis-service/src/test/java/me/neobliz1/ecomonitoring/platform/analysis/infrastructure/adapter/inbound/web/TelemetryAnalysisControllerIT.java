@@ -58,7 +58,7 @@ public class TelemetryAnalysisControllerIT extends IntegrationTestSupport {
                 "kafka",
                 "schema-registry",
                 "consul",
-                "redis"
+                "redis-cache"
         ));
     }
 

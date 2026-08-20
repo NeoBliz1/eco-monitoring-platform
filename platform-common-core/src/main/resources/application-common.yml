@@ -22,3 +22,10 @@ management:
     web:
       exposure:
         include: "health,info,prometheus"
+
+logging:
+  level:
+    root: INFO
+    org.springframework: WARN
+    org.apache.kafka: WARN
+    me.neobliz1.ecomonitoring: DEBUG

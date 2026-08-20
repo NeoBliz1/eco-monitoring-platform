@@ -40,3 +40,8 @@ spring:
 
 server:
   port: ${ANALYSIS_APPLICATION_SERVER_PORT}
+
+management:
+  metrics:
+    enable:
+      lettuce: true

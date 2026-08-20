@@ -31,14 +31,6 @@ public class TelemetryInvocationController {
 
     private final TelemetryIngestionService telemetryIngestionService;
 
-    public static ResponseEntity<Void> getResponseEntity(Boolean isAccepted) {
-        if(Boolean.TRUE.equals(isAccepted)) {
-            return ResponseEntity.status(HttpStatus.ACCEPTED).build();
-        } else {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-        }
-    }
-
     @PostMapping(value = REACTIVE_TELEMETRY_ENDPOINT_URI, consumes = MediaType.APPLICATION_PROTOBUF_VALUE)
     public Mono<ResponseEntity<Void>> receivedReactiveSensorStationData(@ValidProto @RequestBody WeatherPacket packet) {
         return telemetryIngestionService.processTelemetryPacket(packet)
@@ -57,5 +49,13 @@ public class TelemetryInvocationController {
     @PostMapping(value = BLOCKING_TELEMETRY_ENDPOINT_URI, consumes = MediaType.APPLICATION_PROTOBUF_VALUE)
     public ResponseEntity<Void> receivedSensorStationDataVirtual(@ValidProto @RequestBody WeatherPacket packet) {
         return getResponseEntity(telemetryIngestionService.processTelemetryPacketVirtual(packet));
+    }
+
+    public static ResponseEntity<Void> getResponseEntity(Boolean isAccepted) {
+        if(Boolean.TRUE.equals(isAccepted)) {
+            return ResponseEntity.status(HttpStatus.ACCEPTED).build();
+        } else {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        }
     }
 }

@@ -5,31 +5,32 @@ SCRIPT_DIR="$(dirname "$0")"
 cd "$SCRIPT_DIR/../.."
 PROJECT_ROOT="$(pwd)"
 
-# Define the local submodule directory inside platform root
 GATEWAY_SUBMODULE_DIR="$PROJECT_ROOT/gateway-service"
 GATEWAY_REPO_URL="https://github.com/NeoBliz1/eco-platform-api-gateway.git"
 
 cd "$PROJECT_ROOT"
-pwd
-# 🔍 Check if the gateway-service submodule is already tracked by Git
-if git config --file .gitmodules --get "submodule.gateway-service.path" &>/dev/null; then
-    echo "📦 [Go Worker] Submodule 'gateway-service' already exists. Synchronizing and updating..."
-    # Safely initialize and update the existing submodule directory state
+
+echo "🧹 [Go Worker] Checking for submodule index corruption..."
+
+if [ ! -e "$GATEWAY_SUBMODULE_DIR" ] || [ ! -f "$GATEWAY_SUBMODULE_DIR/go.mod" ]; then
+    echo "⚠️  [Go Worker] Submodule directory is broken, missing, or unindexed. Forcing cache purge..."
+    git submodule deinit -f gateway-service 2>/dev/null || true
+    git rm --cached -f gateway-service 2>/dev/null || true
+    rm -rf .git/modules/gateway-service
+    rm -rf "$GATEWAY_SUBMODULE_DIR"
+    git config --remove-section submodule.gateway-service 2>/dev/null || true
+fi
+
+if [ -d "$GATEWAY_SUBMODULE_DIR" ] && [ -f "$GATEWAY_SUBMODULE_DIR/go.mod" ]; then
+    echo "📦 [Go Worker] Submodule directory verified. Synchronizing latest remote changes..."
     git submodule update --init --recursive --remote gateway-service
 else
-    echo "📥 [Go Worker] Submodule missing. Registering and downloading 'gateway-service'..."
-    # Ensure any untracked or leftover folder is safely cleared before adding
-    if [ -d "$GATEWAY_SUBMODULE_DIR" ]; then
-        echo "⚠️ Warning: Found an unindexed directory at $GATEWAY_SUBMODULE_DIR. Removing it to prevent Git conflicts..."
-        rm -rf "$GATEWAY_SUBMODULE_DIR"
-    fi
-
-    # Execute the submodule attachment
-    git submodule add "$GATEWAY_REPO_URL" gateway-service
+    echo "📥 [Go Worker] Submodule unlinked. Performing fresh repository registration..."
+    git config -f .gitmodules --remove-section submodule.gateway-service 2>/dev/null || true
+    git submodule add --force "$GATEWAY_REPO_URL" gateway-service
     git submodule update --init --recursive gateway-service
 fi
 
-# 🚨 Final verification check before compiling
 if [ ! -d "$GATEWAY_SUBMODULE_DIR" ] || [ ! -f "$GATEWAY_SUBMODULE_DIR/go.mod" ]; then
     echo "❌ FATAL: Gateway service source code could not be verified inside $GATEWAY_SUBMODULE_DIR"
     exit 1
@@ -38,5 +39,9 @@ fi
 echo "🐹 [Go Worker] Compiling high-performance API Gateway binary from source..."
 cd "$GATEWAY_SUBMODULE_DIR"
 mkdir -p "$PROJECT_ROOT/bin"
+GATEWAY_DIR="$PROJECT_ROOT/bin/gateway"
+mkdir -p "$GATEWAY_DIR"
+cat "$GATEWAY_SUBMODULE_DIR/.env.example" > "$GATEWAY_DIR/.env"
+go build -v -o "$GATEWAY_DIR/go-service"
 
-go build -v -o "$PROJECT_ROOT/bin/go-service"
+echo "✅ [Go Worker] Compilation complete. Binary available at bin/go-service"

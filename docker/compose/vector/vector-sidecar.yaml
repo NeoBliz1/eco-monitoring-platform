@@ -1,22 +1,59 @@
 services:
+  vector-storage-init:
+    image: redis:8.8.0-alpine
+    user: "0:0"
+    volumes:
+      - vector_disk_buffer:/var/lib/vector/buffer:rw
+    entrypoint: [ "sh", "-c" ]
+    command:
+      - |
+        chown -R 1000:1000 /var/lib/vector/buffer
+        chmod -R 0700 /var/lib/vector/buffer
+        echo "🔒 Host persistent vector disk buffer layer successfully hardened to 0700 (1000:1000)!"
+
+  vector-vault-init:
+    image: hashicorp/vault:2.0.0
+    user: "100:1000"
+    depends_on:
+      vault-server:
+        condition: service_healthy
+      vault-init:
+        condition: service_completed_successfully
+    networks:
+      - eco-net
+    volumes:
+      - ../vault/config/vector-agent.hcl:/etc/vault/agent.hcl:ro
+      - vault_tokens:/tmp/vault_input:rw
+      - ram_secrets_vector:/run/secrets
+    entrypoint: [ "sh", "-c" ]
+    command: [ "vault agent -exit-after-auth -config=/etc/vault/agent.hcl" ]
+
   vector-sidecar:
     image: timberio/vector:0.56.0-alpine
     ports:
       - "6000:6000"
       - "6001:6001"
-    volumes:
-      - ./vector.yaml:/etc/vector/vector.yaml:ro
-      - vector_disk_buffer:/var/lib/vector/buffer
+      - "9598:9598"
     networks:
       - eco-net
-    depends_on:
-      kafka-init-topics:
-        condition: service_completed_successfully
-    restart: on-failure
+    user: "1000:1000"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - ./run-vector.sh:/usr/local/bin/run-vector.sh:ro
+      - ./vector.yaml:/etc/vector/vector.yaml:ro
+      - vector_disk_buffer:/var/lib/vector/buffer:rw
+      - ram_secrets_vector:/run/secrets:rw
     environment:
-      KAFKA_USER: ${KAFKA_ADMIN}
-      KAFKA_PASSWORD: ${KAFKA_ADMIN_PASSWORD}
       VECTOR_LOG: "info"
-      CH_USER: ${CLICKHOUSE_USER}
-      CH_PASSWORD: ${CLICKHOUSE_PASSWORD}
-      CH_DB: ${CLICKHOUSE_DB}
+    restart: on-failure
+    healthcheck:
+      test: [ "CMD-SHELL", "nc -z -w 1 127.0.0.1 9598 || exit 1" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    entrypoint: [ "sh", "-c" ]
+    command: [ "/usr/local/bin/run-vector.sh" ]

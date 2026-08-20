@@ -1,0 +1,42 @@
+services:
+  vault-server:
+    image: hashicorp/vault:2.0.0
+    ports:
+      - "8200:8200"
+    user: "100:1000"
+    volumes:
+      - vault_storage:/vault/file
+      - ./config/vault.hcl:/vault/config/vault.hcl:ro
+    networks:
+      - eco-net
+    cap_add:
+      - IPC_LOCK
+    healthcheck:
+      test: [ "CMD-SHELL", "nc -z 127.0.0.1 8200 || exit 1" ]
+      interval: 3s
+      timeout: 2s
+      retries: 5
+      start_period: 2s
+    restart: on-failure
+    environment:
+      VAULT_ADDR: http://127.0.0.1:8200
+      VAULT_API_ADDR: http://127.0.0.1:8200
+    entrypoint: [ "vault", "server", "-config=/vault/config/vault.hcl" ]
+
+  vault-init:
+    build:
+      context: .
+      dockerfile: vault-dockerfile.init
+    user: "100:1000"
+    depends_on:
+      vault-server:
+        condition: service_healthy
+    volumes:
+      - vault_tokens:/tmp/vault_output
+      - ./scripts/init-vault.sh:/tmp/init-vault.sh:ro
+    networks:
+      - eco-net
+    environment:
+      VAULT_ADDR: http://vault-server:8200
+    entrypoint: [ "sh", "-c" ]
+    command: [ "/tmp/init-vault.sh" ]

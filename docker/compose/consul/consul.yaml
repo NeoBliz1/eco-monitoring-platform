@@ -1,0 +1,29 @@
+services:
+  consul-server:
+    image: hashicorp/consul:2.0.0
+    ports:
+      - "8500:8500"
+    networks:
+      - eco-net
+    healthcheck:
+      test: [ "CMD", "consul", "operator", "raft", "list-peers" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    command: "agent -server -bootstrap-expect=1 -ui -node=control-plane-one -client=0.0.0.0"
+
+  consul-init-service:
+    image: hashicorp/consul:2.0.0
+    depends_on:
+      consul-server:
+        condition: service_healthy
+    networks:
+      - eco-net
+    volumes:
+      - ./platform-global-properties.yaml:/tmp/platform-global-properties.yaml:ro
+      - ./platform-analysis-properties.yaml:/tmp/platform-analysis-properties.yaml:ro
+      - ./platform-history-properties.yaml:/tmp/platform-history-properties.yaml:ro
+      - ./platform-gateway-properties.yaml:/tmp/platform-gateway-properties.yaml:ro
+      - ./init-consul-kv.sh:/opt/consul/init-consul-kv.sh:ro
+    entrypoint: [ "sh", "/opt/consul/init-consul-kv.sh" ]

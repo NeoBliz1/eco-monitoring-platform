@@ -1,0 +1,92 @@
+services:
+  prometheus-vault-init:
+    image: hashicorp/vault:2.0.0
+    user: "100:1000"
+    depends_on:
+      vault-server:
+        condition: service_healthy
+      vault-init:
+        condition: service_completed_successfully
+    networks:
+      - eco-net
+    volumes:
+      - ../vault/config/prometheus-agent.hcl:/etc/vault/agent.hcl:ro
+      - vault_tokens:/tmp/vault_input:rw
+      - ram_secrets_prometheus:/run/secrets
+    entrypoint: [ "sh", "-c" ]
+    command: [ "vault agent -exit-after-auth -config=/etc/vault/agent.hcl" ]
+
+  prometheus-server:
+    image: prom/prometheus:v3
+    ports:
+      - "9090:9090"
+    networks:
+      - eco-net
+    depends_on:
+      vault-server:
+        condition: service_healthy
+      vault-init:
+        condition: service_completed_successfully
+    user: "65534:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_storage:/prometheus:rw
+      - ram_secrets_prometheus:/run/secrets:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: [
+        "CMD", "promtool", "check", "ready",
+        "--url=http://localhost:9090",
+        "--http.config.file=/run/secrets/promtool_http_config.yml"
+      ]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    entrypoint: [ "sh", "-c" ]
+    command:
+      - |
+        echo "📡 Waiting for secure web configuration template from Vault..."
+        while [ ! -f /run/secrets/prometheus_web_config ]; do
+            sleep 0.2
+        done
+        echo "🔒 Configuration file discovered. Igniting Prometheus engine..."
+        exec /bin/prometheus \
+          --config.file=/etc/prometheus/prometheus.yml \
+          --web.config.file=/run/secrets/prometheus_web_config \
+          --storage.tsdb.path=/prometheus \
+          --storage.tsdb.retention.time=7d \
+          --web.enable-lifecycle
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.20.1
+    depends_on:
+      prometheus-server:
+        condition: service_healthy
+    user: "65534:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - eco-net
+    ports:
+      - "9187:9187"
+    volumes:
+      - ram_secrets_prometheus:/run/secrets:rw
+      - ./postgres-metrics-exporter-init.sh:/usr/local/bin/postgres-metrics-exporter-init.sh:ro
+    healthcheck:
+      test: [ "CMD-SHELL", ". /run/secrets/healthcheck.env 2>/dev/null && wget --no-verbose --tries=1 --spider \"http://$$SCRAPER_USER:$$SCRAPER_PASS@127.0.0.1:9187/metrics\" || exit 1" ]
+      interval: 3s
+      timeout: 2s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    entrypoint: [ "sh" ]
+    command: [ "/usr/local/bin/postgres-metrics-exporter-init.sh" ]

@@ -1,0 +1,446 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "eco-history-service-performance",
+    "title": "📜 Eco Platform History Service & PostgreSQL Performance Matrix",
+    "tags": [
+      "telemetry",
+      "history-service",
+      "metrics",
+      "prometheus",
+      "postgres"
+    ],
+    "timezone": "browser",
+    "schemaVersion": 39,
+    "panels": [
+      {
+        "id": 1,
+        "type": "timeseries",
+        "title": "⚡ History Data Processing Throughput (RPS)",
+        "gridPos": {
+          "h": 7,
+          "w": 8,
+          "x": 0,
+          "y": 0
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(rate(http_server_requests_seconds_count{instance=\"host.docker.internal:8082\"}[1m]))",
+            "legendFormat": "Read/Write History Ops / Sec",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth"
+            },
+            "unit": "reqps"
+          }
+        }
+      },
+      {
+        "id": 2,
+        "type": "timeseries",
+        "title": "⏱️ Average History Query & Fetch Latency",
+        "gridPos": {
+          "h": 7,
+          "w": 8,
+          "x": 8,
+          "y": 0
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(rate(http_server_requests_seconds_sum{instance=\"host.docker.internal:8082\"}[1m])) / sum(rate(http_server_requests_seconds_count{instance=\"host.docker.internal:8082\"}[1m])) * 1000",
+            "legendFormat": "Avg Fetch Latency (ms)",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "area",
+              "fillOpacity": 20
+            },
+            "unit": "ms"
+          }
+        }
+      },
+      {
+        "id": 3,
+        "type": "timeseries",
+        "title": "📉 Deep Historical Scan Max Latency Spikes",
+        "gridPos": {
+          "h": 7,
+          "w": 8,
+          "x": 16,
+          "y": 0
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "http_server_requests_seconds_max{instance=\"host.docker.internal:8082\"} * 1000",
+            "legendFormat": "Max Outlier Spike (ms)",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line"
+            },
+            "unit": "ms"
+          }
+        }
+      },
+      {
+        "id": 4,
+        "type": "timeseries",
+        "title": "🧠 History Service Heap Saturation vs Database Disk Reads",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 7
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(jvm_memory_used_bytes{instance=\"host.docker.internal:8082\", area=\"heap\"})",
+            "legendFormat": "History Service Used Heap",
+            "range": true
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(jvm_memory_committed_bytes{instance=\"host.docker.internal:8082\", area=\"heap\"})",
+            "legendFormat": "History Service Committed Heap",
+            "range": true
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(rate(pg_statio_user_tables_heap_blks_read[1m])) * 8192",
+            "legendFormat": "Postgres Physical Disk Read Speed",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth"
+            },
+            "unit": "bytes"
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "Postgres Physical Disk Read Speed"
+              },
+              "properties": [
+                {
+                  "id": "unit",
+                  "value": "Bps"
+                },
+                {
+                  "id": "custom.axisPlacement",
+                  "value": "right"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": 5,
+        "type": "timeseries",
+        "title": "⏳ JVM Garbage Collection Pause Cumulative Time",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 7
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(increase(jvm_gc_pause_seconds_sum{instance=\"host.docker.internal:8082\"}[5m]))",
+            "legendFormat": "GC Total Pause (sec)",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "bar",
+              "fillOpacity": 40
+            },
+            "unit": "s"
+          }
+        }
+      },
+      {
+        "id": 6,
+        "type": "timeseries",
+        "title": "⚙️ History Service CPU Utilization Profile",
+        "gridPos": {
+          "h": 7,
+          "w": 12,
+          "x": 0,
+          "y": 15
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "process_cpu_usage{instance=\"host.docker.internal:8082\"} * 100",
+            "legendFormat": "CPU %",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line"
+            },
+            "unit": "percent"
+          }
+        }
+      },
+      {
+        "id": 7,
+        "type": "timeseries",
+        "title": "🧵 Concurrent History Engine Live Threads",
+        "gridPos": {
+          "h": 7,
+          "w": 12,
+          "x": 12,
+          "y": 15
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "jvm_threads_live_threads{instance=\"host.docker.internal:8082\"}",
+            "legendFormat": "Active Threads",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line"
+            },
+            "unit": "none"
+          }
+        }
+      },
+      {
+        "id": 10,
+        "type": "timeseries",
+        "title": "🔌 Postgres Connection Pools & Saturation (History Workload)",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 22
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(pg_stat_activity_count{state=\"active\"})",
+            "legendFormat": "Active Queries Running",
+            "range": true
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(pg_stat_activity_count{state=\"idle in transaction\"})",
+            "legendFormat": "Stalled Idle Transactions",
+            "range": true
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(pg_stat_activity_count{state=\"idle\"})",
+            "legendFormat": "Idle Connections Pool",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth"
+            },
+            "unit": "none"
+          }
+        }
+      },
+      {
+        "id": 11,
+        "type": "timeseries",
+        "title": "💾 Postgres Index Scans vs Sequential Table Scans",
+        "gridPos": {
+          "h": 7,
+          "w": 12,
+          "x": 12,
+          "y": 22
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(pg_settings_enable_indexscan)",
+            "legendFormat": "Index Scans Enabled (1=True)",
+            "range": true
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(pg_settings_enable_seqscan)",
+            "legendFormat": "Seq Scans Enabled (1=True)",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line"
+            },
+            "unit": "none"
+          }
+        }
+      },
+      {
+        "id": 12,
+        "type": "timeseries",
+        "title": "🔴 Shared Buffers Cache Memory Hit Rate",
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 0,
+          "y": 30
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(rate(pg_stat_database_blks_hit[1m])) / (sum(rate(pg_stat_database_blks_hit[1m])) + sum(rate(pg_stat_database_blks_read[1m]))) * 100",
+            "legendFormat": "Global Cache Hit Ratio (%)",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line"
+            },
+            "unit": "percent",
+            "min": 0,
+            "max": 100
+          }
+        }
+      },
+      {
+        "id": 13,
+        "type": "timeseries",
+        "title": "📉 Lock Contention & Transaction Deadlocks",
+        "gridPos": {
+          "h": 7,
+          "w": 16,
+          "x": 8,
+          "y": 30
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(pg_locks_count)",
+            "legendFormat": "Active Transaction Locks",
+            "range": true
+          },
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(increase(pg_stat_database_deadlocks[1m]))",
+            "legendFormat": "Deadlocks Encountered",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line"
+            },
+            "unit": "none"
+          }
+        }
+      }
+    ]
+  },
+  "overwrite": true,
+  "folderId": 0
+}

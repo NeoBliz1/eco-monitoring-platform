@@ -1,0 +1,53 @@
+services:
+  schema-registry-vault-init:
+    image: hashicorp/vault:2.0.0
+    user: "100:1000"
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
+        condition: service_healthy
+      vault-server:
+        condition: service_healthy
+      vault-init:
+        condition: service_completed_successfully
+    networks:
+      - eco-net
+    volumes:
+      - ./../vault/config/schema-registry-agent.hcl:/etc/vault/agent.hcl:ro
+      - vault_tokens:/tmp/vault_input:ro
+      - ram_secrets_registry:/run/secrets:rw
+    entrypoint: [ "sh", "-c" ]
+    command: [ "vault agent -exit-after-auth -config=/etc/vault/agent.hcl" ]
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:8.2.0
+    ports:
+      - "8085:8081"
+    networks:
+      - eco-net
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - ram_secrets_registry:/run/secrets:rw
+      - ./init-schema-registry.sh:/usr/local/bin/init-schema-registry.sh:ro
+    healthcheck:
+      test: [ "CMD-SHELL", "bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/8081' || exit 1" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_LISTENERS: "http://0.0.0.0:8081"
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: "SASL_PLAINTEXT://kafka-1:9092,SASL_PLAINTEXT://kafka-2:9092,SASL_PLAINTEXT://kafka-3:9092"
+      SCHEMA_REGISTRY_KAFKASTORE_TOPIC_REPLICATION_FACTOR: 3
+      SCHEMA_REGISTRY_KAFKASTORE_SECURITY_PROTOCOL: SASL_PLAINTEXT
+      SCHEMA_REGISTRY_KAFKASTORE_SASL_MECHANISM: SCRAM-SHA-512
+      KAFKA_OPTS: "-Djava.security.auth.login.config=/run/secrets/schema_registry_jaas"
+      SCHEMA_REGISTRY_OPTS: "-Djava.security.auth.login.config=/run/secrets/schema_registry_jaas"
+    entrypoint: [ "sh", "/usr/local/bin/init-schema-registry.sh" ]

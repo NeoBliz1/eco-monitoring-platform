@@ -39,7 +39,7 @@ public class TelemetryIngestionAdapter implements TelemetryIngestionService {
                     @Override
                     public void onCompleted() {
                         if(log.isDebugEnabled()) {
-                            log.debug("Mono request sent successfully");
+                            log.debug("Mono request sent successfully, station id: {}", packet.getStationId());
                         }
                     }
                 })
@@ -52,7 +52,7 @@ public class TelemetryIngestionAdapter implements TelemetryIngestionService {
         try {
             blockingStub.pushEvents(telemetryPayloadMapper.toPushRequest(packet));
             if(log.isDebugEnabled()) {
-                log.debug("Virtual request sent successfully");
+                log.debug("Virtual request sent successfully, station id: {}", packet.getStationId());
             }
             return true;
         } catch(StatusRuntimeException e) {

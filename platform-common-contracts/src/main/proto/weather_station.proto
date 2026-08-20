@@ -9,11 +9,8 @@ option go_package = "./pkg/generated/weather";
 import "buf/validate/validate.proto";
 
 message WeatherPacket {
-  // Station ID: Not empty, must be a numeric string between "1" and "30" via Regex
-  string station_id = 1 [(buf.validate.field).string = {
-    min_len: 1,
-    pattern: "^([1-9]|[12][0-9]|30)$"
-  }];
+  // Station ID: Not empty, must be a numeric string between "000_001_000_01" and "999_999_999_99" via Regex
+  string station_id = 1 [(buf.validate.field).string.pattern = "^[0-9]{11}$"];
 
   // Timestamp: Must be greater than 0 (valid epoch milli)
   int64 timestamp = 2 [(buf.validate.field).int64.gt = 0];

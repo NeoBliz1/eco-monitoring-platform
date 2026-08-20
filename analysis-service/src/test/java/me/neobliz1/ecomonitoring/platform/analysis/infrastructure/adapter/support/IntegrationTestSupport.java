@@ -68,7 +68,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 @Slf4j
 @Testcontainers
-@ActiveProfiles({ "dev", "common" })
+@ActiveProfiles({ "dev", "common", "local" })
 @SpringBootTest(classes = AnalysisBootEngine.class)
 @TestPropertySource(locations = "classpath:.env.test")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
@@ -79,15 +79,6 @@ public abstract class IntegrationTestSupport extends AssertionTestSupport {
     public static final float FLUSH_PACKET_PRESSURE = 1013.25f;
     public static final double FLUSH_LAT = 0.0;
     static final long BUCKET_SIZE_MS = 660_000L; // 11 minutes
-
-    static {
-        System.setProperty("spring.kafka.bootstrap-servers", "localhost:9094,localhost:9194,localhost:9294");
-        System.setProperty("spring.data.redis.host", "localhost");
-        System.setProperty("spring.data.redis.port", "6379");
-        System.setProperty("spring.kafka.properties.schema.registry.url", "http://localhost:8085");
-        System.setProperty("spring.cloud.consul.host", "localhost");
-        System.setProperty("spring.cloud.consul.port", "8500");
-    }
 
     @DynamicPropertySource
     static void dynamicPropertySet(DynamicPropertyRegistry registry) {

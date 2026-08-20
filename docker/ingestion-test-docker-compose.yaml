@@ -1,18 +1,50 @@
 include:
-  - ./compose/kafka.yaml
-  - ./compose/schema-registry.yaml
-  - ./compose/consul.yaml
+  - ./compose/vault/vault.yaml
+  - ./compose/kafka/kafka.yaml
+  - ./compose/kafka/kafka-init-topics.yaml
+  - ./compose/schema-registry/schema-registry.yaml
+  - compose/consul/consul.yaml
   - ./compose/vector/vector-sidecar.yaml
 
 volumes:
   vector_disk_buffer:
     driver: local
+  kafka_data_1: { }
+  kafka_data_2: { }
+  kafka_data_3: { }
+  vault_storage: { }
+  vault_tokens: { }
+  ram_secrets_kafka_1:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "size=64m,mode=0770,uid=100,gid=1000,noswap,noexec,nosuid,nodev"
+  ram_secrets_kafka_2:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "size=64m,mode=0770,uid=100,gid=1000,noswap,noexec,nosuid,nodev"
+  ram_secrets_kafka_3:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "size=64m,mode=0770,uid=100,gid=1000,noswap,noexec,nosuid,nodev"
+  ram_secrets_registry:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "size=64m,mode=0770,uid=100,gid=1000,noswap,noexec,nosuid,nodev"
+  ram_secrets_vector:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "size=64m,mode=0777,uid=1000,gid=1000,noswap,noexec,nosuid,nodev"
 
-secrets:
-  kafka_server_jaas:
-    file: secrets/scram/kafka_server_jaas.conf
-  schema_registry_jaas:
-    file: secrets/scram/schema_registry_jaas.conf
 
 networks:
   eco-net:

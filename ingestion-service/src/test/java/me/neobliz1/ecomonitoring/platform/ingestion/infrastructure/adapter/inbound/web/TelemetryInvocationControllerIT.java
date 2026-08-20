@@ -45,8 +45,8 @@ import java.util.Map;
 
 @Slf4j
 @Testcontainers
-@ActiveProfiles("dev")
 @AutoConfigureWebTestClient
+@ActiveProfiles({ "dev", "local" })
 @TestPropertySource(locations = "classpath:.env.test")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -106,6 +106,15 @@ public class TelemetryInvocationControllerIT {
         log.info("Consumer ready. Assigned partitions: {}, beginning offsets: {}",
                 consumer.assignment(), consumer.beginningOffsets(consumer.assignment()));
         kafkaListener = new TestKafkaListener<>(consumer);
+        try {
+            log.info("📡 Priming HTTP networking layers and schema caches...");
+            performValidPost(webTestClient, SYNC_SINGLE_URL, createValidBase().setStationId("00000100114"));
+
+            consumer.poll(Duration.ofMillis(500));
+            log.info("✅ Platform telemetry pipeline successfully primed.");
+        } catch(Exception e) {
+            log.warn("⚠️ Telemetry warmup routine completed with warnings: {}", e.getMessage());
+        }
     }
 
     @AfterEach
@@ -115,7 +124,7 @@ public class TelemetryInvocationControllerIT {
 
     @Test
     void shouldSuccessPollPacketFromKafka_whenSendItByBlockingWayViaVector() {
-        String sId = "14";
+        String sId = "00000100014";
 
         performValidPost(webTestClient, SYNC_SINGLE_URL, createValidBase().setStationId(sId));
 
@@ -124,7 +133,7 @@ public class TelemetryInvocationControllerIT {
 
     @Test
     void shouldSuccessPollPacketFromKafka_whenSendItByReactiveWayViaVector() {
-        String sId = "18";
+        String sId = "00000100018";
 
         performValidPost(webTestClient, REACTIVE_MONO_URL, createValidBase().setStationId(sId));
 

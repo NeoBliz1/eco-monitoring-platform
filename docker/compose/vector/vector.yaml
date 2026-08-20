@@ -12,6 +12,8 @@ sources:
     mode: "tcp"
     decoding:
       codec: "json"
+  vector_metrics:
+    type: "internal_metrics"
 
 transforms:
   extract_pure_bytes:
@@ -23,20 +25,13 @@ transforms:
     type: "remap"
     inputs: [ "host_jar_logs_stream" ]
     source: |
-      # 🏢 RE-MAPPING MATRIX ENGINE (HANDLES BOTH SPRING AND GO STRUCTURALS)
       .thread_name = del(.threadName) || .thread_name || "main"
       .logger_name = del(.loggerName) || .logger_name || "gateway.proxy"
       .level = del(.logLevel) || .level || "INFO"
-      
-      # Handle time standardization
       .timestamp = .timestamp || now()
-      
-      # Extract tracing context if generated
       .trace_id = .mdc.trace_id || .traceId || ""
       .span_id = .mdc.span_id || .spanId || ""
       .stack_trace = del(.stackTrace) || .stack_trace || ""
-      
-      # Extract the service tracking identifier
       .service_name = del(.service_name) || .service_name || "unknown-service"
 
 sinks:
@@ -86,3 +81,8 @@ sinks:
       user: "${CH_USER}"
       password: "${CH_PASSWORD}"
     table: "application_logs"
+
+  prometheus_exporter_endpoint:
+    type: "prometheus_exporter"
+    inputs: [ "vector_metrics" ]
+    address: "0.0.0.0:9598"

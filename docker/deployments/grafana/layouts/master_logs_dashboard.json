@@ -1,0 +1,177 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "eco-platform-master-logs",
+    "title": "📜 Eco Platform Master Log Stream Matrix",
+    "tags": [
+      "telemetry",
+      "mesh"
+    ],
+    "timezone": "browser",
+    "schemaVersion": 39,
+    "panels": [
+      {
+        "id": 1,
+        "type": "logs",
+        "title": "🌱 Ingestion Service Logs",
+        "gridPos": {
+          "h": 11,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-clickhouse-datasource",
+              "uid": "ClickHouse-Ecosystem"
+            },
+            "format": "logs",
+            "queryType": "logs",
+            "rawSql": "SELECT timestamp, level, message, thread_name, logger_name, trace_id FROM ${CLICKHOUSE_DB}.application_logs WHERE service_name = 'eco-monitoring-ingestion' AND timestamp >= fromUnixTimestamp(intDiv($__from, 1000)) AND timestamp <= fromUnixTimestamp(intDiv($__to, 1000)) ORDER BY timestamp DESC LIMIT 1000",
+            "meta": {
+              "timeColumn": "timestamp",
+              "levelColumn": "level",
+              "messageColumn": "message"
+            }
+          }
+        ],
+        "options": {
+          "dedupStrategy": "numbers",
+          "enableInfiniteScrolling": true,
+          "enableLogDetails": true,
+          "prettifyLogMessage": true,
+          "showControls": true,
+          "showFieldSelector": true,
+          "showLevel": true,
+          "showTime": true,
+          "sortOrder": "Descending",
+          "wrapLogMessage": true
+        }
+      },
+      {
+        "id": 2,
+        "type": "logs",
+        "title": "📊 Analysis Service Logs",
+        "gridPos": {
+          "h": 11,
+          "w": 12,
+          "x": 12,
+          "y": 0
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-clickhouse-datasource",
+              "uid": "ClickHouse-Ecosystem"
+            },
+            "format": "logs",
+            "queryType": "logs",
+            "rawSql": "SELECT timestamp, level, message, thread_name, logger_name, trace_id FROM ${CLICKHOUSE_DB}.application_logs WHERE service_name = 'eco-monitoring-analysis' AND timestamp >= fromUnixTimestamp(intDiv($__from, 1000)) AND timestamp <= fromUnixTimestamp(intDiv($__to, 1000)) ORDER BY timestamp DESC LIMIT 1000",
+            "meta": {
+              "timeColumn": "timestamp",
+              "levelColumn": "level",
+              "messageColumn": "message"
+            }
+          }
+        ],
+        "options": {
+          "dedupStrategy": "numbers",
+          "enableInfiniteScrolling": true,
+          "enableLogDetails": true,
+          "prettifyLogMessage": true,
+          "showControls": true,
+          "showFieldSelector": true,
+          "showLevel": true,
+          "showTime": true,
+          "sortOrder": "Descending",
+          "wrapLogMessage": true
+        }
+      },
+      {
+        "id": 3,
+        "type": "logs",
+        "title": "📜 History Service Logs",
+        "gridPos": {
+          "h": 11,
+          "w": 12,
+          "x": 0,
+          "y": 11
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-clickhouse-datasource",
+              "uid": "ClickHouse-Ecosystem"
+            },
+            "format": "logs",
+            "queryType": "logs",
+            "rawSql": "SELECT timestamp, level, message, thread_name, logger_name, trace_id FROM ${CLICKHOUSE_DB}.application_logs WHERE service_name = 'eco-monitoring-history' AND timestamp >= fromUnixTimestamp(intDiv($__from, 1000)) AND timestamp <= fromUnixTimestamp(intDiv($__to, 1000)) ORDER BY timestamp DESC LIMIT 1000",
+            "meta": {
+              "timeColumn": "timestamp",
+              "levelColumn": "level",
+              "messageColumn": "message"
+            }
+          }
+        ],
+        "options": {
+          "dedupStrategy": "numbers",
+          "enableInfiniteScrolling": true,
+          "enableLogDetails": true,
+          "prettifyLogMessage": true,
+          "showControls": true,
+          "showFieldSelector": true,
+          "showLevel": true,
+          "showTime": true,
+          "sortOrder": "Descending",
+          "wrapLogMessage": true
+        }
+      },
+      {
+        "id": 4,
+        "type": "logs",
+        "title": "🐹 Go API Gateway Proxy Logs",
+        "gridPos": {
+          "h": 11,
+          "w": 12,
+          "x": 12,
+          "y": 11
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "grafana-clickhouse-datasource",
+              "uid": "ClickHouse-Ecosystem"
+            },
+            "format": "logs",
+            "queryType": "logs",
+            "rawSql": "SELECT timestamp, level, message, thread_name, logger_name, trace_id FROM ${CLICKHOUSE_DB}.application_logs WHERE service_name = 'go-service' AND timestamp >= fromUnixTimestamp(intDiv($__from, 1000)) AND timestamp <= fromUnixTimestamp(intDiv($__to, 1000)) ORDER BY timestamp DESC LIMIT 1000",
+            "meta": {
+              "timeColumn": "timestamp",
+              "levelColumn": "level",
+              "messageColumn": "message"
+            }
+          }
+        ],
+        "options": {
+          "dedupStrategy": "numbers",
+          "enableInfiniteScrolling": true,
+          "enableLogDetails": true,
+          "prettifyLogMessage": true,
+          "showControls": true,
+          "showFieldSelector": true,
+          "showLevel": true,
+          "showTime": true,
+          "sortOrder": "Descending",
+          "wrapLogMessage": true
+        }
+      }
+    ],
+    "time": {
+      "from": "now-24h",
+      "to": "now"
+    },
+    "refresh": "5s"
+  },
+  "overwrite": true
+}

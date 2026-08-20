@@ -1,0 +1,9 @@
+FROM hashicorp/vault:2.0.0
+
+USER root
+
+RUN mkdir -p /tmp/vault_output && \
+    chown -R 100:1000 /tmp/vault_output && \
+    chmod 775 /tmp/vault_output
+
+USER vault

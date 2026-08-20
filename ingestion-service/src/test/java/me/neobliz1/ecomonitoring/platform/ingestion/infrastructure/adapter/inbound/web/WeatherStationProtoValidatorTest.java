@@ -57,13 +57,13 @@ public class WeatherStationProtoValidatorTest {
     @ParameterizedTest
     @ValueSource(strings = { SYNC_SINGLE_URL, REACTIVE_MONO_URL })
     void shouldReturn200_whenStationIdIsAtLowerBoundary(String url) {
-        performValidPost(webTestClient, url, createValidBase().setStationId("1"));
+        performValidPost(webTestClient, url, createValidBase().setStationId("00000100001"));
     }
 
     @ParameterizedTest
     @ValueSource(strings = { SYNC_SINGLE_URL, REACTIVE_MONO_URL })
     void shouldReturn200_whenStationIdIsAtUpperBoundary(String url) {
-        performValidPost(webTestClient, url, createValidBase().setStationId("30"));
+        performValidPost(webTestClient, url, createValidBase().setStationId("99999999999"));
     }
 
     @ParameterizedTest

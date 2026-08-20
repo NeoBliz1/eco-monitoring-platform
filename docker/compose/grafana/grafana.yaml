@@ -1,0 +1,73 @@
+services:
+  grafana-storage-init:
+    image: hashicorp/vault:2.0.0
+    user: "0:0"
+    depends_on:
+      clickhouse-db:
+        condition: service_healthy
+    volumes:
+      - ./../../../.data/grafana:/mnt/storage:rw
+    entrypoint: [ "sh", "-c" ]
+    command:
+      - |
+        mkdir -p /mnt/storage/data
+        chown -R 472:472 /mnt/storage/data
+        chmod 750 /mnt/storage/data
+        echo "🔒 Host local persistent storage layer successfully hardened to 0750 (472:472)!"
+
+  grafana-vault-init:
+    image: hashicorp/vault:2.0.0
+    user: "100:1000"
+    depends_on:
+      grafana-storage-init:
+        condition: service_completed_successfully
+      vault-server:
+        condition: service_healthy
+      vault-init:
+        condition: service_completed_successfully
+    networks:
+      - eco-net
+    volumes:
+      - ./../vault/config/grafana-agent.hcl:/etc/vault/agent.hcl:ro
+      - vault_tokens:/tmp/vault_input:rw
+      - ram_secrets_grafana:/run/secrets
+    entrypoint: [ "sh", "-c" ]
+    command: [ "vault agent -exit-after-auth -config=/etc/vault/agent.hcl" ]
+
+  grafana:
+    image: grafana/grafana-oss:13.0.2
+    ports:
+      - "3000:3000"
+    networks:
+      - eco-net
+    depends_on:
+      clickhouse-db:
+        condition: service_healthy
+      grafana-storage-init:
+        condition: service_completed_successfully
+    user: "472:1000"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=32M,uid=472,gid=472,mode=1777,noexec,nosuid,nodev
+      - /usr/share/grafana/data:size=10M,uid=472,gid=472,mode=0700
+    volumes:
+      - ./../../../.data/grafana/data:/var/lib/grafana:rw
+      - ram_secrets_grafana:/run/secrets:rw
+      - ./run-grafana.sh:/opt/grafana/run-grafana.sh:ro
+    environment:
+      GF_USERS_ALLOW_SIGN_UP: false
+      GF_INSTALL_PLUGINS: grafana-clickhouse-datasource
+      GF_PLUGINS_AUTO_UPDATE: false
+      GF_ANALYTICS_REPORTING_ENABLED: false
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    entrypoint: [ "sh", "-c" ]
+    command: [ "/opt/grafana/run-grafana.sh" ]

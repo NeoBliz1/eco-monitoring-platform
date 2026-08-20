@@ -16,7 +16,6 @@ import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbou
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.persistence.redis.TelemetryPersistenceRepositoryAdapter;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.persistence.redis.TelemetryQueryRepositoryAdapter;
 import me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils;
-import me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils.ServiceAddressRecord;
 import me.neobliz1.ecomonitoring.platform.model.exception.RedisPasswordNotSetException;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -27,15 +26,20 @@ import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.ConfigurableEnvironment;
-import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.data.redis.connection.ReactiveRedisConnectionFactory;
 import org.springframework.data.redis.connection.RedisPassword;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
+import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.kafka.annotation.EnableKafkaStreams;
+import org.springframework.scripting.support.ResourceScriptSource;
 
+import java.time.Duration;
 import java.util.List;
 
 @Slf4j
@@ -61,9 +65,10 @@ public class AnalysisServiceConfig {
     }
 
     @Bean
-    public TelemetryPersistenceRepository telemetryPersistenceRepository(RedisTemplate<String, byte[]> protobufRedisTemplate,
-                                                                 StringRedisTemplate redisTemplate) {
-        return new TelemetryPersistenceRepositoryAdapter(protobufRedisTemplate, redisTemplate);
+    public TelemetryPersistenceRepository telemetryPersistenceRepository(ReactiveStringRedisTemplate reactiveStringRedisTemplate,
+                                                                         RedisTemplate<String, byte[]> protobufRedisTemplate,
+                                                                         DefaultRedisScript<String> saveHistoricalGridScript) {
+        return new TelemetryPersistenceRepositoryAdapter(reactiveStringRedisTemplate, protobufRedisTemplate, saveHistoricalGridScript);
     }
 
     @Bean
@@ -88,9 +93,9 @@ public class AnalysisServiceConfig {
     }
 
     @Bean
-    public LettuceConnectionFactory redisConnectionFactory() {
-        ServiceAddressRecord serviceAddress = PlatformCommonUtils.discoverServiceAddressFromConsulServerByName(discoveryClient,
-                environment, redisServiceName);
+    public LettuceConnectionFactory redisConnectionFactory(DiscoveryClient discoveryClient) {
+        PlatformCommonUtils.ServiceAddressRecord serviceAddress = PlatformCommonUtils.discoverServiceAddressFromConsulServerByName(
+                discoveryClient, environment, redisServiceName);
 
         RedisStandaloneConfiguration config = new RedisStandaloneConfiguration();
         config.setHostName(serviceAddress.resolvedHost());
@@ -102,17 +107,36 @@ public class AnalysisServiceConfig {
             throw new RedisPasswordNotSetException();
         }
 
-        return new LettuceConnectionFactory(config);
+        LettuceClientConfiguration clientConfig = LettuceClientConfiguration.builder()
+                .commandTimeout(Duration.ofMillis(200))
+                .shutdownTimeout(Duration.ofMillis(100))
+                .build();
+
+        return new LettuceConnectionFactory(config, clientConfig);
     }
 
     @Bean
-    public RedisTemplate<String, byte[]> protobufRedisTemplate(RedisConnectionFactory connectionFactory) {
+    public RedisTemplate<String, byte[]> protobufRedisTemplate(LettuceConnectionFactory connectionFactory) {
         RedisTemplate<String, byte[]> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
         template.setKeySerializer(RedisSerializer.string());
+        template.setValueSerializer(RedisSerializer.byteArray());
         template.setHashKeySerializer(RedisSerializer.string());
         template.setHashValueSerializer(RedisSerializer.byteArray());
         return template;
+    }
+
+    @Bean
+    public DefaultRedisScript<String> saveHistoricalGridScript() {
+        DefaultRedisScript<String> script = new DefaultRedisScript<>();
+        script.setScriptSource(new ResourceScriptSource(new ClassPathResource("lua/scripts/save_historical_grid.lua")));
+        script.setResultType(String.class);
+        return script;
+    }
+
+    @Bean
+    public ReactiveStringRedisTemplate reactiveStringRedisTemplate(ReactiveRedisConnectionFactory factory) {
+        return new ReactiveStringRedisTemplate(factory);
     }
 
     @PostConstruct
