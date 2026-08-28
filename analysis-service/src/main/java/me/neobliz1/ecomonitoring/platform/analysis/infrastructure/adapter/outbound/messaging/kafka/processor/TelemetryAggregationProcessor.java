@@ -1,13 +1,16 @@
 package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor;
 
+import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.GRID_BUCKET_KEY_FORMAT;
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.ZERO_LOSS_ACCUMULATION_STORE;
+import static me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryUtils.clampLatitude;
+import static me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryUtils.clampLongitude;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.HASHTAG_DELIMITER;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryPersistentService;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryUtils;
+import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.Location;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 import org.apache.kafka.streams.KeyValue;
@@ -52,20 +55,18 @@ public class TelemetryAggregationProcessor implements Processor<String, WeatherP
         if(record==null || record.value()==null) {
             return;
         }
-
         WeatherPacket packet = record.value();
-
-        // record.key() is already pre-formatted as "00001783949700000#55.0#-61.0" by selectKey()
         String uniqueTxId = packet.getStationId()+":"+packet.getTimestamp();
+        // record.key() is already pre-formatted as "55.0#-61.0" by selectKey()
         String storageKey = String.format("%017d", TelemetryUtils.getAggregationBucketFloorInterval(packet.getTimestamp(), secondsPerInterval))
                 +HASHTAG_DELIMITER+record.key()+HASHTAG_DELIMITER+uniqueTxId;
         if(log.isDebugEnabled()) {
             log.debug("Storing taskId {}", this.context.taskId().toString());
         }
-        // Persist records inside the transactional boundary local state store
         accumStore.put(storageKey, packet);
-        double latGrid = Math.round(packet.getLocation().getLatitude()*10.0)/10.0;
-        double lonGrid = Math.round(packet.getLocation().getLongitude()*10.0)/10.0;
+        Location location = packet.getLocation();
+        double latGrid = clampLatitude(location.getLatitude());
+        double lonGrid = clampLongitude(location.getLongitude());
         persistentService.updateRealTimeSlidingWindow(packet, latGrid, lonGrid);
     }
 
@@ -76,8 +77,8 @@ public class TelemetryAggregationProcessor implements Processor<String, WeatherP
         }
         lastStreamTime = currentStreamTimeMs;
         long currentWindowFloor = TelemetryUtils.getAggregationBucketFloorInterval(currentStreamTimeInMillis, secondsPerInterval);
-        String startRangeKey = String.format(AnalysisConstants.UTC_TIMESTAMP_FORMAT, 0);
-        String endRangeKey = String.format(AnalysisConstants.UTC_TIMESTAMP_FORMAT, currentWindowFloor)+"\uFFFF";
+        String startRangeKey = String.format(GRID_BUCKET_KEY_FORMAT, 0);
+        String endRangeKey = String.format(GRID_BUCKET_KEY_FORMAT, currentWindowFloor)+"\uFFFF";
         List<String> keysToRemove = new ArrayList<>();
         Map<Long, Map<String, List<WeatherPacket>>> extractionMatrix = new HashMap<>();
         try(KeyValueIterator<String, WeatherPacket> iterator = accumStore.range(startRangeKey, endRangeKey)) {

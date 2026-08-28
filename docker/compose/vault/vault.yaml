@@ -27,6 +27,8 @@ services:
     build:
       context: .
       dockerfile: vault-dockerfile.init
+    env_file:
+      - .env
     user: "100:1000"
     depends_on:
       vault-server:

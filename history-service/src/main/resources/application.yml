@@ -1,7 +1,9 @@
 spring:
   profiles:
-    # profile for include common configs from common-core module
-    include: common
+    include:
+      # profile for include common configs from common-core module
+      - common
+      - common-web
   application:
     name: ${SPRING_HISTORY_APPLICATION_NAME}
   config:
@@ -22,13 +24,15 @@ spring:
         enabled: true
         format: yaml
         prefixes: config
+        import-check:
+          enabled: false
   threads:
     virtual:
       enabled: true
   datasource:
     service-name: ${SPRING_DATA_SERVICE_NAME}
-    username: ${SPRING_DATA_POSTGRES_USER_NAME}
-    password: ${SPRING_DATA_POSTGRES_PASSWORD}
+    username: ${postgres_user:${SPRING_DATA_POSTGRES_USER_NAME}}
+    password: ${postgres_password:${SPRING_DATA_POSTGRES_PASSWORD}}
     driver-class-name: org.postgresql.Driver
     database: ${SPRING_DATA_DB_NAME}
     schema-name: ${POSTGRES_DB_SCHEMA}
@@ -55,9 +59,40 @@ spring:
       group.protocol: "consumer"
       security.protocol: "SASL_PLAINTEXT"
       sasl.mechanism: "SCRAM-SHA-512"
-      sasl.jaas.config: "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"${KAFKA_CLIENT}\" password=\"${KAFKA_CLIENT_PASSWORD}\";"
+      sasl.jaas.config: "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"${kafka_client:${KAFKA_CLIENT}}\" password=\"${kafka_client_password:${KAFKA_CLIENT_PASSWORD}}\";"
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: validate
 server:
   port: ${HISTORY_APPLICATION_SERVER_PORT}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  cloud:
+    vault:
+      enabled: false
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+    import:
+      - "optional:consul:${SPRING_CLOUD_CONSUL_HOST}:${SPRING_CLOUD_CONSUL_PORT}/"
+      - vault://secret/history-service
+  cloud:
+    vault:
+      enabled: true
+      uri: http://${SPRING_CLOUD_VAULT_HOST}:${SPRING_CLOUD_VAULT_PORT}
+      kv:
+        enabled: true
+        backend: secret
+        default-context: history-service
+      authentication: APPROLE
+      app-role:
+        role-id: ${HISTORY_VAULT_ROLE_ID}
+        secret-id: ${HISTORY_VAULT_SECRET_ID}

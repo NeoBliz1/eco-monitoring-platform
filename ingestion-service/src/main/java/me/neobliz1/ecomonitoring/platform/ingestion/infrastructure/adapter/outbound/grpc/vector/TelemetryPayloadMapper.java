@@ -44,7 +44,6 @@ public class TelemetryPayloadMapper {
         );
     }
 
-
     public PushEventsRequest toPushRequest(WeatherPacket packet) {
         byte[] verifiedConfluentBytes = serializeToConfluentProtobuf(packet);
 

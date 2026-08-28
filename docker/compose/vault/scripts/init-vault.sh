@@ -32,57 +32,69 @@ if echo "$RAW_STATUS" | grep -q '"initialized": false'; then
 
 	echo "📝 Injecting multi-app secrets into database buckets..."
 
-	# PostgreSQL
+	echo "🔐 Injecting History Service Credentials..."
+	vault kv put secret/history-service \
+		postgres_user="$POSTGRES_ECO_USER_NAME" \
+		postgres_password="$POSTGRES_ECO_USER_PASSWORD" \
+		kafka_client="$KAFKA_CLIENT_USER" \
+		kafka_client_password="$KAFKA_CLIENT_PASS"
+
+	echo "🔐 Injecting Analysis Service Credentials..."
+	vault kv put secret/analysis-service \
+		redis_password="$REDIS_PASSWORD" \
+		kafka_client="$KAFKA_CLIENT_USER" \
+		kafka_client_password="$KAFKA_CLIENT_PASS"
+
+	echo "🔐 Injecting Postgres Credentials..."
 	vault kv put secret/postgres \
-		eco_user_name="eco_user" \
-		eco_user_password="my_super_secret_eco_user_password" \
-		metrics_user_name="postgres_metrics_exporter" \
-		metrics_user_password="my_super_secret_postgres_metrics_exporter_password" \
-		postgres_password="my_super_secret_postgres_password"
+		eco_user_name="$POSTGRES_ECO_USER_NAME" \
+		eco_user_password="$POSTGRES_ECO_USER_PASSWORD" \
+		metrics_user_name="$POSTGRES_METRICS_USER_NAME" \
+		metrics_user_password="$POSTGRES_METRICS_USER_PASSWORD" \
+		postgres_password="$POSTGRES_POSTGRES_PASSWORD"
 
-	# Redis
+	echo "🔐 Injecting Redis Credentials..."
 	vault kv put secret/redis \
-		redis_password="my_super_secret_redis_password"
+		redis_password="$REDIS_PASSWORD"
 
-	# ClickHouse
-	# clickhouse_default_password="my_temporary_bootstrap_lockout_pass_123_73928173"
+	echo "🔐 Injecting ClickHouse Credentials..."
 	vault kv put secret/clickhouse \
-		clickhouse_user="admin" \
-		clickhouse_password="my_highly_secure_clickhouse_production_pass" \
-		clickhouse_sha256_password="637b2168c969a87fd0cde6c25c73aa649271d91051b06c2ff53fae329c0d13f7" \
-		clickhouse_sha256_default_password="2cc215760674f9439d8c2340a654ceeda481f60fe26c57ac74cc8919dd713504" \
-		clickhouse_db="eco_telemetry_logs"
+		clickhouse_user="$CLICKHOUSE_USER" \
+		clickhouse_password="$CLICKHOUSE_PASSWORD" \
+		clickhouse_sha256_password="$CLICKHOUSE_SHA256_PASSWORD" \
+		clickhouse_sha256_default_password="$CLICKHOUSE_SHA256_DEFAULT_PASSWORD" \
+		clickhouse_db="$CLICKHOUSE_DB"
 
-	# Prometheus password: my_actual_password (hashed with bcrypt)
+	echo "🔐 Injecting Prometheus Credentials..."
 	vault kv put secret/prometheus \
-		basic_auth_users="eco_admin: '\$2b\$12\$2MDyAb2OH4nQIoKGETU7S.1ONxa70ATSJUqJbI5z0f.ZT/Hj5MRmi'" \
-		user="eco_admin" \
-		password="my_actual_password" \
-		pg_db_metrics_user_name="postgres_metrics_exporter" \
-    pg_db_metrics_user_password="my_super_secret_postgres_metrics_exporter_password"
+		basic_auth_users="$PROMETHEUS_BASIC_AUTH_USERS" \
+		user="$PROMETHEUS_USER" \
+		password="$PROMETHEUS_PASSWORD" \
+		pg_db_metrics_user_name="$PROMETHEUS_PG_DB_METRICS_USER_NAME" \
+		pg_db_metrics_user_password="$PROMETHEUS_PG_DB_METRICS_USER_PASSWORD"
 
-	# Grafana
+	echo "🔐 Injecting Grafana Credentials..."
 	vault kv put secret/grafana \
-		admin_user="admin" \
-		admin_password="my_highly_secure_grafana_dashboard_pass_2026"
+		admin_user="$GRAFANA_ADMIN_USER" \
+		admin_password="$GRAFANA_ADMIN_PASSWORD"
 
 	echo "📝 Injecting Kafka JAAS Configurations..."
-
 	vault kv put secret/kafka \
-		admin_user="admin" \
-		admin_pass="admin-password" \
-		registry_user="registry" \
-		registry_pass="registry-secret-pass" \
-		vector_user="vector" \
-		vector_pass="vector-secret-pass" \
-		client_user="client" \
-		client_pass="client-secret-pass"
-	echo "🎉 All requested secrets have been successfully injected into Vault!"
+		admin_user="$KAFKA_ADMIN_USER" \
+		admin_pass="$KAFKA_ADMIN_PASS" \
+		registry_user="$KAFKA_REGISTRY_USER" \
+		registry_pass="$KAFKA_REGISTRY_PASS" \
+		vector_user="$KAFKA_VECTOR_USER" \
+		vector_pass="$KAFKA_VECTOR_PASS" \
+		client_user="$KAFKA_CLIENT_USER" \
+		client_pass="$KAFKA_CLIENT_PASS"
+
+	echo "✅ All secrets successfully synchronized to Vault Storage!"
 
 	echo "🔐 Configuring AppRole security loops..."
 	vault auth enable approle
 
-	for app in kafka_1 kafka_2 kafka_3 kafka_topics postgres redis clickhouse grafana schema-registry prometheus vector; do
+	for app in kafka_1 kafka_2 kafka_3 kafka_topics postgres redis clickhouse grafana schema-registry prometheus vector history-service analysis-service; do
 		echo "🔧 Provisioning permissions infrastructure for: [$app]"
 
 		if [ "$app" = "schema-registry" ] || [ "$app" = "kafka_1" ] || [ "$app" = "kafka_2" ] || [ "$app" = "kafka_3" ] || [ "$app" = "kafka_topics" ]; then

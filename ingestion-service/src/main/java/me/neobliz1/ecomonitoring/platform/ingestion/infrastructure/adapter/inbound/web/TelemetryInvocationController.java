@@ -6,8 +6,15 @@ import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.TELE
 
 import io.github.neobliz1.validproto.annotation.ValidProto;
 import io.github.neobliz1.validproto.annotation.ValidatedProto;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import me.neobliz1.ecomonitoring.platform.ingestion.domain.port.inbound.TelemetryIngestionService;
+import me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.adapter.inbound.web.docs.ValidationErrorResponse;
 import me.neobliz1.ecomonitoring.platform.model.exception.PipelineTimeoutException;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import org.springframework.http.HttpStatus;
@@ -27,10 +34,28 @@ import java.util.concurrent.TimeoutException;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping(TELEMETRY_URI)
+@Tag(name = "Telemetry Ingestion", description = "High-throughput pipelines for multi-sensor climatic logs")
 public class TelemetryInvocationController {
 
     private final TelemetryIngestionService telemetryIngestionService;
 
+    @Operation(
+            summary = "Ingest Reactive Sensor Data",
+            description = "Asynchronously processes incoming streaming climatic packages with a strict 200ms timeout barrier boundary constraint."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "202", description = "Payload processed and accepted into pipeline successfully", content = @Content),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "Malformed Protobuf payload structure or validation rules failed",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ValidationErrorResponse.class))
+            ),
+            @ApiResponse(
+                    responseCode = "504",
+                    description = "Pipeline Timeout Error - Processing exceeded designated thread response window limit",
+                    content = @Content
+            )
+    })
     @PostMapping(value = REACTIVE_TELEMETRY_ENDPOINT_URI, consumes = MediaType.APPLICATION_PROTOBUF_VALUE)
     public Mono<ResponseEntity<Void>> receivedReactiveSensorStationData(@ValidProto @RequestBody WeatherPacket packet) {
         return telemetryIngestionService.processTelemetryPacket(packet)
@@ -46,6 +71,22 @@ public class TelemetryInvocationController {
                 });
     }
 
+    @Operation(
+            summary = "Ingest Virtual-Thread Sensor Data",
+            description = "Handles incoming station data over blocking execution patterns routed directly across underlying virtual thread allocations."
+    )
+    @ApiResponses(value = {
+            @ApiResponse(
+                    responseCode = "202",
+                    description = "Station data committed into storage buffer completely",
+                    content = @Content
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "Malformed Protobuf payload structure or validation rules failed",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ValidationErrorResponse.class))
+            )
+    })
     @PostMapping(value = BLOCKING_TELEMETRY_ENDPOINT_URI, consumes = MediaType.APPLICATION_PROTOBUF_VALUE)
     public ResponseEntity<Void> receivedSensorStationDataVirtual(@ValidProto @RequestBody WeatherPacket packet) {
         return getResponseEntity(telemetryIngestionService.processTelemetryPacketVirtual(packet));

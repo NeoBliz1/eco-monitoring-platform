@@ -1,7 +1,9 @@
 spring:
     profiles:
         # profile for include common configs from common-core module
-        include: common
+      include:
+        - common
+        - common-web
     application:
         name: ${SPRING_INGESTION_APPLICATION_NAME}
     config:

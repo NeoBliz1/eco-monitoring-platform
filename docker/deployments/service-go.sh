@@ -41,7 +41,7 @@ cd "$GATEWAY_SUBMODULE_DIR"
 mkdir -p "$PROJECT_ROOT/bin"
 GATEWAY_DIR="$PROJECT_ROOT/bin/gateway"
 mkdir -p "$GATEWAY_DIR"
-cat "$GATEWAY_SUBMODULE_DIR/.env.example" > "$GATEWAY_DIR/.env"
+cat "$GATEWAY_SUBMODULE_DIR/.env" > "$GATEWAY_DIR/.env"
 go build -v -o "$GATEWAY_DIR/go-service"
 
 echo "✅ [Go Worker] Compilation complete. Binary available at bin/go-service"

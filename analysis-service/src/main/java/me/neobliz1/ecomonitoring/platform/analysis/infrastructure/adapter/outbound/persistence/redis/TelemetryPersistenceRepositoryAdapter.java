@@ -1,13 +1,16 @@
 package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.persistence.redis;
 
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.HASHTAG_DELIMITER;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryPersistenceRepository;
+import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.data.redis.serializer.RedisSerializer;
 import reactor.core.scheduler.Schedulers;
 
@@ -21,7 +24,7 @@ public class TelemetryPersistenceRepositoryAdapter implements TelemetryPersisten
 
     private final ReactiveStringRedisTemplate reactiveStringRedisTemplate;
     private final RedisTemplate<String, byte[]> protobufRedisTemplate;
-    private final DefaultRedisScript<String> saveHistoricalGridScript;
+    private final RedisScript<String> saveHistoricalGridScript;
 
     @Value("${spring.redis.records.ttl}")
     private Long redisCacheTtlInterval;
@@ -47,19 +50,30 @@ public class TelemetryPersistenceRepositoryAdapter implements TelemetryPersisten
     }
 
     @Override
-    public void saveHistoricalGridCell(String recordKey, String geohash, byte[] serializedLayers) {
-        String redisHistoryKey = AnalysisConstants.WEATHER_MAP_KEY+recordKey;
-        byte[] geohashBytes = geohash.getBytes(StandardCharsets.UTF_8);
-        byte[] ttlBytes = String.valueOf(redisCacheTtlInterval).getBytes(StandardCharsets.UTF_8);
-        byte[][] scriptArgs = new byte[][]{ geohashBytes, serializedLayers, ttlBytes };
-
+    public void saveHistoricalGridCell(String geohash, byte[] serializedLayers) {
+        String[] parts = geohash.split(HASHTAG_DELIMITER);
+        byte[][] scriptArgs = parseArgsForStoreInRedis(parts[0], geohash, serializedLayers);
         protobufRedisTemplate.execute(
                 saveHistoricalGridScript,
                 RedisSerializer.byteArray(),
                 RedisSerializer.string(),
-                List.of(redisHistoryKey),
+                List.of(geohash),
                 (Object[]) scriptArgs
         );
+    }
+
+    private byte[] @NonNull [] parseArgsForStoreInRedis(String recordKey, String geohash, byte[] serializedLayers) {
+        String[] parts = geohash.split(HASHTAG_DELIMITER);
+        String lat = parts[1];
+        String lon = parts[2];
+        long ttlInSeconds = Duration.ofHours(redisCacheTtlInterval).toSeconds();
+        return new byte[][]{
+                lat.getBytes(StandardCharsets.UTF_8),
+                lon.getBytes(StandardCharsets.UTF_8),
+                serializedLayers,
+                String.valueOf(ttlInSeconds).getBytes(StandardCharsets.UTF_8),
+                recordKey.getBytes(StandardCharsets.UTF_8)
+        };
     }
 }
 

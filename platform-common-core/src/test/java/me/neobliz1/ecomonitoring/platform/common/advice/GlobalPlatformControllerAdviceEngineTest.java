@@ -1,13 +1,13 @@
 package me.neobliz1.ecomonitoring.platform.common.advice;
 
 import static me.neobliz1.ecomonitoring.platform.model.exception.EcoPlatformErrorCode.PIPELINE_TIMEOUT;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 
 import jakarta.validation.ConstraintViolationException;
 import me.neobliz1.ecomonitoring.platform.model.exception.BasePlatformException;
@@ -86,8 +86,8 @@ class GlobalPlatformControllerAdviceEngineTest {
     private void performTest(MockHttpServletRequestBuilder requestBuilder, int expectedStatus, String expectedCode, String expectedDescription) throws Exception {
         mockMvc.perform(requestBuilder)
                 .andExpect(status().is(expectedStatus))
-                .andExpect(jsonPath("$.code").value(expectedCode))
-                .andExpect(jsonPath("$.description").value(expectedDescription))
+                .andExpect(jsonPath("$.errorCode").value(expectedCode))
+                .andExpect(jsonPath("$.errorDescription").value(expectedDescription))
                 .andExpect(jsonPath("$.timestamp").value(greaterThanOrEqualTo(Instant.now().toEpochMilli()-200)));
     }
 

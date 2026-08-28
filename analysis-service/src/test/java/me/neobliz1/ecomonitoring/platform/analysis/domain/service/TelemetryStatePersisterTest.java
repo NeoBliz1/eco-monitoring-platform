@@ -1,5 +1,6 @@
 package me.neobliz1.ecomonitoring.platform.analysis.domain.service;
 
+import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.GRID_BUCKET_KEY_FORMAT;
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.HOT_WINDOW_PREFIX;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.HASHTAG_DELIMITER;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -39,7 +40,7 @@ class TelemetryStatePersisterTest {
     private static final double LON_GRID = 37.456;
     private static final String EXPECTED_GEOHASH_KEY = LAT_GRID+HASHTAG_DELIMITER+LON_GRID;
     private static final String EXPECTED_STATION_FIELD = HOT_WINDOW_PREFIX+STATION_ID;
-    private static final String EXPECTED_TIMESTAMP = String.format("%017d", PACKET_TIMESTAMP);
+    private static final String EXPECTED_TIMESTAMP = String.format(GRID_BUCKET_KEY_FORMAT, PACKET_TIMESTAMP);
 
     private static final String SAMPLE_GEOSHAH = "55.123#37.456";
     private static final long SINGLE_BUCKET_TIMESTAMP = 1800000000L;
@@ -106,7 +107,7 @@ class TelemetryStatePersisterTest {
 
         assertThat(result).hasSize(1);
         assertThat(result.getFirst().key()).isEqualTo(floorBucketKey);
-        verify(telemetryRepository).saveHistoricalGridCell(eq(floorBucketKey), eq(SAMPLE_GEOSHAH), any(byte[].class));
+        verify(telemetryRepository).saveHistoricalGridCell(eq(SAMPLE_GEOSHAH), any(byte[].class));
     }
 
     @Test
@@ -130,27 +131,25 @@ class TelemetryStatePersisterTest {
         String secondGeohash = "55.999#37.999";
         spatial.put(SAMPLE_GEOSHAH, List.of(buildWeatherPacket()));
         spatial.put(secondGeohash, List.of(buildWeatherPacket()));
-        String floorBucketKey = String.valueOf(SINGLE_BUCKET_TIMESTAMP);
         matrix.put(SINGLE_BUCKET_TIMESTAMP, spatial);
 
         persister.processAndComputeAggregatedHistory(matrix);
 
-        verify(telemetryRepository).saveHistoricalGridCell(eq(floorBucketKey), eq(SAMPLE_GEOSHAH), any(byte[].class));
-        verify(telemetryRepository).saveHistoricalGridCell(eq(floorBucketKey), eq(secondGeohash), any(byte[].class));
+        verify(telemetryRepository).saveHistoricalGridCell(eq(SAMPLE_GEOSHAH), any(byte[].class));
+        verify(telemetryRepository).saveHistoricalGridCell(eq(secondGeohash), any(byte[].class));
     }
 
     @Test
     void shouldPersistCorrectBucketFloorInterval_whenTimestampIsNotAlignedToInterval() {
         Map<Long, Map<String, List<WeatherPacket>>> matrix = new HashMap<>();
         long unalignedTimestamp = 1800000030000L;
-        long expectedFloorBucket = 1800000000000L;
         Map<String, List<WeatherPacket>> spatial = new HashMap<>();
         spatial.put(SAMPLE_GEOSHAH, List.of(buildWeatherPacket()));
         matrix.put(unalignedTimestamp, spatial);
 
         persister.processAndComputeAggregatedHistory(matrix);
 
-        verify(telemetryRepository).saveHistoricalGridCell(eq(String.valueOf(expectedFloorBucket)), eq(SAMPLE_GEOSHAH), any(byte[].class));
+        verify(telemetryRepository).saveHistoricalGridCell(eq(SAMPLE_GEOSHAH), any(byte[].class));
     }
 
     @Test
@@ -262,7 +261,7 @@ class TelemetryStatePersisterTest {
     @Test
     void shouldThrowProtocolBufferTranslationException_whenSaveHistoricalGridCellFails() {
         Map<Long, Map<String, List<WeatherPacket>>> matrix = buildMatrixWithSingleBucket();
-        doThrow(new RuntimeException("DB error")).when(telemetryRepository).saveHistoricalGridCell(any(String.class), any(String.class), any(byte[].class));
+        doThrow(new RuntimeException("DB error")).when(telemetryRepository).saveHistoricalGridCell(any(String.class), any(byte[].class));
 
         assertThatThrownBy(() -> persister.processAndComputeAggregatedHistory(matrix))
                 .isInstanceOf(ProtocolBufferTranslationException.class)

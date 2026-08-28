@@ -105,7 +105,6 @@ public class TelemetryInvocationControllerIT {
         consumer.seekToBeginning(consumer.assignment());
         log.info("Consumer ready. Assigned partitions: {}, beginning offsets: {}",
                 consumer.assignment(), consumer.beginningOffsets(consumer.assignment()));
-        kafkaListener = new TestKafkaListener<>(consumer);
         try {
             log.info("📡 Priming HTTP networking layers and schema caches...");
             performValidPost(webTestClient, SYNC_SINGLE_URL, createValidBase().setStationId("00000100114"));
@@ -115,6 +114,7 @@ public class TelemetryInvocationControllerIT {
         } catch(Exception e) {
             log.warn("⚠️ Telemetry warmup routine completed with warnings: {}", e.getMessage());
         }
+        kafkaListener = new TestKafkaListener<>(consumer);
     }
 
     @AfterEach

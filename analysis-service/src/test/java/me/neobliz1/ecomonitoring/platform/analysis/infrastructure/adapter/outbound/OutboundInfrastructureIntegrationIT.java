@@ -1,8 +1,9 @@
 package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound;
 
+import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.GRID_BUCKET_KEY_FORMAT;
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.HOT_WINDOW_PREFIX;
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.WEATHER_HOTWINDOW;
-import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.WEATHER_MAP_KEY;
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.HASHTAG_DELIMITER;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.waitForConsulServicesToBeHealthy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hibernate.validator.internal.util.Contracts.assertNotEmpty;
@@ -303,13 +304,13 @@ public class OutboundInfrastructureIntegrationIT extends IntegrationTestSupport 
             WeatherPacket packet = createBasicPacket(stationId, currentBucketFloor+1000, lat, lon);
             sendPacket(packet);
             sendFlushPackage(stationId, currentBucketFloor, lat, lon);
-            currentBucketFloor+=100;
+            currentBucketFloor += 100;
         }
 
         List<WeatherMap> weatherMaps = collectHistoryRecords(targetRecordsNum);
 
         assertNotEmpty(weatherMaps, "Should have history records");
-        assertEquals(targetRecordsNum, weatherMaps.size() );
+        assertEquals(targetRecordsNum, weatherMaps.size());
         for(WeatherMap map : weatherMaps) {
             map.getGridCellsMap().keySet().forEach(key -> {
                 assertNotNull(key, "Grid cell key should not be null");
@@ -353,11 +354,10 @@ public class OutboundInfrastructureIntegrationIT extends IntegrationTestSupport 
         double lat = 55.123;
         double lon = -61.345;
         String expectedGridCellFieldKey = calculateGridCellKey(lat, lon);
-        String expectedHistoryRedisKey = WEATHER_MAP_KEY+currentWindowTimeFloor;
         String expectedHotWindowRedisKey = WEATHER_HOTWINDOW+expectedGridCellFieldKey;
         List<WeatherPacket> batchPackets = generateMockPackets(100, stationId, currentWindowTimeFloor, lat, lon);
 
-        for (WeatherPacket packet : batchPackets) {
+        for(WeatherPacket packet : batchPackets) {
             testProducer.send(new ProducerRecord<>(
                     kafkaIngestionTopic,
                     0,
@@ -368,60 +368,65 @@ public class OutboundInfrastructureIntegrationIT extends IntegrationTestSupport 
         }
         testProducer.flush();
         ConsumerRecord<String, WeatherPacket> rawRecord = pollSingleRecord(rawTopicConsumer);
-        long advancedWindowTimeFloor = currentWindowTimeFloor + 300_000L;
+        long advancedWindowTimeFloor = currentWindowTimeFloor+300_000L;
         List<WeatherPacket> batch2Packets = generateMockPackets(101, stationId, advancedWindowTimeFloor, lat, lon);
-        for (WeatherPacket packet : batch2Packets) {
+        for(WeatherPacket packet : batch2Packets) {
             testProducer.send(new ProducerRecord<>(kafkaIngestionTopic, 0, packet.getTimestamp(), packet.getStationId(), packet)).get();
         }
         sendFlushPackage(stationId, currentWindowTimeFloor, lat, lon);
-        WeatherMap weatherMap = findWeatherMapByGridCellAnBucketFloor(expectedGridCellFieldKey, currentWindowTimeFloor);
-        Map<Object, Object> liveRedisHashMatrix = protobufRedisTemplate.opsForHash().entries(expectedHistoryRedisKey);
+        WeatherMap actualWeatherMapFromHistoryTopic = findWeatherMapByGridCellAnBucketFloor(expectedGridCellFieldKey, currentWindowTimeFloor);
+        WeatherMap actualWeatherMapFromRedis = telemetryQueryService.getLatestTimeIntervalWeatherMapByCoordinates(currentWindowTimeFloor,
+                lat-5, lat+5, lon-5, lon+5);
         Map<Object, Object> liveRedisHotWindowMatrix = redisTemplate.opsForHash().entries(expectedHotWindowRedisKey);
 
         assertNotNull(rawRecord);
         assertEquals(stationId, rawRecord.value().getStationId());
-        assertNotNull(weatherMap);
-        assertEquals(currentWindowTimeFloor, weatherMap.getTimestampBucket());
-        assertEquals(201, getReadingsNum(List.of(weatherMap), expectedGridCellFieldKey, currentWindowTimeFloor));
-        assertTrue(weatherMap.getGridCellsMap().keySet().stream()
+        assertNotNull(actualWeatherMapFromHistoryTopic);
+        assertEquals(currentWindowTimeFloor, actualWeatherMapFromHistoryTopic.getTimestampBucket());
+        assertEquals(201, getReadingsNum(List.of(actualWeatherMapFromHistoryTopic), expectedGridCellFieldKey, currentWindowTimeFloor));
+        assertTrue(actualWeatherMapFromHistoryTopic.getGridCellsMap().keySet().stream()
+                .anyMatch(k -> k.contains(expectedGridCellFieldKey)));
+        assertNotNull(actualWeatherMapFromRedis);
+        assertEquals(currentWindowTimeFloor, actualWeatherMapFromRedis.getTimestampBucket());
+        assertEquals(201, getReadingsNum(List.of(actualWeatherMapFromRedis), expectedGridCellFieldKey, currentWindowTimeFloor));
+        assertTrue(actualWeatherMapFromRedis.getGridCellsMap().keySet().stream()
                 .anyMatch(k -> k.contains(expectedGridCellFieldKey)));
         assertThat(liveRedisHotWindowMatrix).isNotEmpty();
         assertTrue(liveRedisHotWindowMatrix.containsKey(HOT_WINDOW_PREFIX+stationId));
-        assertThat(liveRedisHashMatrix).isNotEmpty();
-        assertTrue(liveRedisHashMatrix.keySet().stream()
-                .anyMatch(k -> {
-                    if (k instanceof String sK) {
-                        return sK.contains(expectedGridCellFieldKey);
-                    }
-                    return false;
-                })
-        );
     }
 
     @Test
-    public void shouldExpireRedisKeysAfter24Hours_whenWeatherDataIsPersisted() throws Exception {
-        long currentWindowTimeFloor = getCurrentBucketFloor();
+    void shouldExpireRedisKeysAfter24Hours_whenWeatherDataIsPersisted() throws Exception {
         String stationId = "10";
-        double lat = 55.0;
-        double lon = -61.0;
-        String expectedGridCellFieldKey = calculateGridCellKey(lat, lon);
-        String historyKey = WEATHER_MAP_KEY+currentWindowTimeFloor;
+        double latitude = 55.0;
+        double longitude = -61.0;
+        long minimumExpectedTtlMinutes = 1435L;
+        long maximumExpectedTtlMinutes = 1440L;
+        long currentWindowTimeFloor = getCurrentBucketFloor();
+        String expectedGridCellFieldKey = calculateGridCellKey(latitude, longitude);
+        String formattedBucketFloor = String.format(GRID_BUCKET_KEY_FORMAT, currentWindowTimeFloor);
+        String historyKey = formattedBucketFloor+HASHTAG_DELIMITER+expectedGridCellFieldKey;
         String hotWindowKey = WEATHER_HOTWINDOW+expectedGridCellFieldKey;
-        List<WeatherPacket> packets = generateMockPackets(3, stationId, currentWindowTimeFloor, lat, lon);
+        String expectedSpatialIndexKey = "spatial_index:"+formattedBucketFloor;
+        List<WeatherPacket> packets = generateMockPackets(3, stationId, currentWindowTimeFloor, latitude, longitude);
 
         sendPackets(packets, 100);
-        sendFlushPackage(stationId, currentWindowTimeFloor, lat, lon);
+        sendFlushPackage(stationId, currentWindowTimeFloor, latitude, longitude);
         WeatherMap weatherMap = findWeatherMapByGridCellAnBucketFloor(expectedGridCellFieldKey, currentWindowTimeFloor);
         Long historyTTL = protobufRedisTemplate.getExpire(historyKey, TimeUnit.MINUTES);
         Long hotWindowTTL = protobufRedisTemplate.getExpire(hotWindowKey, TimeUnit.MINUTES);
+        Long spatialIndexTTL = protobufRedisTemplate.getExpire(expectedSpatialIndexKey, TimeUnit.MINUTES);
 
         assertEquals(currentWindowTimeFloor, weatherMap.getTimestampBucket());
         assertNotNull(historyTTL, "historyTTL should exist");
-        assertTrue(historyTTL>1435, "historyTTL should have positive TTL");
-        assertTrue(historyTTL<=1440, "historyTTL should not exceed 24 hours");
-        assertNotNull(historyTTL, "hotWindowTTL key should exist");
-        assertTrue(hotWindowTTL>1435, "hotWindowTTL should have positive TTL");
-        assertTrue(hotWindowTTL<=1440, "hotWindowTTL should not exceed 24 hours");
+        assertTrue(historyTTL>minimumExpectedTtlMinutes, "historyTTL should have positive TTL");
+        assertTrue(historyTTL<=maximumExpectedTtlMinutes, "historyTTL should not exceed 24 hours");
+        assertNotNull(hotWindowTTL, "hotWindowTTL key should exist");
+        assertTrue(hotWindowTTL>minimumExpectedTtlMinutes, "hotWindowTTL should have positive TTL");
+        assertTrue(hotWindowTTL<=maximumExpectedTtlMinutes, "hotWindowTTL should not exceed 24 hours");
+        assertNotNull(spatialIndexTTL, "spatialIndexTTL key should exist");
+        assertTrue(spatialIndexTTL>minimumExpectedTtlMinutes, "spatialIndexTTL should have positive TTL");
+        assertTrue(spatialIndexTTL<=maximumExpectedTtlMinutes, "spatialIndexTTL should not exceed 24 hours");
     }
 
     @Test

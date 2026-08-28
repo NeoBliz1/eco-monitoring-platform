@@ -1,9 +1,9 @@
 package me.neobliz1.ecomonitoring.platform.analysis.domain.port.inbound;
 
 
-import java.util.List;
+import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 
 public interface TelemetryQueryService {
 
-    String getLatestTimeIntervalWeatherMapByCoordinates(long targetTimestamp, List<Double> coordinatesSquare);
+    WeatherMap getLatestTimeIntervalWeatherMapByCoordinates(long targetTimestamp, Double minLat, Double maxLat, Double minLon, Double maxLon);
 }

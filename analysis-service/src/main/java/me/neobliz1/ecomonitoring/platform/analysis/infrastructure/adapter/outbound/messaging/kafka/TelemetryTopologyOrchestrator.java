@@ -1,5 +1,8 @@
 package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka;
 
+import static me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryUtils.clampLatitude;
+import static me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryUtils.clampLongitude;
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.HASHTAG_DELIMITER;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.SCHEMA_REGISTRY_URL;
 
 import io.confluent.kafka.streams.serdes.protobuf.KafkaProtobufSerde;
@@ -11,7 +14,6 @@ import me.neobliz1.ecomonitoring.platform.analysis.domain.port.inbound.Telemetry
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryPersistentService;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.TelemetryAggregationProcessor;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.TelemetryDeduplicationProcessor;
-import me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.Location;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
@@ -68,13 +70,12 @@ public class TelemetryTopologyOrchestrator implements TelemetryAnalysisService {
         registerAggregationStore(streamsBuilder);
     }
 
-    private static void registerDeduplicationStore(StreamsBuilder streamsBuilder) {
-        // Local Deduplication Window Store Builder for Pipeline 1
+    private void registerDeduplicationStore(StreamsBuilder streamsBuilder) {
         StoreBuilder<WindowStore<String, String>> dedupStoreBuilder = Stores.windowStoreBuilder(
                 Stores.persistentWindowStore(
                         AnalysisConstants.DEDUPLICATE_ROCKS_DB,
-                        Duration.ofMinutes(10),
-                        Duration.ofMinutes(10),
+                        Duration.ofMillis(deduplicationInterval),
+                        Duration.ofMillis(deduplicationInterval),
                         false
                 ),
                 Serdes.String(), Serdes.String()
@@ -83,7 +84,6 @@ public class TelemetryTopologyOrchestrator implements TelemetryAnalysisService {
     }
 
     private void registerAggregationStore(StreamsBuilder streamsBuilder) {
-        // Local Accumulation Key-Value Store Builder for Pipeline 2
         StoreBuilder<KeyValueStore<String, WeatherPacket>> accumStoreBuilder = Stores.keyValueStoreBuilder(
                 Stores.persistentKeyValueStore(AnalysisConstants.ZERO_LOSS_ACCUMULATION_STORE),
                 Serdes.String(), weatherPacketSerde
@@ -101,14 +101,14 @@ public class TelemetryTopologyOrchestrator implements TelemetryAnalysisService {
                 () -> new TelemetryDeduplicationProcessor(deduplicationInterval),
                 AnalysisConstants.DEDUPLICATE_ROCKS_DB
         );
+        // we should use record key only with coordinates so that similar coordinates
+        // are grouped in the same accumStore and can be processed together
         KStream<String, WeatherPacket> reKeyedStream = deduplicatedStream.selectKey((key, packet) -> {
             Location location = packet.getLocation();
-            double roundCoefficient = 10.0;
-            double latGrid = Math.round(location.getLatitude()*roundCoefficient)/roundCoefficient;
-            double lonGrid = Math.round(location.getLongitude()*roundCoefficient)/roundCoefficient;
-            return latGrid+PlatformConstants.HASHTAG_DELIMITER+lonGrid;
+            double latGrid = clampLatitude(location.getLatitude());
+            double lonGrid = clampLongitude(location.getLongitude());
+            return latGrid+HASHTAG_DELIMITER+lonGrid;
         });
-        // Publish to the raw topic. Kafka automatically funnels matching locations to the SAME partition.
         reKeyedStream.to(
                 kafkaAnalysisRawTopic,
                 Produced.with(Serdes.String(), weatherPacketSerde)

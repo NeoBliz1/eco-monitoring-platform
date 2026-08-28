@@ -1,7 +1,9 @@
 spring:
   profiles:
     # profile for include common configs from common-core module
-    include: common
+    include:
+      - common
+      - common-web
   application:
     name: ${SPRING_ANALYSIS_APPLICATION_NAME}
   config:
@@ -22,10 +24,12 @@ spring:
         enabled: true
         format: yaml
         prefixes: config
+        import-check:
+          enabled: false
   data:
     redis:
       service-name: ${SPRING_DATA_REDIS_SERVICE_NAME}
-      password: ${SPRING_DATA_REDIS_PASSWORD}
+      password: ${redis_password:${SPRING_DATA_REDIS_PASSWORD}}
   kafka:
     service-name: ${KAFKA_SERVICE_NAME}
     streams:
@@ -34,9 +38,10 @@ spring:
         processing.guarantee: "exactly_once_v2"
         commit.interval.ms: 100
         topology.optimization: "all"
+        state.dir: "${user.dir}/kafka-state"
         security.protocol: "SASL_PLAINTEXT"
         sasl.mechanism: "SCRAM-SHA-512"
-        sasl.jaas.config: "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"${KAFKA_CLIENT}\" password=\"${KAFKA_CLIENT_PASSWORD}\";"
+        sasl.jaas.config: "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"${kafka_client:${KAFKA_CLIENT}}\" password=\"${kafka_client_password:${KAFKA_CLIENT_PASSWORD}}\";"
 
 server:
   port: ${ANALYSIS_APPLICATION_SERVER_PORT}
@@ -45,3 +50,33 @@ management:
   metrics:
     enable:
       lettuce: true
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  cloud:
+    vault:
+      enabled: false
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+    import:
+      - "optional:consul:${SPRING_CLOUD_CONSUL_HOST}:${SPRING_CLOUD_CONSUL_PORT}/"
+      - vault://secret/analysis-service
+  cloud:
+    vault:
+      enabled: true
+      uri: http://${SPRING_CLOUD_VAULT_HOST}:${SPRING_CLOUD_VAULT_PORT}
+      kv:
+        enabled: true
+        backend: secret
+        default-context: analysis-service
+      authentication: APPROLE
+      app-role:
+        role-id: ${ANALYSIS_VAULT_ROLE_ID}
+        secret-id: ${ANALYSIS_VAULT_SECRET_ID}

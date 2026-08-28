@@ -4,5 +4,11 @@ import java.util.Map;
 
 public interface TelemetryQueryRepository {
 
-    Map<Object, Object> findRawGridDataByBucketFloor(String historyKey);
+    Map<String, byte[]> findFilteredGridDataBySpatialBox(
+            long activeBucketFloor,
+            double minLat,
+            double maxLat,
+            double minLon,
+            double maxLon
+    );
 }

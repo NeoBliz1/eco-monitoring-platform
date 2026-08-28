@@ -1,9 +1,10 @@
 HELP.md
 target/
-.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
-**/bin/jmeter/reports
+**/bin/jmeter/reports/
+**/kafka-state/
+.data/
 
 ### STS ###
 .apt_generated
@@ -57,4 +58,4 @@ hs_err_pid*
 replay_pid*
 
 .env
-.data/
+dev_creds.env

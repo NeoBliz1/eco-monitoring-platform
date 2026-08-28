@@ -9,6 +9,7 @@ import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUti
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import lombok.extern.slf4j.Slf4j;
 import me.neobliz1.ecomonitoring.platform.analysis.AnalysisBootEngine;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.port.inbound.TelemetryQueryService;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryUtils;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.AirQualityReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.AmbientReading;
@@ -95,6 +96,8 @@ public abstract class IntegrationTestSupport extends AssertionTestSupport {
     protected RedisTemplate<String, byte[]> protobufRedisTemplate;
     @Autowired
     protected StringRedisTemplate redisTemplate;
+    @Autowired
+    protected TelemetryQueryService telemetryQueryService;
 
     @Value("${spring.kafka.topic.weather-live}")
     protected String kafkaIngestionTopic;

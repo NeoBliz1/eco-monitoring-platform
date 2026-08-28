@@ -2,7 +2,7 @@ include:
   - ./compose/kafka/kafka.yaml
   - ./compose/kafka/kafka-init-topics.yaml
   - ./compose/schema-registry/schema-registry.yaml
-  - compose/consul/consul.yaml
+  - ./compose/consul/consul.yaml
   - ./compose/jaeger.yaml
   - ./compose/redis/redis.yaml
   - ./compose/postgres/postgres.yaml

@@ -21,18 +21,6 @@ transforms:
     inputs: [ "grpc_sensor_in" ]
     source: |
       .message = .raw_protobuf_packet
-  format_spring_logs:
-    type: "remap"
-    inputs: [ "host_jar_logs_stream" ]
-    source: |
-      .thread_name = del(.threadName) || .thread_name || "main"
-      .logger_name = del(.loggerName) || .logger_name || "gateway.proxy"
-      .level = del(.logLevel) || .level || "INFO"
-      .timestamp = .timestamp || now()
-      .trace_id = .mdc.trace_id || .traceId || ""
-      .span_id = .mdc.span_id || .spanId || ""
-      .stack_trace = del(.stackTrace) || .stack_trace || ""
-      .service_name = del(.service_name) || .service_name || "unknown-service"
 
 sinks:
   console_debug:

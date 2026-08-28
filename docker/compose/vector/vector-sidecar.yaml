@@ -3,13 +3,13 @@ services:
     image: redis:8.8.0-alpine
     user: "0:0"
     volumes:
-      - vector_disk_buffer:/var/lib/vector/buffer:rw
+      - vector_disk_buffer:/var/lib/vector:rw
     entrypoint: [ "sh", "-c" ]
     command:
       - |
-        chown -R 1000:1000 /var/lib/vector/buffer
-        chmod -R 0700 /var/lib/vector/buffer
-        echo "🔒 Host persistent vector disk buffer layer successfully hardened to 0700 (1000:1000)!"
+        chown -R 100:1000 /var/lib/vector
+        chmod -R 0700 /var/lib/vector
+        echo "🔒 Host persistent vector disk buffer layer successfully hardened to 0700 (100:1000)!"
 
   vector-vault-init:
     image: hashicorp/vault:2.0.0
@@ -36,8 +36,7 @@ services:
       - "9598:9598"
     networks:
       - eco-net
-    user: "1000:1000"
-    read_only: true
+    user: "100:1000"
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -45,7 +44,7 @@ services:
     volumes:
       - ./run-vector.sh:/usr/local/bin/run-vector.sh:ro
       - ./vector.yaml:/etc/vector/vector.yaml:ro
-      - vector_disk_buffer:/var/lib/vector/buffer:rw
+      - vector_disk_buffer:/var/lib/vector:rw
       - ram_secrets_vector:/run/secrets:rw
     environment:
       VECTOR_LOG: "info"

@@ -29,7 +29,7 @@ public class TelemetryStatePersister implements TelemetryPersistentService {
     public void updateRealTimeSlidingWindow(WeatherPacket packet, double latGrid, double lonGrid) {
         String geohashKey = latGrid+HASHTAG_DELIMITER+lonGrid;
         String stationField = AnalysisConstants.HOT_WINDOW_PREFIX+packet.getStationId();
-        String timestampFormatted = String.format(AnalysisConstants.UTC_TIMESTAMP_FORMAT, packet.getTimestamp());
+        String timestampFormatted = String.format(AnalysisConstants.GRID_BUCKET_KEY_FORMAT, packet.getTimestamp());
 
         // Delegate technical write execution across the boundary port
         telemetryRepository.saveRealTimeSlidingWindow(geohashKey, stationField, timestampFormatted);
@@ -51,13 +51,11 @@ public class TelemetryStatePersister implements TelemetryPersistentService {
             });
 
             WeatherMap finalReport = weatherMapBuilder.build();
-            long floorBucketInterval = TelemetryUtils.getAggregationBucketFloorInterval(bucketTime, aggregationSecondsPerInterval);
 
-            // 1. Persist computed data layers via the Port interface boundary
+            // Persist computed data layers via the Port interface boundary
             finalReport.getGridCellsMap().forEach((geohash, cellLayers) -> {
                 try {
                     telemetryRepository.saveHistoricalGridCell(
-                            String.valueOf(floorBucketInterval),
                             geohash,
                             cellLayers.toByteArray()
                     );
@@ -66,7 +64,7 @@ public class TelemetryStatePersister implements TelemetryPersistentService {
                 }
             });
 
-            // 2. Stage the output data so infrastructure can forward it to the stream engine
+            // Stage the output data so infrastructure can forward it to the stream engine
             generatedRecords.add(new WeatherMapRecord(String.valueOf(bucketTime), finalReport));
         });
 

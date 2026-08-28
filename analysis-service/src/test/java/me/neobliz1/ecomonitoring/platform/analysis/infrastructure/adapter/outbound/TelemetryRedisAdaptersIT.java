@@ -1,8 +1,10 @@
 package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound;
 
-import me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants;
+import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.WEATHER_HOTWINDOW;
+
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.persistence.redis.TelemetryPersistenceRepositoryAdapter;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.persistence.redis.TelemetryQueryRepositoryAdapter;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.config.RedisTestConfig;
 import me.neobliz1.ecomonitoring.platform.model.exception.WeatherMapDataNotFoundException;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterAll;
@@ -11,16 +13,12 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
-import org.springframework.core.env.PropertiesPropertySource;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.core.io.support.PropertiesLoaderUtils;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.data.redis.serializer.RedisSerializer;
-import org.springframework.scripting.support.ResourceScriptSource;
+import redis.embedded.RedisServer;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -29,18 +27,22 @@ import java.util.Map;
 
 class TelemetryRedisAdaptersIT {
 
-    private static final String RECORD_KEY = "202608181200";
-    private static final String GEOHASH = "v1h2j3";
+    private static final String GEOHASH = "00001787649600000#55.1#-61.3";
     private static final byte[] EXPECTED_PAYLOAD = "mock-binary-protobuf-payload".getBytes(StandardCharsets.UTF_8);
     private static final String STATION = "STATION_001";
     private static final String TIMESTAMP = "2026-08-18T12:00:00Z";
+    private static final long ACTIVE_BUCKET_FLOOR = 1787649600000L;
+    private static final double MIN_LAT = 55.0;
+    private static final double MAX_LAT = 56.0;
+    private static final double MIN_LON = -62.0;
+    private static final double MAX_LON = -60.0;
 
-    private static redis.embedded.RedisServer embeddedRedisProcess;
+    private static RedisServer embeddedRedisProcess;
     private static ApplicationContextRunner contextRunner;
 
     @BeforeAll
     static void setupSuite() throws IOException {
-        embeddedRedisProcess = new redis.embedded.RedisServer(6379);
+        embeddedRedisProcess = new RedisServer(6379);
         embeddedRedisProcess.start();
 
         contextRunner = new ApplicationContextRunner()
@@ -48,18 +50,6 @@ class TelemetryRedisAdaptersIT {
                         "spring.main.web-application-type=none",
                         "spring.redis.records.ttl=1"
                 )
-                .withInitializer(context -> {
-                    try {
-                        PropertiesPropertySource source =
-                                new PropertiesPropertySource(
-                                        "test-env",
-                                        PropertiesLoaderUtils.loadProperties(new ClassPathResource(".env.test"))
-                                );
-                        context.getEnvironment().getPropertySources().addFirst(source);
-                    } catch(IOException e) {
-                        throw new RuntimeException(e);
-                    }
-                })
                 .withBean(LettuceConnectionFactory.class, () -> {
                     RedisStandaloneConfiguration config = new RedisStandaloneConfiguration("localhost", 6379);
                     config.setPassword("testpassword");
@@ -68,7 +58,8 @@ class TelemetryRedisAdaptersIT {
                     return factory;
                 })
                 .withBean("protobufRedisTemplate", RedisTemplate.class, () -> {
-                    LettuceConnectionFactory factory = new LettuceConnectionFactory(new RedisStandaloneConfiguration("localhost", 6379));
+                    LettuceConnectionFactory factory = new LettuceConnectionFactory(
+                            new RedisStandaloneConfiguration("localhost", 6379));
                     factory.afterPropertiesSet();
                     RedisTemplate<String, byte[]> template = new RedisTemplate<>();
                     template.setConnectionFactory(factory);
@@ -80,18 +71,12 @@ class TelemetryRedisAdaptersIT {
                     return template;
                 })
                 .withBean(ReactiveStringRedisTemplate.class, () -> {
-                    LettuceConnectionFactory factory = new LettuceConnectionFactory(new RedisStandaloneConfiguration("localhost", 6379));
+                    LettuceConnectionFactory factory = new LettuceConnectionFactory(
+                            new RedisStandaloneConfiguration("localhost", 6379));
                     factory.afterPropertiesSet();
                     return new ReactiveStringRedisTemplate(factory);
                 })
-                .withBean(DefaultRedisScript.class, () -> {
-                    DefaultRedisScript<String> script = new DefaultRedisScript<>();
-                    script.setScriptSource(new ResourceScriptSource(new ClassPathResource("lua/scripts/save_historical_grid.lua")));
-                    script.setResultType(String.class);
-                    return script;
-                })
-                .withBean(TelemetryPersistenceRepositoryAdapter.class)
-                .withBean(TelemetryQueryRepositoryAdapter.class);
+                .withUserConfiguration(RedisTestConfig.class);
     }
 
     @AfterAll
@@ -115,13 +100,14 @@ class TelemetryRedisAdaptersIT {
             TelemetryPersistenceRepositoryAdapter persistenceRepository = context.getBean(TelemetryPersistenceRepositoryAdapter.class);
             TelemetryQueryRepositoryAdapter queryRepository = context.getBean(TelemetryQueryRepositoryAdapter.class);
 
-            persistenceRepository.saveHistoricalGridCell(RECORD_KEY, GEOHASH, EXPECTED_PAYLOAD);
-            Map<Object, Object> resultsMatrix = queryRepository.findRawGridDataByBucketFloor(AnalysisConstants.WEATHER_MAP_KEY+RECORD_KEY);
+            persistenceRepository.saveHistoricalGridCell(GEOHASH, EXPECTED_PAYLOAD);
+            Map<String, byte[]> resultsMatrix = queryRepository.findFilteredGridDataBySpatialBox(ACTIVE_BUCKET_FLOOR,
+                    MIN_LAT, MAX_LAT, MIN_LON, MAX_LON);
 
             Assertions.assertNotNull(resultsMatrix);
             Assertions.assertFalse(resultsMatrix.isEmpty());
             Assertions.assertTrue(resultsMatrix.containsKey(GEOHASH));
-            Assertions.assertArrayEquals(EXPECTED_PAYLOAD, (byte[]) resultsMatrix.get(GEOHASH));
+            Assertions.assertArrayEquals(EXPECTED_PAYLOAD, resultsMatrix.get(GEOHASH));
         });
     }
 
@@ -142,7 +128,7 @@ class TelemetryRedisAdaptersIT {
                     .atMost(Duration.ofSeconds(2))
                     .pollInterval(Duration.ofMillis(50))
                     .untilAsserted(() -> {
-                        Object actualTimestamp = stringTemplate.opsForHash().get(AnalysisConstants.WEATHER_HOTWINDOW+GEOHASH, STATION);
+                        Object actualTimestamp = stringTemplate.opsForHash().get(WEATHER_HOTWINDOW+GEOHASH, STATION);
                         Assertions.assertEquals(TIMESTAMP, actualTimestamp);
                     });
         });
@@ -153,7 +139,8 @@ class TelemetryRedisAdaptersIT {
         contextRunner.run(context -> {
             TelemetryQueryRepositoryAdapter queryRepository = context.getBean(TelemetryQueryRepositoryAdapter.class);
 
-            Assertions.assertThrows(WeatherMapDataNotFoundException.class, () -> queryRepository.findRawGridDataByBucketFloor(AnalysisConstants.WEATHER_MAP_KEY+"empty_bucket_id"));
+            Assertions.assertThrows(WeatherMapDataNotFoundException.class,
+                    () -> queryRepository.findFilteredGridDataBySpatialBox(0L, MIN_LAT, MAX_LAT, MIN_LON, MAX_LON));
         });
     }
 

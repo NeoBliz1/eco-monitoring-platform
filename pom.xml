@@ -13,7 +13,8 @@
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <spring-boot.version>4.0.5</spring-boot.version>
+        <spring-boot.version>4.1.0</spring-boot.version>
+        <springdoc.version>3.1.0</springdoc.version>
         <validproto.version>0.0.1</validproto.version>
         <spring-cloud.version>2025.1.2</spring-cloud.version>
         <lombok.version>1.18.46</lombok.version>
@@ -34,6 +35,10 @@
         <confluent.version>8.2.0</confluent.version>
         <liquibase-maven-plugin.version>5.0.3</liquibase-maven-plugin.version>
         <postgresql.version>42.7.13</postgresql.version>
+        <jackson-databind.version>3.2.2</jackson-databind.version>
+        <jackson-annotation.version>2.22</jackson-annotation.version>
+        <jackson-datatype-protobuf.version>1.0.0</jackson-datatype-protobuf.version>
+        <swagger-annotations.version>2.2.53</swagger-annotations.version>
         <testcontainers.version>2.0.5</testcontainers.version>
         <embedded-redis.version>1.4.3</embedded-redis.version>
     </properties>
@@ -71,6 +76,14 @@
                 <version>${project.version}</version>
             </dependency>
 
+            <!-- 2. Official Ecosystem BOM Imports (Order Matters!) -->
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-bom</artifactId>
+                <version>${grpc.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <dependency>
                 <groupId>org.springframework.cloud</groupId>
                 <artifactId>spring-cloud-dependencies</artifactId>
@@ -82,6 +95,13 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
                 <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-bom</artifactId>
+                <version>${springdoc.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -137,30 +157,9 @@
                 <version>${avro-plugin.version}</version>
             </dependency>
             <dependency>
-                <groupId>io.grpc</groupId>
-                <artifactId>grpc-netty-shaded</artifactId>
-                <version>${grpc.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.grpc</groupId>
-                <artifactId>grpc-protobuf</artifactId>
-                <version>${grpc.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.grpc</groupId>
-                <artifactId>grpc-stub</artifactId>
-                <version>${grpc.version}</version>
-            </dependency>
-            <dependency>
                 <groupId>com.salesforce.servicelibs</groupId>
                 <artifactId>reactor-grpc-stub</artifactId>
                 <version>${reactor-grpc.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.grpc</groupId>
-                <artifactId>grpc-api</artifactId>
-                <version>${grpc.version}</version>
-                <scope>compile</scope>
             </dependency>
             <dependency>
                 <groupId>org.apache.kafka</groupId>
@@ -186,6 +185,32 @@
                 <groupId>org.postgresql</groupId>
                 <artifactId>postgresql</artifactId>
                 <version>${postgresql.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>tools.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>${jackson-databind.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>tools.jackson.core</groupId>
+                <artifactId>jackson-core</artifactId>
+                <version>${jackson-databind.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-annotations</artifactId>
+                <version>${jackson-annotation.version}</version>
+                <scope>compile</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.hubspot.jackson</groupId>
+                <artifactId>jackson3-datatype-protobuf</artifactId>
+                <version>${jackson-datatype-protobuf.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.swagger.core.v3</groupId>
+                <artifactId>swagger-annotations-jakarta</artifactId>
+                <version>${swagger-annotations.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.testcontainers</groupId>

@@ -19,6 +19,7 @@ public class DevDotenvEnvironmentPostProcessor implements EnvironmentPostProcess
 
     private static final String PROPERTY_SOURCE_NAME = "devDotenvProperties";
     private static final String ENV_FILE_NAME = ".env";
+    private static final String CREDENTIALS_ENV_FILE_NAME = "dev_creds.env";
 
     @Override
     public void postProcessEnvironment(@NonNull ConfigurableEnvironment environment, @NonNull SpringApplication application) {
@@ -32,32 +33,37 @@ public class DevDotenvEnvironmentPostProcessor implements EnvironmentPostProcess
         if(!devIsActive) {
             return;
         }
-        File envFile = new File(ENV_FILE_NAME);
-        if(!envFile.exists()) {
+        Map<String, Object> dotenvMap = new HashMap<>();
+        loadEnvFile(ENV_FILE_NAME, dotenvMap);
+        loadEnvFile(CREDENTIALS_ENV_FILE_NAME, dotenvMap);
+        if(!dotenvMap.isEmpty()) {
+            environment.getPropertySources().addLast(
+                    new MapPropertySource(PROPERTY_SOURCE_NAME, dotenvMap)
+            );
+        }
+    }
+
+    private void loadEnvFile(String filename, Map<String, Object> targetMap) {
+        File file = new File(filename);
+        if(!file.exists()) {
             return;
         }
         try {
             Dotenv dotenv = Dotenv.configure()
-                    .filename(ENV_FILE_NAME)
+                    .filename(filename)
                     .ignoreIfMalformed()
                     .load();
-            Map<String, Object> dotenvMap = new HashMap<>();
             for(DotenvEntry entry : dotenv.entries()) {
-                dotenvMap.put(entry.getKey(), entry.getValue());
-            }
-            if(!dotenvMap.isEmpty()) {
-                environment.getPropertySources().addLast(
-                        new MapPropertySource(PROPERTY_SOURCE_NAME, dotenvMap)
-                );
+                targetMap.put(entry.getKey(), entry.getValue());
             }
         } catch(Exception e) {
-            throw new DotenvLoadException("Failed to load or parse environment configurations from "+ENV_FILE_NAME, e);
+            throw new DotenvLoadException("Failed to load or parse environment configurations from "+filename, e);
         }
     }
 
     @Override
     public int getOrder() {
-        return Ordered.HIGHEST_PRECEDENCE+10;
+        return HIGHEST_PRECEDENCE+10;
     }
 }
 

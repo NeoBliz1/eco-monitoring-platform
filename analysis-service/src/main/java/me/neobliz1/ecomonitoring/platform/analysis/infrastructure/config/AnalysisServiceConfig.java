@@ -2,6 +2,9 @@ package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.config;
 
 import static me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils.resolveSchemaRegistryServer;
 
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.info.License;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,10 +37,9 @@ import org.springframework.data.redis.connection.lettuce.LettuceClientConfigurat
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.kafka.annotation.EnableKafkaStreams;
-import org.springframework.scripting.support.ResourceScriptSource;
 
 import java.time.Duration;
 import java.util.List;
@@ -65,15 +67,27 @@ public class AnalysisServiceConfig {
     }
 
     @Bean
+    public RedisScript<String> saveHistoricalGridScript() {
+        return RedisScript.of(new ClassPathResource("lua/scripts/save_historical_grid.lua"));
+    }
+
+    @Bean
+    @SuppressWarnings("unchecked")
+    public RedisScript<List<byte[]>> queryHistoricalGridScript() {
+        return RedisScript.of(new ClassPathResource("lua/scripts/query_historical_grid.lua"), (Class<List<byte[]>>) (Class<?>) List.class);
+    }
+
+    @Bean
     public TelemetryPersistenceRepository telemetryPersistenceRepository(ReactiveStringRedisTemplate reactiveStringRedisTemplate,
                                                                          RedisTemplate<String, byte[]> protobufRedisTemplate,
-                                                                         DefaultRedisScript<String> saveHistoricalGridScript) {
+                                                                         RedisScript<String> saveHistoricalGridScript) {
         return new TelemetryPersistenceRepositoryAdapter(reactiveStringRedisTemplate, protobufRedisTemplate, saveHistoricalGridScript);
     }
 
     @Bean
-    public TelemetryQueryRepository telemetryQueryRepository(RedisTemplate<String, byte[]> protobufRedisTemplate) {
-        return new TelemetryQueryRepositoryAdapter(protobufRedisTemplate);
+    public TelemetryQueryRepository telemetryQueryRepository(RedisTemplate<String, byte[]> protobufRedisTemplate,
+                                                             RedisScript<List<byte[]>> queryHistoricalGridScript) {
+        return new TelemetryQueryRepositoryAdapter(queryHistoricalGridScript, protobufRedisTemplate);
     }
 
     @Bean
@@ -127,14 +141,6 @@ public class AnalysisServiceConfig {
     }
 
     @Bean
-    public DefaultRedisScript<String> saveHistoricalGridScript() {
-        DefaultRedisScript<String> script = new DefaultRedisScript<>();
-        script.setScriptSource(new ResourceScriptSource(new ClassPathResource("lua/scripts/save_historical_grid.lua")));
-        script.setResultType(String.class);
-        return script;
-    }
-
-    @Bean
     public ReactiveStringRedisTemplate reactiveStringRedisTemplate(ReactiveRedisConnectionFactory factory) {
         return new ReactiveStringRedisTemplate(factory);
     }
@@ -143,6 +149,17 @@ public class AnalysisServiceConfig {
     public void resolveEnvironmentBootstrapServers() {
         resolveKafkaBootstrapServers();
         resolveSchemaRegistryServer(discoveryClient, environment);
+    }
+
+    @Bean
+    public OpenAPI ecomonitoringAnalysisOpenAPI() {
+        return new OpenAPI()
+                .info(new Info()
+                        .title("EcoMonitoring Analytics & Stream Processing Engine")
+                        .version("1.0.0")
+                        .description("Stateful real-time data analysis matrix engineered with Kafka Streams. "
+                                +"Features transactional deduplication windows, zero-loss spatial aggregation, and localized RocksDB topologies.")
+                        .license(new License().name("Apache 2.0").url("https://springdoc.org")));
     }
 
     private void resolveKafkaBootstrapServers() {

@@ -1,16 +1,18 @@
 package me.neobliz1.ecomonitoring.platform.analysis.domain.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryQueryRepository;
-import me.neobliz1.ecomonitoring.platform.model.exception.InvalidCoordinatesSquareException;
 import me.neobliz1.ecomonitoring.platform.model.exception.ProtocolBufferTranslationException;
 import me.neobliz1.ecomonitoring.platform.model.exception.WeatherMapDataNotFoundException;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.GridCellLayers;
+import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,7 +23,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 @ExtendWith(MockitoExtension.class)
@@ -30,6 +31,10 @@ class TelemetryStateQueryResolverTest {
     private static final int AGGREGATION_INTERVAL = 60;
     private static final long TARGET_TIMESTAMP = 1800000000L;
     private static final String VALID_CELL_KEY = "cell#55.5#37.5";
+    public static final double MIN_LAT = 55.0;
+    public static final double MAX_LAT = 56.0;
+    public static final double MIN_LON = 37.0;
+    public static final double MAX_LON = 38.0;
 
     @Mock
     private TelemetryQueryRepository telemetryQueryRepositoryAdapter;
@@ -44,100 +49,61 @@ class TelemetryStateQueryResolverTest {
 
     @Test
     void shouldReturnJsonWeatherMap_whenCoordinatesAreValidAndDataExists() {
-        List<Double> coordinates = List.of(55.0, 56.0, 37.0, 38.0);
-        Map<Object, Object> rawData = new HashMap<>();
+        Map<String, byte[]> rawData = new HashMap<>();
         GridCellLayers layers = GridCellLayers.newBuilder().setAvgTemperature(25.5).build();
         rawData.put(VALID_CELL_KEY, layers.toByteArray());
-        when(telemetryQueryRepositoryAdapter.findRawGridDataByBucketFloor(anyString())).thenReturn(rawData);
+        when(telemetryQueryRepositoryAdapter.findFilteredGridDataBySpatialBox(anyLong(), anyDouble(), anyDouble(), anyDouble(), anyDouble())).thenReturn(rawData);
 
-        String result = resolver.getLatestTimeIntervalWeatherMapByCoordinates(TARGET_TIMESTAMP, coordinates);
+        WeatherMap mapByCoordinates = resolver.getLatestTimeIntervalWeatherMapByCoordinates(TARGET_TIMESTAMP, MIN_LAT, MAX_LAT, MIN_LON, MAX_LON);
 
-        assertThat(result).contains("timestamp_bucket");
-        assertThat(result).contains("grid_cells");
+        assertTrue(mapByCoordinates.containsGridCells(VALID_CELL_KEY));
     }
 
     @Test
     void shouldFilterOutCellsOutsideCoordinatesSquare_whenDataIsProcessed() {
-        List<Double> coordinates = List.of(55.0, 56.0, 37.0, 38.0);
-        Map<Object, Object> rawData = new HashMap<>();
+        Map<String, byte[]> rawData = new HashMap<>();
         GridCellLayers validLayers = GridCellLayers.newBuilder().setAvgTemperature(25.5).build();
-        GridCellLayers invalidLayers = GridCellLayers.newBuilder().setAvgTemperature(10.0).build();
         rawData.put(VALID_CELL_KEY, validLayers.toByteArray());
-        rawData.put("cell#60.0#40.0", invalidLayers.toByteArray());
-        when(telemetryQueryRepositoryAdapter.findRawGridDataByBucketFloor(anyString())).thenReturn(rawData);
+        when(telemetryQueryRepositoryAdapter.findFilteredGridDataBySpatialBox(anyLong(), anyDouble(), anyDouble(), anyDouble(), anyDouble())).thenReturn(rawData);
 
-        String result = resolver.getLatestTimeIntervalWeatherMapByCoordinates(TARGET_TIMESTAMP, coordinates);
+        WeatherMap mapByCoordinates = resolver.getLatestTimeIntervalWeatherMapByCoordinates(TARGET_TIMESTAMP, MIN_LAT, MAX_LAT, MIN_LON, MAX_LON);
 
-        assertThat(result).contains("55.5");
-        assertThat(result).doesNotContain("60.0");
+        assertTrue(mapByCoordinates.containsGridCells(VALID_CELL_KEY));
+        assertFalse(mapByCoordinates.containsGridCells("cell#60.0#40.0"));
     }
 
     @Test
-    void shouldThrowInvalidCoordinatesSquareException_whenCoordinatesListIsNull() {
-        List<Double> coordinates = null;
+    void shouldThrowWeatherMapDataNotFoundException_whenMinLatExceedsMaxLat() {
+        when(telemetryQueryRepositoryAdapter.findFilteredGridDataBySpatialBox(anyLong(), anyDouble(), anyDouble(), anyDouble(), anyDouble())).thenReturn(Collections.emptyMap());
 
-        assertThatThrownBy(() -> resolver.getLatestTimeIntervalWeatherMapByCoordinates(TARGET_TIMESTAMP, coordinates))
-                .isInstanceOf(InvalidCoordinatesSquareException.class);
+        assertThatThrownBy(() -> resolver.getLatestTimeIntervalWeatherMapByCoordinates(TARGET_TIMESTAMP, MAX_LAT, MIN_LAT, MIN_LON, MAX_LON))
+                .isInstanceOf(WeatherMapDataNotFoundException.class);
     }
 
     @Test
-    void shouldThrowInvalidCoordinatesSquareException_whenCoordinatesListHasInsufficientElements() {
-        List<Double> coordinates = List.of(55.0, 56.0, 37.0);
+    void shouldThrowWeatherMapDataNotFoundException_whenMinLonExceedsMaxLon() {
+        when(telemetryQueryRepositoryAdapter.findFilteredGridDataBySpatialBox(anyLong(), anyDouble(), anyDouble(), anyDouble(), anyDouble())).thenReturn(Collections.emptyMap());
 
-        assertThatThrownBy(() -> resolver.getLatestTimeIntervalWeatherMapByCoordinates(TARGET_TIMESTAMP, coordinates))
-                .isInstanceOf(InvalidCoordinatesSquareException.class);
-    }
-
-    @Test
-    void shouldThrowInvalidCoordinatesSquareException_whenCoordinatesDoNotFormValidSquareRange() {
-        List<Double> coordinates = List.of(56.0, 55.0, 37.0, 38.0);
-
-        assertThatThrownBy(() -> resolver.getLatestTimeIntervalWeatherMapByCoordinates(TARGET_TIMESTAMP, coordinates))
-                .isInstanceOf(InvalidCoordinatesSquareException.class);
-    }
-
-    @Test
-    void shouldThrowProtocolBufferTranslationException_whenGridKeyCoordinatesAreMalformed() {
-        List<Double> coordinates = List.of(55.0, 56.0, 37.0, 38.0);
-        Map<Object, Object> rawData = new HashMap<>();
-        rawData.put("cell#not_a_double#37.5", new byte[]{ 1, 2, 3 });
-        when(telemetryQueryRepositoryAdapter.findRawGridDataByBucketFloor(anyString())).thenReturn(rawData);
-
-        assertThatThrownBy(() -> resolver.getLatestTimeIntervalWeatherMapByCoordinates(TARGET_TIMESTAMP, coordinates))
-                .isInstanceOf(ProtocolBufferTranslationException.class)
-                .hasMessageContaining("Corrupted or malformed grid matrix coordinates key");
+        assertThatThrownBy(() -> resolver.getLatestTimeIntervalWeatherMapByCoordinates(TARGET_TIMESTAMP, MIN_LAT, MAX_LAT, MAX_LON, MIN_LON))
+                .isInstanceOf(WeatherMapDataNotFoundException.class);
     }
 
     @Test
     void shouldThrowProtocolBufferTranslationException_whenGridValueBytesAreCorrupted() {
-        List<Double> coordinates = List.of(55.0, 56.0, 37.0, 38.0);
-        Map<Object, Object> rawData = new HashMap<>();
+        Map<String, byte[]> rawData = new HashMap<>();
         rawData.put(VALID_CELL_KEY, new byte[]{ 0, 1, 2 });
-        when(telemetryQueryRepositoryAdapter.findRawGridDataByBucketFloor(anyString())).thenReturn(rawData);
+        when(telemetryQueryRepositoryAdapter.findFilteredGridDataBySpatialBox(anyLong(), anyDouble(), anyDouble(), anyDouble(), anyDouble())).thenReturn(rawData);
 
-        assertThatThrownBy(() -> resolver.getLatestTimeIntervalWeatherMapByCoordinates(TARGET_TIMESTAMP, coordinates))
+        assertThatThrownBy(() -> resolver.getLatestTimeIntervalWeatherMapByCoordinates(TARGET_TIMESTAMP, MIN_LAT, MAX_LAT, MIN_LON, MAX_LON))
                 .isInstanceOf(ProtocolBufferTranslationException.class)
                 .hasCauseInstanceOf(InvalidProtocolBufferException.class);
     }
 
     @Test
-    void shouldThrowWeatherMapDataNotFoundException_whenNoGridCellsMatchCoordinatesSquare() {
-        List<Double> coordinates = List.of(55.0, 56.0, 37.0, 38.0);
-        Map<Object, Object> rawData = new HashMap<>();
-        GridCellLayers layers = GridCellLayers.newBuilder().setAvgTemperature(20.0).build();
-        rawData.put("cell#10.0#10.0", layers.toByteArray());
-        when(telemetryQueryRepositoryAdapter.findRawGridDataByBucketFloor(anyString())).thenReturn(rawData);
-
-        assertThatThrownBy(() -> resolver.getLatestTimeIntervalWeatherMapByCoordinates(TARGET_TIMESTAMP, coordinates))
-                .isInstanceOf(WeatherMapDataNotFoundException.class);
-    }
-
-    @Test
     void shouldThrowWeatherMapDataNotFoundException_whenRepositoryReturnsEmptyMatrixMap() {
-        List<Double> coordinates = List.of(55.0, 56.0, 37.0, 38.0);
-        when(telemetryQueryRepositoryAdapter.findRawGridDataByBucketFloor(anyString())).thenReturn(Collections.emptyMap());
+        when(telemetryQueryRepositoryAdapter.findFilteredGridDataBySpatialBox(anyLong(), anyDouble(), anyDouble(), anyDouble(), anyDouble())).thenReturn(Collections.emptyMap());
 
-        assertThatThrownBy(() -> resolver.getLatestTimeIntervalWeatherMapByCoordinates(TARGET_TIMESTAMP, coordinates))
+        assertThatThrownBy(() -> resolver.getLatestTimeIntervalWeatherMapByCoordinates(TARGET_TIMESTAMP, MIN_LAT, MAX_LAT, MIN_LON, MAX_LON))
                 .isInstanceOf(WeatherMapDataNotFoundException.class);
     }
 }
