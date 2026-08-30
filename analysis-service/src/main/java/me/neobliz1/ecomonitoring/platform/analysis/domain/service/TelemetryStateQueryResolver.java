@@ -1,33 +1,42 @@
 package me.neobliz1.ecomonitoring.platform.analysis.domain.service;
 
+import static java.util.Objects.isNull;
+
 import com.google.protobuf.InvalidProtocolBufferException;
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.inbound.TelemetryQueryService;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryQueryArchive;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryQueryRepository;
 import me.neobliz1.ecomonitoring.platform.model.exception.ProtocolBufferTranslationException;
 import me.neobliz1.ecomonitoring.platform.model.exception.WeatherMapDataNotFoundException;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.GridCellLayers;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cache.annotation.Cacheable;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 
 @RequiredArgsConstructor
 public class TelemetryStateQueryResolver implements TelemetryQueryService {
 
     private final TelemetryQueryRepository telemetryQueryRepositoryAdapter;
+    private final TelemetryQueryArchive telemetryQueryArchiveAdapter;
+    private final int aggregationSecondsPerInterval;
+    private final int historyRecordsTtlInHours;
 
-    @Value("${spring.kafka.streams.pipeline.name.aggregation-processor.interval}")
-    private Integer aggregationSecondsPerInterval;
     @Override
-    @Cacheable(value = "weatherMaps", key = "#root.args[0] + '#' + #root.args[1] + ',' + #root.args[2] + ',' + #root.args[3] + ',' + #root.args[4]")
-    public WeatherMap getLatestTimeIntervalWeatherMapByCoordinates(long targetTimestamp, Double minLat, Double maxLat, Double minLon, Double maxLon) {
-
+    public @NonNull WeatherMap getLatestTimeIntervalWeatherMapByCoordinates(long targetTimestamp, Double minLat, Double maxLat, Double minLon, Double maxLon) {
         long activeBucketFloor = TelemetryUtils.getAggregationBucketFloorInterval(targetTimestamp, aggregationSecondsPerInterval);
-        Map<String, byte[]> filteredDataMatrix = telemetryQueryRepositoryAdapter.findFilteredGridDataBySpatialBox(activeBucketFloor,
-                minLat, maxLat, minLon, maxLon);
+        if(Instant.now().minusMillis(activeBucketFloor).toEpochMilli()>Duration.ofHours(historyRecordsTtlInHours).toMillis()) {
+            return telemetryQueryArchiveAdapter.findFilteredGridDataBySpatialBoxInArchive(activeBucketFloor, minLat, maxLat, minLon, maxLon);
+        }
+        Map<String, byte[]> filteredDataMatrix = telemetryQueryRepositoryAdapter.findFilteredGridDataBySpatialBox(
+                activeBucketFloor, minLat, maxLat, minLon, maxLon
+        );
+        if(isNull(filteredDataMatrix) || filteredDataMatrix.isEmpty()) {
+            throw new WeatherMapDataNotFoundException();
+        }
         WeatherMap.Builder weatherMapBuilder = WeatherMap.newBuilder()
                 .setTimestampBucket(activeBucketFloor)
                 .setIntervalMinutes((int) Duration.ofSeconds(aggregationSecondsPerInterval).toMinutes());

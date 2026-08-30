@@ -6,6 +6,7 @@ import io.lettuce.core.RedisNoScriptException;
 import lombok.RequiredArgsConstructor;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryQueryRepository;
 import me.neobliz1.ecomonitoring.platform.model.exception.WeatherMapDataNotFoundException;
+import org.springframework.data.redis.RedisSystemException;
 import org.springframework.data.redis.connection.ReturnType;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -50,7 +51,7 @@ public class TelemetryQueryRepositoryAdapter implements TelemetryQueryRepository
                         1,
                         keysAndArgs
                 );
-            } catch(org.springframework.data.redis.RedisSystemException e) {
+            } catch(RedisSystemException e) {
                 if(e.getRootCause() instanceof RedisNoScriptException
                         || (e.getMessage()!=null && e.getMessage().contains("NOSCRIPT"))) {
 

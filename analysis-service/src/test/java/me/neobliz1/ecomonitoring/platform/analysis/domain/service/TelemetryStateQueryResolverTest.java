@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
 import com.google.protobuf.InvalidProtocolBufferException;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryQueryArchive;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryQueryRepository;
 import me.neobliz1.ecomonitoring.platform.model.exception.ProtocolBufferTranslationException;
 import me.neobliz1.ecomonitoring.platform.model.exception.WeatherMapDataNotFoundException;
@@ -16,11 +17,10 @@ import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Instant;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -29,7 +29,7 @@ import java.util.Map;
 class TelemetryStateQueryResolverTest {
 
     private static final int AGGREGATION_INTERVAL = 60;
-    private static final long TARGET_TIMESTAMP = 1800000000L;
+    private static final long TARGET_TIMESTAMP = Instant.now().toEpochMilli();
     private static final String VALID_CELL_KEY = "cell#55.5#37.5";
     public static final double MIN_LAT = 55.0;
     public static final double MAX_LAT = 56.0;
@@ -38,13 +38,18 @@ class TelemetryStateQueryResolverTest {
 
     @Mock
     private TelemetryQueryRepository telemetryQueryRepositoryAdapter;
-
-    @InjectMocks
+    @Mock
+    private TelemetryQueryArchive telemetryQueryArchive;
     private TelemetryStateQueryResolver resolver;
 
     @BeforeEach
     void setUp() {
-        ReflectionTestUtils.setField(resolver, "aggregationSecondsPerInterval", AGGREGATION_INTERVAL);
+        this.resolver = new TelemetryStateQueryResolver(
+                telemetryQueryRepositoryAdapter,
+                telemetryQueryArchive,
+                AGGREGATION_INTERVAL,
+                24
+        );
     }
 
     @Test

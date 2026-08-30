@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package weather.history;
+
+option java_multiple_files = true;
+option java_package = "weather.history";
+
+import "buf/validate/validate.proto";
+import "weather_map.proto";
+
+service HistoryService {
+  rpc findFilteredGridDataBySpatialBox (SpatialBoxRequest) returns (weather.map.WeatherMap);
+}
+
+message SpatialBoxRequest {
+  int64 timestamp_bucket = 1 [(buf.validate.field).int64.gt = 0];
+
+  double min_lat = 2 [
+    (buf.validate.field).double.gte = -90.0,
+    (buf.validate.field).double.lte = 90.0
+  ];
+  double max_lat = 3 [
+    (buf.validate.field).double.gte = -90.0,
+    (buf.validate.field).double.lte = 90.0
+  ];
+
+  double min_lon = 4 [
+    (buf.validate.field).double.gte = -180.0,
+    (buf.validate.field).double.lte = 180.0
+  ];
+  double max_lon = 5 [
+    (buf.validate.field).double.gte = -180.0,
+    (buf.validate.field).double.lte = 180.0
+  ];
+}

@@ -16,10 +16,10 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(name = "weather_map_buckets")
 @Getter
 @Setter
 @NoArgsConstructor
+@Table(name = "weather_map_buckets")
 public class WeatherMapBucket {
 
     @Id

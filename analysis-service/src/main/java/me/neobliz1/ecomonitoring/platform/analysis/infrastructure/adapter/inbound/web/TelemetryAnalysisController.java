@@ -17,6 +17,7 @@ import me.neobliz1.ecomonitoring.platform.analysis.domain.service.SpatialRequest
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.inbound.web.doc.WeatherMapResponse;
 import me.neobliz1.ecomonitoring.platform.model.dto.ErrorEnvelopeDto;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -57,6 +58,10 @@ public class TelemetryAnalysisController {
             )
     })
     @GetMapping(value = LATEST_WEATHER_MAP_ENDPOINT, produces = MediaType.APPLICATION_JSON_VALUE)
+    @Cacheable(
+            value = "weatherMaps",
+            key = "#targetTimestamp + '#' + #minLat + ',' + #maxLat + ',' + #minLon + ',' + #maxLon"
+    )
     public ResponseEntity<WeatherMap> getWeatherMapByTimeAndCoordinatesSquare(
             @RequestParam(name = "targetTimestamp")
             @Min(value = 0L, message = "Timestamp cannot be negative")

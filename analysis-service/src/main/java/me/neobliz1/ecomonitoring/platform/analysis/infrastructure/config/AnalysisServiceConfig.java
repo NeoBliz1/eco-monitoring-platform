@@ -12,9 +12,11 @@ import me.neobliz1.ecomonitoring.platform.analysis.domain.port.inbound.Telemetry
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.inbound.TelemetryQueryService;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryPersistenceRepository;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryPersistentService;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryQueryArchive;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryQueryRepository;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryStatePersister;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryStateQueryResolver;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.history.grpc.TelemetryQueryGrpcAdapter;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.TelemetryTopologyOrchestrator;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.persistence.redis.TelemetryPersistenceRepositoryAdapter;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.persistence.redis.TelemetryQueryRepositoryAdapter;
@@ -39,7 +41,9 @@ import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.data.redis.serializer.RedisSerializer;
+import org.springframework.grpc.client.GrpcChannelFactory;
 import org.springframework.kafka.annotation.EnableKafkaStreams;
+import weather.history.HistoryServiceGrpc;
 
 import java.time.Duration;
 import java.util.List;
@@ -60,6 +64,8 @@ public class AnalysisServiceConfig {
     private String redisPassword;
     @Value("${spring.kafka.service-name}")
     private String kafkaServiceName;
+    @Value("${spring.grpc.client.channels.history-service.name}")
+    private String grpcClientChannelName;
 
     @Bean
     public TelemetryPersistentService telemetryPersistentService(TelemetryPersistenceRepository telemetryRepository) {
@@ -91,8 +97,16 @@ public class AnalysisServiceConfig {
     }
 
     @Bean
-    public TelemetryQueryService telemetryQueryService(TelemetryQueryRepository telemetryQueryRepository) {
-        return new TelemetryStateQueryResolver(telemetryQueryRepository);
+    public TelemetryQueryArchive telemetryQueryArchive(HistoryServiceGrpc.HistoryServiceBlockingStub historyServiceStub) {
+        return new TelemetryQueryGrpcAdapter(historyServiceStub);
+    }
+
+    @Bean
+    public TelemetryQueryService telemetryQueryService(TelemetryQueryRepository telemetryQueryRepository,
+                                                       TelemetryQueryArchive telemetryQueryArchive,
+                                                       @Value("${spring.kafka.streams.pipeline.name.aggregation-processor.interval}") Integer interval,
+                                                       @Value("${spring.redis.records.ttl}") Integer historyRecordTtl) {
+        return new TelemetryStateQueryResolver(telemetryQueryRepository, telemetryQueryArchive, interval, historyRecordTtl);
     }
 
     @Bean
@@ -143,6 +157,13 @@ public class AnalysisServiceConfig {
     @Bean
     public ReactiveStringRedisTemplate reactiveStringRedisTemplate(ReactiveRedisConnectionFactory factory) {
         return new ReactiveStringRedisTemplate(factory);
+    }
+
+    @Bean
+    public HistoryServiceGrpc.HistoryServiceBlockingStub historyServiceBlockingStub(GrpcChannelFactory channelFactory) {
+        return HistoryServiceGrpc.newBlockingStub(
+                channelFactory.createChannel(grpcClientChannelName)
+        );
     }
 
     @PostConstruct

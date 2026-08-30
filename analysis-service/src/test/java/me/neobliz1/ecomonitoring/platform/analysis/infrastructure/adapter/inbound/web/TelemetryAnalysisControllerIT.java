@@ -234,7 +234,7 @@ public class TelemetryAnalysisControllerIT extends IntegrationTestSupport {
 
     @Test
     public void shouldReturnBadRequest_whenTimestampIsNegative() throws Exception {
-        String exMsg = "Invalid request parameters: getWeatherMapByTimeAndCoordinatesSquare.arg0: Timestamp cannot be negative";
+        String exMsg = "Invalid request parameters: getWeatherMapByTimeAndCoordinatesSquare.targetTimestamp: Timestamp cannot be negative";
 
         mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
                         .param(TARGET_TIMESTAMP_PARAM, "-1000")
@@ -250,7 +250,7 @@ public class TelemetryAnalysisControllerIT extends IntegrationTestSupport {
 
     @Test
     public void shouldReturnBadRequest_whenTimestampExceedsYear2100() throws Exception {
-        String exMsg = "Invalid request parameters: getWeatherMapByTimeAndCoordinatesSquare.arg0: "
+        String exMsg = "Invalid request parameters: getWeatherMapByTimeAndCoordinatesSquare.targetTimestamp: "
                 +"Timestamp cannot be unreasonably far in the future (Max: Year 2100)";
 
         mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)

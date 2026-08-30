@@ -20,6 +20,8 @@ spring:
         service-name: ${SPRING_HISTORY_APPLICATION_NAME}
         health-check-path: /actuator/health
         health-check-interval: 10s
+        metadata:
+          gRPC_port: ${HISTORY_APPLICATION_GRPC_PORT}
       config:
         enabled: true
         format: yaml
@@ -66,7 +68,9 @@ spring:
       ddl-auto: validate
 server:
   port: ${HISTORY_APPLICATION_SERVER_PORT}
-
+grpc:
+  server:
+    port: ${HISTORY_APPLICATION_GRPC_PORT}
 ---
 spring:
   config:
