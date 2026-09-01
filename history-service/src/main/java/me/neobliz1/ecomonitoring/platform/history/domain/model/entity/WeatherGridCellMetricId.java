@@ -18,6 +18,7 @@ public class WeatherGridCellMetricId implements Serializable {
     @Column(name = "bucket_id")
     private UUID bucketId;
 
+    //lat#lon
     @Column(name = "geohash")
     private String geohash;
 }

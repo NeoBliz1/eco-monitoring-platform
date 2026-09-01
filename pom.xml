@@ -12,6 +12,7 @@
         <java.version>21</java.version>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
+        <maven-compiler-plugin-version>3.15.0</maven-compiler-plugin-version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring-boot.version>4.1.0</spring-boot.version>
         <springdoc.version>3.1.0</springdoc.version>
@@ -41,6 +42,7 @@
         <swagger-annotations.version>2.2.53</swagger-annotations.version>
         <testcontainers.version>2.0.5</testcontainers.version>
         <embedded-redis.version>1.4.3</embedded-redis.version>
+        <grpc-testing.version>1.83.1</grpc-testing.version>
     </properties>
 
     <modules>
@@ -228,6 +230,12 @@
                 <version>${embedded-redis.version}</version>
                 <scope>test</scope>
             </dependency>
+            <dependency>
+                <groupId>io.grpc</groupId>
+                <artifactId>grpc-testing</artifactId>
+                <version>${grpc-testing.version}</version>
+                <scope>test</scope>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -299,6 +307,16 @@
         </plugins>
         <pluginManagement>
             <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>${maven-compiler-plugin-version}</version>
+                    <configuration>
+                        <parameters>true</parameters>
+                        <source>${maven.compiler.source}</source>
+                        <target>${maven.compiler.target}</target>
+                    </configuration>
+                </plugin>
                 <plugin>
                     <groupId>org.xolstice.maven.plugins</groupId>
                     <artifactId>protobuf-maven-plugin</artifactId>

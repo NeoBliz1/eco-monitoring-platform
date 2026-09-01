@@ -15,12 +15,14 @@ import lombok.Setter;
 
 import java.util.UUID;
 
-@Entity
 @Getter
 @Setter
 @NoArgsConstructor
-@Table(name = "weather_grid_cell_metrics")
+@Table(name = WeatherGridCellMetric.TABLE_NAME)
+@Entity(name = WeatherGridCellMetric.TABLE_NAME)
 public class WeatherGridCellMetric {
+
+    public static final String TABLE_NAME = "weather_grid_cell_metrics";
 
     @EmbeddedId
     @Getter(AccessLevel.NONE)

@@ -58,14 +58,8 @@ public class AnalysisServiceConfig {
     private final KafkaProperties kafkaProperties;
     private final ConfigurableEnvironment environment;
 
-    @Value("${spring.data.redis.service-name}")
-    private String redisServiceName;
-    @Value("${spring.data.redis.password:}")
-    private String redisPassword;
     @Value("${spring.kafka.service-name}")
-    private String kafkaServiceName;
-    @Value("${spring.grpc.client.channels.history-service.name}")
-    private String grpcClientChannelName;
+    String kafkaServiceName;
 
     @Bean
     public TelemetryPersistentService telemetryPersistentService(TelemetryPersistenceRepository telemetryRepository) {
@@ -121,7 +115,9 @@ public class AnalysisServiceConfig {
     }
 
     @Bean
-    public LettuceConnectionFactory redisConnectionFactory(DiscoveryClient discoveryClient) {
+    public LettuceConnectionFactory redisConnectionFactory(DiscoveryClient discoveryClient,
+                                                           @Value("${spring.data.redis.password:}") String redisPassword,
+                                                           @Value("${spring.data.redis.service-name}") String redisServiceName) {
         PlatformCommonUtils.ServiceAddressRecord serviceAddress = PlatformCommonUtils.discoverServiceAddressFromConsulServerByName(
                 discoveryClient, environment, redisServiceName);
 
@@ -160,7 +156,9 @@ public class AnalysisServiceConfig {
     }
 
     @Bean
-    public HistoryServiceGrpc.HistoryServiceBlockingStub historyServiceBlockingStub(GrpcChannelFactory channelFactory) {
+    public HistoryServiceGrpc.HistoryServiceBlockingStub historyServiceBlockingStub(GrpcChannelFactory channelFactory,
+                                                                                    @Value("${spring.grpc.client.channels.history-service.name}")
+                                                                                    String grpcClientChannelName) {
         return HistoryServiceGrpc.newBlockingStub(
                 channelFactory.createChannel(grpcClientChannelName)
         );

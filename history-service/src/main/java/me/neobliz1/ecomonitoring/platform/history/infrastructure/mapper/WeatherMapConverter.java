@@ -1,15 +1,15 @@
 package me.neobliz1.ecomonitoring.platform.history.infrastructure.mapper;
 
 import lombok.NonNull;
-import me.neobliz1.ecomonitoring.platform.history.domain.inbound.HistoricalService;
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherGridCellMetric;
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherMapBucket;
+import me.neobliz1.ecomonitoring.platform.history.domain.port.inbound.HistoricalDataConvertService;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.GridCellLayers;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 
 import java.util.Map;
 
-public class WeatherMapConverter implements HistoricalService {
+public class WeatherMapConverter implements HistoricalDataConvertService {
 
     @Override
     public void extractTelemetryFromWeatherMap(@NonNull WeatherMap weatherMap, @NonNull WeatherMapBucket bucket) {
@@ -52,5 +52,36 @@ public class WeatherMapConverter implements HistoricalService {
 
             bucket.addCellMetric(cellMetric);
         }
+    }
+
+    @Override
+    public @NonNull GridCellLayers convertWeatherGridCellsToWeatherMap(@NonNull WeatherGridCellMetric gridCellMetric) {
+        return GridCellLayers.newBuilder()
+                .setReadingCount(gridCellMetric.getReadingCount())
+
+                .setAvgTemperature(gridCellMetric.getAvgTemperature())
+                .setAvgHumidity(gridCellMetric.getAvgHumidity())
+                .setAvgPressure(gridCellMetric.getAvgPressure())
+                .setAvgLeafWetnessPct(gridCellMetric.getAvgLeaf_wetnessPct())
+
+                .setAvgWindSpeed(gridCellMetric.getAvgWindSpeed())
+                .setAvgWindDirection(gridCellMetric.getAvgWindDirection())
+
+                .setAvgPm25(gridCellMetric.getAvgPm25())
+                .setAvgPm10(gridCellMetric.getAvgPm10())
+                .setAvgPm100(gridCellMetric.getAvgPm100())
+
+                .setAvgVoc(gridCellMetric.getAvgVoc())
+                .setAvgNoiseDb(gridCellMetric.getAvgNoiseDb())
+
+                .setAvgRainMm(gridCellMetric.getAvgRainMm())
+                .setAvgSnowCm(gridCellMetric.getAvgSnowCm())
+                .setAvgEvapRate(gridCellMetric.getAvgEvapRate())
+
+                .setAvgUvIndex(gridCellMetric.getAvgUvIndex())
+                .setAvgSolarRadiationWm2(gridCellMetric.getAvgSolarRadiationWm2())
+                .setAvgLux(gridCellMetric.getAvgLux())
+                .setAvgVisibilityM(gridCellMetric.getAvgVisibilityM())
+                .build();
     }
 }

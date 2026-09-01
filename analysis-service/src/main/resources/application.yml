@@ -3,8 +3,8 @@ spring:
     client:
       channels:
         history-service:
-          name: "eco-monitoring-history"
-          address: "discovery:///eco-monitoring-history"
+          name: ${SPRING_HISTORY_APPLICATION_NAME}
+          address: "discovery:///${SPRING_HISTORY_APPLICATION_NAME}"
           secure: false
   profiles:
     # profile for include common configs from common-core module

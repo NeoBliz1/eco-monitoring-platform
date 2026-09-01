@@ -7,13 +7,15 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils;
-import me.neobliz1.ecomonitoring.platform.history.domain.inbound.HistoricalService;
-import me.neobliz1.ecomonitoring.platform.history.domain.outbound.HistoricalPersistenceRepository;
-import me.neobliz1.ecomonitoring.platform.history.domain.outbound.HistoricalQueryRepository;
+import me.neobliz1.ecomonitoring.platform.history.domain.port.inbound.HistoricalDataConvertService;
+import me.neobliz1.ecomonitoring.platform.history.domain.port.outbound.HistoricalPersistenceRepository;
+import me.neobliz1.ecomonitoring.platform.history.domain.port.outbound.HistoricalQueryRepository;
+import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.inbound.grpc.HistoricalExternalCommunicationObserver;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.inbound.kafka.HistoricalTelemetryListener;
-import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalQueryJpaRepository;
+import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalPersistenceRepositoryAdapter;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalQueryRepositoryAdapter;
-import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.TelemetryHistoryPersistenceRepositoryAdapter;
+import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalWeatherGridCellJpaRepository;
+import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalWeatherMapJpaRepository;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.mapper.WeatherMapConverter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.jdbc.autoconfigure.DataSourceProperties;
@@ -57,20 +59,26 @@ public class HistoryServiceConfig {
     private int connectionTimeout;
 
     @Bean
-    public HistoricalQueryRepository historicalQueryRepository(HistoricalQueryJpaRepository jpaRepository) {
-        return new HistoricalQueryRepositoryAdapter(jpaRepository);
+    public HistoricalQueryRepository historicalQueryRepository(HistoricalWeatherMapJpaRepository weatherMapJpaRepository,
+                                                               HistoricalWeatherGridCellJpaRepository gridCellJpaRepository) {
+        return new HistoricalQueryRepositoryAdapter(weatherMapJpaRepository, gridCellJpaRepository);
     }
 
     @Bean
-    public HistoricalService weatherMapConverter() {
+    public HistoricalDataConvertService weatherMapConverter() {
         return new WeatherMapConverter();
     }
 
     @Bean
-    public HistoricalPersistenceRepository historicalPersistenceRepository(HistoricalQueryRepository queryRepositoryAdapter,
-                                                                           HistoricalService weatherMapConverter,
-                                                                           HistoricalQueryJpaRepository jpaRepository) {
-        return new TelemetryHistoryPersistenceRepositoryAdapter(queryRepositoryAdapter, weatherMapConverter, jpaRepository);
+    public HistoricalPersistenceRepository historicalPersistenceRepository(HistoricalDataConvertService weatherMapConverter,
+                                                                           HistoricalWeatherMapJpaRepository weatherMapJpaRepository) {
+        return new HistoricalPersistenceRepositoryAdapter(weatherMapConverter, weatherMapJpaRepository);
+    }
+
+    @Bean
+    public HistoricalExternalCommunicationObserver historicalExternalCommunicationObserver(HistoricalQueryRepository queryRepositoryAdapter,
+                                                                                           HistoricalDataConvertService weatherMapConverter) {
+        return new HistoricalExternalCommunicationObserver(queryRepositoryAdapter, weatherMapConverter);
     }
 
     @Bean

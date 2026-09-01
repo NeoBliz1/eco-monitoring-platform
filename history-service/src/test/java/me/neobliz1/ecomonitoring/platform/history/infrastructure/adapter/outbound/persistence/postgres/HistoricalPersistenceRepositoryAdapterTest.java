@@ -1,4 +1,4 @@
-package history.infrastructure.adapter.outbound.persistence.postgres;
+package me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -9,12 +9,10 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
-import me.neobliz1.ecomonitoring.platform.history.domain.inbound.HistoricalService;
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherMapBucket;
-import me.neobliz1.ecomonitoring.platform.history.domain.outbound.HistoricalQueryRepository;
-import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalQueryJpaRepository;
-import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.TelemetryHistoryPersistenceRepositoryAdapter;
+import me.neobliz1.ecomonitoring.platform.history.domain.port.inbound.HistoricalDataConvertService;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,22 +23,19 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
-class TelemetryHistoryPersistenceRepositoryAdapterTest {
+class HistoricalPersistenceRepositoryAdapterTest {
 
     private static final long BUCKET_TIME = 1800000000L;
     private static final int INTERVAL_MINS = 60;
 
     @Mock
-    private HistoricalQueryRepository queryRepositoryAdapter;
+    private HistoricalDataConvertService weatherMapConverter;
 
     @Mock
-    private HistoricalService weatherMapConverter;
-
-    @Mock
-    private HistoricalQueryJpaRepository jpaRepository;
+    private HistoricalWeatherMapJpaRepository jpaRepository;
 
     @InjectMocks
-    private TelemetryHistoryPersistenceRepositoryAdapter adapter;
+    private HistoricalPersistenceRepositoryAdapter adapter;
 
     @Test
     void shouldPersistTelemetryRecord_whenValidWeatherMapProvided() {
@@ -48,11 +43,11 @@ class TelemetryHistoryPersistenceRepositoryAdapterTest {
         doReturn(BUCKET_TIME).when(weatherMap).getTimestampBucket();
         doReturn(INTERVAL_MINS).when(weatherMap).getIntervalMinutes();
         WeatherMapBucket bucket = new WeatherMapBucket(UUID.randomUUID(), BUCKET_TIME, INTERVAL_MINS);
-        doReturn(bucket).when(queryRepositoryAdapter).upsertBucket(any(UUID.class), eq(BUCKET_TIME), eq(INTERVAL_MINS));
+        doReturn(bucket).when(jpaRepository).upsertBucket(any(UUID.class), eq(BUCKET_TIME), eq(INTERVAL_MINS));
 
         adapter.persistTelemetryRecord(weatherMap);
 
-        verify(queryRepositoryAdapter).upsertBucket(any(UUID.class), eq(BUCKET_TIME), eq(INTERVAL_MINS));
+        verify(jpaRepository).upsertBucket(any(UUID.class), eq(BUCKET_TIME), eq(INTERVAL_MINS));
         verify(weatherMapConverter).extractTelemetryFromWeatherMap(weatherMap, bucket);
         verify(jpaRepository).saveAndFlush(bucket);
     }
@@ -62,7 +57,7 @@ class TelemetryHistoryPersistenceRepositoryAdapterTest {
     void shouldThrowNullPointerException_whenWeatherMapIsNull() {
         assertThrows(NullPointerException.class, () -> adapter.persistTelemetryRecord(null));
 
-        verifyNoInteractions(queryRepositoryAdapter, weatherMapConverter, jpaRepository);
+        verifyNoInteractions(jpaRepository, weatherMapConverter);
     }
 
     @Test
@@ -71,12 +66,13 @@ class TelemetryHistoryPersistenceRepositoryAdapterTest {
         doReturn(BUCKET_TIME).when(weatherMap).getTimestampBucket();
         doReturn(INTERVAL_MINS).when(weatherMap).getIntervalMinutes();
         String exceptionMessage = "Database connection failure";
-        doThrow(new RuntimeException(exceptionMessage)).when(queryRepositoryAdapter).upsertBucket(any(UUID.class), eq(BUCKET_TIME), eq(INTERVAL_MINS));
+        doThrow(new RuntimeException(exceptionMessage)).when(jpaRepository).upsertBucket(any(UUID.class), eq(BUCKET_TIME), eq(INTERVAL_MINS));
 
         RuntimeException exception = assertThrows(RuntimeException.class, () -> adapter.persistTelemetryRecord(weatherMap));
 
         assertEquals(exceptionMessage, exception.getMessage());
-        verifyNoInteractions(weatherMapConverter, jpaRepository);
+        verifyNoInteractions(weatherMapConverter);
+        verifyNoMoreInteractions(jpaRepository);
     }
 
     @Test
@@ -86,7 +82,7 @@ class TelemetryHistoryPersistenceRepositoryAdapterTest {
         doReturn(INTERVAL_MINS).when(weatherMap).getIntervalMinutes();
         WeatherMapBucket bucket = new WeatherMapBucket(UUID.randomUUID(), BUCKET_TIME, INTERVAL_MINS);
         String exceptionMessage = "Conversion error";
-        doReturn(bucket).when(queryRepositoryAdapter).upsertBucket(any(UUID.class), eq(BUCKET_TIME), eq(INTERVAL_MINS));
+        doReturn(bucket).when(jpaRepository).upsertBucket(any(UUID.class), eq(BUCKET_TIME), eq(INTERVAL_MINS));
         doThrow(new RuntimeException(exceptionMessage)).when(weatherMapConverter).extractTelemetryFromWeatherMap(weatherMap, bucket);
 
         RuntimeException exception = assertThrows(RuntimeException.class, () -> adapter.persistTelemetryRecord(weatherMap));
@@ -101,7 +97,7 @@ class TelemetryHistoryPersistenceRepositoryAdapterTest {
         doReturn(INTERVAL_MINS).when(weatherMap).getIntervalMinutes();
         WeatherMapBucket bucket = new WeatherMapBucket(UUID.randomUUID(), BUCKET_TIME, INTERVAL_MINS);
         String exceptionMessage = "Unexpected save failure";
-        doReturn(bucket).when(queryRepositoryAdapter).upsertBucket(any(UUID.class), eq(BUCKET_TIME), eq(INTERVAL_MINS));
+        doReturn(bucket).when(jpaRepository).upsertBucket(any(UUID.class), eq(BUCKET_TIME), eq(INTERVAL_MINS));
         doThrow(new RuntimeException(exceptionMessage)).when(jpaRepository).saveAndFlush(bucket);
 
         RuntimeException exception = assertThrows(RuntimeException.class, () -> adapter.persistTelemetryRecord(weatherMap));

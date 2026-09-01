@@ -15,12 +15,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-@Entity
 @Getter
 @Setter
 @NoArgsConstructor
-@Table(name = "weather_map_buckets")
+@Table(name = WeatherMapBucket.TABLE_NAME)
+@Entity(name = WeatherMapBucket.TABLE_NAME)
 public class WeatherMapBucket {
+
+    public static final String TABLE_NAME = "weather_map_buckets";
 
     @Id
     private UUID id;

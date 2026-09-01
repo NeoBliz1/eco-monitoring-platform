@@ -2,7 +2,7 @@ package me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.inboun
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import me.neobliz1.ecomonitoring.platform.history.domain.outbound.HistoricalPersistenceRepository;
+import me.neobliz1.ecomonitoring.platform.history.domain.port.outbound.HistoricalPersistenceRepository;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.kafka.annotation.KafkaListener;

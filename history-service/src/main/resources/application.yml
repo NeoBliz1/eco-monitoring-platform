@@ -71,6 +71,7 @@ server:
 grpc:
   server:
     port: ${HISTORY_APPLICATION_GRPC_PORT}
+
 ---
 spring:
   config:

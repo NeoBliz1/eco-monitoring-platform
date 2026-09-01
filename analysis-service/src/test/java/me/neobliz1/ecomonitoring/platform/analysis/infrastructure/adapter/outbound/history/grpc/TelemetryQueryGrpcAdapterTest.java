@@ -31,7 +31,7 @@ class TelemetryQueryGrpcAdapterTest {
     public static final double MAX_LAT = 56.0;
     public static final double MIN_LON = 60.0;
     public static final double MAX_LON = 61.0;
-    public static final String V_1234 = "55.5#60.5";
+    public static final String GEOHASH = "55.5#60.5";
     private static final long ACTIVE_BUCKET_FLOOR = 1718845200000L;
     private static ApplicationContextRunner contextRunner;
 
@@ -43,6 +43,7 @@ class TelemetryQueryGrpcAdapterTest {
                         GrpcServerAutoConfiguration.class
                 ))
                 .withPropertyValues(
+                        "spring.kafka.streams.pipeline.name.aggregation-processor.interval=100000",
                         "spring.main.web-application-type=none",
                         "spring.cloud.consul.discovery.enabled=false",
                         "spring.cloud.consul.config.enabled=false",
@@ -66,8 +67,8 @@ class TelemetryQueryGrpcAdapterTest {
             WeatherMap expectedResponse = WeatherMap.newBuilder()
                     .setTimestampBucket(ACTIVE_BUCKET_FLOOR)
                     .setIntervalMinutes(15)
-                    .putGridCells(V_1234, GridCellLayers.newBuilder()
-                            .setGeohash(V_1234)
+                    .putGridCells(GEOHASH, GridCellLayers.newBuilder()
+                            .setGeohash(GEOHASH)
                             .setReadingCount(5)
                             .setAvgTemperature(22.5)
                             .build())
@@ -81,7 +82,7 @@ class TelemetryQueryGrpcAdapterTest {
             assertThat(actualResponse).isNotNull();
             assertThat(actualResponse.getTimestampBucket()).isEqualTo(ACTIVE_BUCKET_FLOOR);
             assertThat(actualResponse.getIntervalMinutes()).isEqualTo(15);
-            assertThat(actualResponse.getGridCellsOrThrow(V_1234).getAvgTemperature()).isEqualTo(22.5);
+            assertThat(actualResponse.getGridCellsOrThrow(GEOHASH).getAvgTemperature()).isEqualTo(22.5);
             SpatialBoxRequest capturedRequest = mockHistoryService.getLastCapturedRequest();
             assertThat(capturedRequest.getTimestampBucket()).isEqualTo(ACTIVE_BUCKET_FLOOR);
             assertThat(capturedRequest.getMinLat()).isEqualTo(MIN_LAT);

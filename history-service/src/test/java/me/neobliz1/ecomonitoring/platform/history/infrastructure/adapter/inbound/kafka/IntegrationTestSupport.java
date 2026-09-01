@@ -1,6 +1,6 @@
-package history.infrastructure.adapter.inbound;
+package me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.inbound.kafka;
 
-import static history.infrastructure.adapter.inbound.HistoricalTelemetryListenerIT.ENVIRONMENT;
+import static me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.inbound.kafka.HistoricalTelemetryListenerIT.ENVIRONMENT;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.INTERVAL_MINUTES;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.getProducerConf;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.getTestKafkaAdminConf;
@@ -21,8 +21,8 @@ import liquibase.resource.DirectoryResourceAccessor;
 import lombok.extern.slf4j.Slf4j;
 import me.neobliz1.ecomonitoring.platform.history.HistoricalBootEngine;
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherMapBucket;
-import me.neobliz1.ecomonitoring.platform.history.domain.outbound.HistoricalQueryRepository;
-import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalQueryJpaRepository;
+import me.neobliz1.ecomonitoring.platform.history.domain.port.outbound.HistoricalQueryRepository;
+import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalWeatherMapJpaRepository;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -35,11 +35,15 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
+import org.springframework.boot.grpc.client.autoconfigure.GrpcClientAutoConfiguration;
 import org.springframework.boot.kafka.autoconfigure.KafkaProperties;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.grpc.client.ImportGrpcClients;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
+import weather.history.HistoryServiceGrpc;
 
 import java.io.File;
 import java.sql.Connection;
@@ -52,9 +56,20 @@ import java.util.concurrent.ExecutionException;
 
 @Slf4j
 @ActiveProfiles({ "dev", "common", "local" })
-@SpringBootTest(classes = HistoricalBootEngine.class)
 @TestPropertySource(locations = "classpath:.env.test")
+@ImportAutoConfiguration(GrpcClientAutoConfiguration.class)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@ImportGrpcClients(
+        types = HistoryServiceGrpc.HistoryServiceBlockingStub.class,
+        prefix = "history-service"
+)
+@SpringBootTest(
+        classes = HistoricalBootEngine.class,
+        properties = {
+                "spring.grpc.client.channels.history-service.address=static://localhost:8192",
+                "spring.grpc.client.channels.history-service.secure=false"
+        }
+)
 public class IntegrationTestSupport {
 
     public static final String PG_DB = "pg-db";
@@ -65,7 +80,9 @@ public class IntegrationTestSupport {
     @Autowired
     HistoricalQueryRepository queryRepositoryAdapter;
     @Autowired
-    HistoricalQueryJpaRepository queryJpaRepositoryAdapter;
+    HistoricalWeatherMapJpaRepository queryJpaRepositoryAdapter;
+    @Autowired
+    HistoryServiceGrpc.HistoryServiceBlockingStub historyRemoteClientStub;
     @Value("${spring.kafka.streams.properties.schema.registry.url}")
     private String schemaRegistryUrl;
     @PersistenceContext
@@ -81,6 +98,18 @@ public class IntegrationTestSupport {
                 "consul",
                 "pg-db"
         ));
+    }
+
+    @BeforeEach
+    public void setupEcosystem() {
+        setupKafkaProducer();
+    }
+
+    @AfterEach
+    public void teardownEcosystem() throws ExecutionException, InterruptedException {
+        clearKafkaTopics();
+        if(testProducer!=null) testProducer.close();
+        queryJpaRepositoryAdapter.deleteAllInBatch();
     }
 
     static void runLiquibaseMigrationsOnTestComposeCluster() {
@@ -108,18 +137,6 @@ public class IntegrationTestSupport {
             log.error("❌ Testcontainers Compose migration step collapsed! Integration pipeline aborted.", e);
             throw new RuntimeException(e);
         }
-    }
-
-    @BeforeEach
-    public void setupEcosystem() {
-        setupKafkaProducer();
-    }
-
-    @AfterEach
-    public void teardownEcosystem() throws ExecutionException, InterruptedException {
-        clearKafkaTopics();
-        if(testProducer!=null) testProducer.close();
-        queryJpaRepositoryAdapter.deleteAllInBatch();
     }
 
     private void setupKafkaProducer() {
