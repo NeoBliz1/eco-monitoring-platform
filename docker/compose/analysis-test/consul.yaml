@@ -1,6 +1,7 @@
 services:
   consul-server:
-    image: hashicorp/consul:2.0.0
+    # image: hashicorp/consul:2.0.0
+    image: hashicorp/consul@sha256:fd737d7d84bd11e6d8e54d5ffc4af68d3411bc19d1e5c357c91539d18384da13
     ports:
       - "8500:8500"
     networks:
@@ -14,7 +15,8 @@ services:
     command: "agent -server -bootstrap-expect=1 -ui -node=control-plane-one -client=0.0.0.0"
 
   consul-init-service:
-    image: hashicorp/consul:2.0.0
+    # image: hashicorp/consul:2.0.0
+    image: hashicorp/consul@sha256:fd737d7d84bd11e6d8e54d5ffc4af68d3411bc19d1e5c357c91539d18384da13
     depends_on:
       consul-server:
         condition: service_healthy

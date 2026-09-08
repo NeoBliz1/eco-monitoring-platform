@@ -1,6 +1,7 @@
 services:
   vector-storage-init:
-    image: redis:8.8.0-alpine
+    # image: redis:8.8.0-alpine
+    image: redis@sha256:9d317178eceac8454a2284a9e6df2466b93c745529947f0cd42a0fa9609d7005
     user: "0:0"
     volumes:
       - vector_disk_buffer:/var/lib/vector:rw
@@ -12,7 +13,8 @@ services:
         echo "🔒 Host persistent vector disk buffer layer successfully hardened to 0700 (100:1000)!"
 
   vector-vault-init:
-    image: hashicorp/vault:2.0.0
+    # image: hashicorp/vault:2.0.0
+    image: hashicorp/vault@sha256:e40c741ed95bb271425e3e6ca6c222d620cf8682f6f7a1b1e7c9d49d0aba484b
     user: "100:1000"
     depends_on:
       vault-server:
@@ -29,7 +31,8 @@ services:
     command: [ "vault agent -exit-after-auth -config=/etc/vault/agent.hcl" ]
 
   vector-sidecar:
-    image: timberio/vector:0.56.0-alpine
+    # image: timberio/vector:0.56.0-alpine
+    image: timberio/vector@sha256:8f2de273559680c4a6a03bb2bcf4a7636b08e0fb15269f546adc7b2cef2b6e8c
     ports:
       - "6000:6000"
       - "6001:6001"

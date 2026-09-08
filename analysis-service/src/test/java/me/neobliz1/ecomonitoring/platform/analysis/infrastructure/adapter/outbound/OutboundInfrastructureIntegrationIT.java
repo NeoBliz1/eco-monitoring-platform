@@ -19,6 +19,7 @@ import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.GridCellLay
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.awaitility.Awaitility;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -33,6 +34,15 @@ import java.util.concurrent.TimeUnit;
 
 @Slf4j
 public class OutboundInfrastructureIntegrationIT extends IntegrationTestSupport {
+
+    private static final double BASE_LATITUDE = 40.0;
+    private static final long TIME_OFFSET_MS = 1000L;
+    private static final double BASE_LONGITUDE = -70.0;
+    private static final float BASE_TEMPERATURE = 20.0f;
+    private static final float EXPECTED_HUMIDITY = 50.0f;
+    private static final float EXPECTED_PRESSURE = 1013.0f;
+    private static final int PACKETS_PER_STATION_COUNT = 10;
+    private static final int SIMULTANEOUS_STATIONS_COUNT = 10;
 
     @Container
     @SuppressWarnings("unused")
@@ -279,6 +289,7 @@ public class OutboundInfrastructureIntegrationIT extends IntegrationTestSupport 
 
         sendPackets(firstBatch, 20);
         sendPacket(secondBatchPacket);
+        sendFlushPackage(stationId, nextBucketFloor, lat, lon);
         List<WeatherMap> weatherMaps = collectHistoryRecords(2);
         long totalReadingsMap = getReadingsNum(weatherMaps, gridCellKey, currentBucketFloor);
         long totalReadingsNextMap = getReadingsNum(weatherMaps, gridCellKey, nextBucketFloor);
@@ -294,19 +305,29 @@ public class OutboundInfrastructureIntegrationIT extends IntegrationTestSupport 
     @Test
     public void shouldHandleEdgeCaseGeoCoordinates_whenLatitudeOrLongitudeAreAtBoundaries() throws Exception {
         long currentBucketFloor = getCurrentBucketFloor();
-        String stationId = "8";
         double[][] edgeCoords = getEdgeCaseCoordinates();
         int targetRecordsNum = edgeCoords.length;
 
+        int stationId = 0;
         for(double[] coord : edgeCoords) {
+            stationId++;
             double lat = coord[0];
             double lon = coord[1];
-            WeatherPacket packet = createBasicPacket(stationId, currentBucketFloor+1000, lat, lon);
+            WeatherPacket packet = createBasicPacket(String.valueOf(stationId), currentBucketFloor, lat, lon);
             sendPacket(packet);
-            sendFlushPackage(stationId, currentBucketFloor, lat, lon);
-            currentBucketFloor += 100;
         }
-
+        Awaitility.await()
+                .forever()
+                .pollDelay(3, TimeUnit.SECONDS)
+                .until(() -> true);
+        stationId = 0;
+        for(double[] coord : edgeCoords) {
+            stationId++;
+            double lat = coord[0];
+            double lon = coord[1];
+            sendFlushPackage(String.valueOf(stationId), currentBucketFloor, lat, lon);
+            currentBucketFloor += 1000;
+        }
         List<WeatherMap> weatherMaps = collectHistoryRecords(targetRecordsNum);
 
         assertNotEmpty(weatherMaps, "Should have history records");
@@ -315,7 +336,7 @@ public class OutboundInfrastructureIntegrationIT extends IntegrationTestSupport 
             map.getGridCellsMap().keySet().forEach(key -> {
                 assertNotNull(key, "Grid cell key should not be null");
                 assertFalse(key.isEmpty(), "Grid cell key should not be empty");
-                assertTrue(key.matches(".*#.*#.*"), "Grid cell key should contain underscore");
+                assertTrue(key.matches(".*#.*#.*"), "Grid cell key should contain delimiter: "+HASHTAG_DELIMITER);
             });
         }
     }
@@ -331,10 +352,9 @@ public class OutboundInfrastructureIntegrationIT extends IntegrationTestSupport 
         WeatherPacket packet = createBasicPacket(stationId, timestamp, lat, lon);
 
         sendPacket(packet);
-        Thread.sleep(100);
         sendPacket(packet);
         sendFlushPackage(stationId, currentBucketFloor, lat, lon);
-        Optional<WeatherMap> targetMap = collectHistoryRecords(2).stream()
+        Optional<WeatherMap> targetMap = collectHistoryRecords(1).stream()
                 .filter(m -> m.getTimestampBucket()==currentBucketFloor)
                 .findFirst();
         List<WeatherPacket> weatherPackets = collectRawRecords();
@@ -459,7 +479,6 @@ public class OutboundInfrastructureIntegrationIT extends IntegrationTestSupport 
         for(String stationId : stationIds) {
             WeatherPacket packet = createBasicPacket(stationId, currentWindowTimeFloor+1000, lat, lon);
             sendPacket(packet);
-            Thread.sleep(50);
         }
         sendFlushPackage("1", currentWindowTimeFloor, lat, lon);
         WeatherMap weatherMap = findWeatherMapByGridCellAnBucketFloor(gridCellKey, currentWindowTimeFloor);
@@ -486,6 +505,47 @@ public class OutboundInfrastructureIntegrationIT extends IntegrationTestSupport 
         assertGridCellExists(weatherMap, gridCellKey);
         assertVectorWindDirectionAveraging(weatherMap, gridCellKey, 0.0, 1.0);
         assertAverageWindSpeed(weatherMap, gridCellKey, 15.0, 0.1);
+    }
+
+    @Test
+    void shouldAccumulateTenPacketsPerStation_whenMultipleUniquePacketsArriveBeforeFlush() throws Exception {
+        long currentBucketFloor = getCurrentBucketFloor();
+        List<String> gridCellKeys = new ArrayList<>();
+        List<WeatherPacket> packets = new ArrayList<>();
+        for(int i = 1; i<=SIMULTANEOUS_STATIONS_COUNT; i++) {
+            String stationId = String.valueOf(i);
+            double lat = BASE_LATITUDE+i;
+            double lon = BASE_LONGITUDE+i;
+            gridCellKeys.add(calculateGridCellKey(lat, lon));
+            for(int k = 1; k<=PACKETS_PER_STATION_COUNT; k++) {
+                packets.add(createPacketWithAmbientReadings(
+                        stationId,
+                        currentBucketFloor+(k*TIME_OFFSET_MS),
+                        lat,
+                        lon,
+                        BASE_TEMPERATURE+i+k,
+                        EXPECTED_HUMIDITY,
+                        EXPECTED_PRESSURE
+                ));
+            }
+        }
+
+        for(WeatherPacket packet : packets) {
+            sendPacket(packet);
+        }
+        for(int i = 0; i<SIMULTANEOUS_STATIONS_COUNT; i++) {
+            String stationId = String.valueOf(i+1);
+            double lat = BASE_LATITUDE+(i+1);
+            double lon = BASE_LONGITUDE+(i+1);
+            sendFlushPackage(stationId, currentBucketFloor, lat, lon);
+        }
+
+        for(int i = 0; i<SIMULTANEOUS_STATIONS_COUNT; i++) {
+            String gridCellKey = gridCellKeys.get(i);
+            WeatherMap map = findWeatherMapByGridCellAnBucketFloor(gridCellKey, currentBucketFloor);
+            assertGridCellExists(map, gridCellKey);
+            assertGridCellReadingCount(map, gridCellKey, PACKETS_PER_STATION_COUNT);
+        }
     }
 
     private static long getReadingsNum(List<WeatherMap> weatherMaps, String gridCellKey, long bucketFloor) {

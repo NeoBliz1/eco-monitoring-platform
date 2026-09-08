@@ -1,6 +1,7 @@
 services:
   vault-server:
-    image: hashicorp/vault:2.0.0
+    # image: hashicorp/vault:2.0.0
+    image: hashicorp/vault@sha256:e40c741ed95bb271425e3e6ca6c222d620cf8682f6f7a1b1e7c9d49d0aba484b
     ports:
       - "8200:8200"
     user: "100:1000"

@@ -10,6 +10,7 @@ import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.method.MethodValidationException;
 
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -20,6 +21,7 @@ public class GlobalPlatformGrpcAdviceEngine {
     public StatusException handleBindException(BindException ex) {
         String validationErrors = ex.getBindingResult().getFieldErrors().stream()
                 .map(FieldError::getDefaultMessage)
+                .filter(Objects::nonNull)
                 .collect(Collectors.joining(", "));
 
         log.warn("Protobuf model constraint violation intercepted: {}", validationErrors);
@@ -35,6 +37,7 @@ public class GlobalPlatformGrpcAdviceEngine {
         String validationErrors = ex.getParameterValidationResults().stream()
                 .flatMap(result -> result.getResolvableErrors().stream())
                 .map(MessageSourceResolvable::getDefaultMessage)
+                .filter(Objects::nonNull)
                 .collect(Collectors.joining(", "));
         log.warn("Method invocation validation failure intercepted: {}", validationErrors);
         return Status.INVALID_ARGUMENT

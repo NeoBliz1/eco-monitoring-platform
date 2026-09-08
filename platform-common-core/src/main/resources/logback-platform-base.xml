@@ -7,6 +7,14 @@
             </encoder>
         </appender>
 
+        <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+            <file>${user.dir}/target/logs/test-execution-run.log</file>
+            <append>false</append>
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n</pattern>
+            </encoder>
+        </appender>
+
         <!-- Testcontainers logs -->
         <logger name="org.testcontainers" level="INFO"/>
         <logger name="tc" level="INFO"/>
@@ -23,9 +31,12 @@
         <logger name="org.springframework.core.env" level="INFO"/>
         <logger name="org.springframework.beans.factory" level="INFO"/>
         <logger name="org.springframework.cache" level="TRACE"/>
+        <logger name="org.apache.kafka" level="WARN"/>
+        <logger name="io.confluent.kafka.serializers" level="WARN"/>
 
         <root level="INFO">
             <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="FILE"/>
         </root>
     </springProfile>
     <springProfile name="prod">
@@ -62,6 +73,7 @@
         </appender>
         <logger name="org.springframework" level="WARN"/>
         <logger name="org.apache.kafka" level="WARN"/>
+        <logger name="io.confluent.kafka.serializers" level="WARN"/>
         <logger name="me.neobliz1.ecomonitoring" level="INFO"/>
         <root level="INFO">
             <appender-ref ref="ASYNC_STRUCTURED_JSON"/>

@@ -10,4 +10,5 @@ public class AnalysisConstants {
     public static final String WEATHER_HOTWINDOW = "weather:hotwindow:";
     public static final String GRID_BUCKET_KEY_FORMAT = "%017d";
     public static final String HOT_WINDOW_PREFIX = "station:id:";
+    public static final double SCALE_COFF = 1000.0;
 }

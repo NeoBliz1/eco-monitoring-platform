@@ -1,6 +1,6 @@
 package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.inbound.web;
 
-import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.LATEST_WEATHER_MAP_ENDPOINT;
+import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.WEATHER_MAP_ENDPOINT;
 import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.WEATHER_MAP_URI;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -57,7 +57,7 @@ public class TelemetryAnalysisController {
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorEnvelopeDto.class))
             )
     })
-    @GetMapping(value = LATEST_WEATHER_MAP_ENDPOINT, produces = MediaType.APPLICATION_JSON_VALUE)
+    @GetMapping(value = WEATHER_MAP_ENDPOINT, produces = MediaType.APPLICATION_JSON_VALUE)
     @Cacheable(
             value = "weatherMaps",
             key = "#targetTimestamp + '#' + #minLat + ',' + #maxLat + ',' + #minLon + ',' + #maxLon"

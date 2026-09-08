@@ -25,6 +25,7 @@ import me.neobliz1.ecomonitoring.platform.model.exception.RedisPasswordNotSetExc
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
+import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.kafka.autoconfigure.KafkaProperties;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
@@ -41,7 +42,7 @@ import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.data.redis.serializer.RedisSerializer;
-import org.springframework.grpc.client.GrpcChannelFactory;
+import org.springframework.grpc.client.ImportGrpcClients;
 import org.springframework.kafka.annotation.EnableKafkaStreams;
 import weather.history.HistoryServiceGrpc;
 
@@ -52,6 +53,7 @@ import java.util.List;
 @Configuration
 @EnableKafkaStreams
 @RequiredArgsConstructor
+@ImportGrpcClients(target = "history-service", types = HistoryServiceGrpc.HistoryServiceBlockingStub.class)
 public class AnalysisServiceConfig {
 
     private final DiscoveryClient discoveryClient;
@@ -62,8 +64,9 @@ public class AnalysisServiceConfig {
     String kafkaServiceName;
 
     @Bean
-    public TelemetryPersistentService telemetryPersistentService(TelemetryPersistenceRepository telemetryRepository) {
-        return new TelemetryStatePersister(telemetryRepository);
+    public TelemetryPersistentService telemetryPersistentService(TelemetryPersistenceRepository telemetryRepository,
+                                                                 @Value("${spring.kafka.streams.pipeline.name.aggregation-processor.interval}") Integer aggregationInterval) {
+        return new TelemetryStatePersister(telemetryRepository, aggregationInterval);
     }
 
     @Bean
@@ -80,8 +83,9 @@ public class AnalysisServiceConfig {
     @Bean
     public TelemetryPersistenceRepository telemetryPersistenceRepository(ReactiveStringRedisTemplate reactiveStringRedisTemplate,
                                                                          RedisTemplate<String, byte[]> protobufRedisTemplate,
-                                                                         RedisScript<String> saveHistoricalGridScript) {
-        return new TelemetryPersistenceRepositoryAdapter(reactiveStringRedisTemplate, protobufRedisTemplate, saveHistoricalGridScript);
+                                                                         RedisScript<String> saveHistoricalGridScript,
+                                                                         @NonNull @Value("${spring.redis.records.ttl}") Long redisCacheTtlInterval) {
+        return new TelemetryPersistenceRepositoryAdapter(reactiveStringRedisTemplate, protobufRedisTemplate, saveHistoricalGridScript, redisCacheTtlInterval);
     }
 
     @Bean
@@ -91,8 +95,9 @@ public class AnalysisServiceConfig {
     }
 
     @Bean
-    public TelemetryQueryArchive telemetryQueryArchive(HistoryServiceGrpc.HistoryServiceBlockingStub historyServiceStub) {
-        return new TelemetryQueryGrpcAdapter(historyServiceStub);
+    public TelemetryQueryArchive telemetryQueryArchive(HistoryServiceGrpc.HistoryServiceBlockingStub historyServiceStub,
+                                                       @NonNull @Value("${spring.kafka.streams.pipeline.name.aggregation-processor.interval}") Integer interval) {
+        return new TelemetryQueryGrpcAdapter(historyServiceStub, interval);
     }
 
     @Bean
@@ -109,8 +114,8 @@ public class AnalysisServiceConfig {
     }
 
     @Bean(name = "kafkaStream")
-    public KStream<String, WeatherPacket> preventWeatherPacketDuplicationStream(TelemetryAnalysisService telemetryAnalysisService,
-                                                                                StreamsBuilder streamsBuilder) {
+    public KStream<String, WeatherPacket> topologyOrchestratorStream(TelemetryAnalysisService telemetryAnalysisService,
+                                                                     StreamsBuilder streamsBuilder) {
         return telemetryAnalysisService.buildTopology(streamsBuilder);
     }
 
@@ -153,15 +158,6 @@ public class AnalysisServiceConfig {
     @Bean
     public ReactiveStringRedisTemplate reactiveStringRedisTemplate(ReactiveRedisConnectionFactory factory) {
         return new ReactiveStringRedisTemplate(factory);
-    }
-
-    @Bean
-    public HistoryServiceGrpc.HistoryServiceBlockingStub historyServiceBlockingStub(GrpcChannelFactory channelFactory,
-                                                                                    @Value("${spring.grpc.client.channels.history-service.name}")
-                                                                                    String grpcClientChannelName) {
-        return HistoryServiceGrpc.newBlockingStub(
-                channelFactory.createChannel(grpcClientChannelName)
-        );
     }
 
     @PostConstruct

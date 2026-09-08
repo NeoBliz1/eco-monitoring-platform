@@ -6,6 +6,8 @@ import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.Telemetr
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryQueryRepository;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.persistence.redis.TelemetryPersistenceRepositoryAdapter;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.persistence.redis.TelemetryQueryRepositoryAdapter;
+import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
@@ -32,8 +34,9 @@ public class RedisTestConfig {
     @Bean
     public TelemetryPersistenceRepository telemetryPersistenceRepository(ReactiveStringRedisTemplate reactiveStringRedisTemplate,
                                                                          RedisTemplate<String, byte[]> protobufRedisTemplate,
-                                                                         RedisScript<String> saveHistoricalGridScript) {
-        return new TelemetryPersistenceRepositoryAdapter(reactiveStringRedisTemplate, protobufRedisTemplate, saveHistoricalGridScript);
+                                                                         RedisScript<String> saveHistoricalGridScript,
+                                                                         @NonNull @Value("${spring.redis.records.ttl}") Long redisCacheTtlInterval) {
+        return new TelemetryPersistenceRepositoryAdapter(reactiveStringRedisTemplate, protobufRedisTemplate, saveHistoricalGridScript, redisCacheTtlInterval);
     }
 
     @Bean

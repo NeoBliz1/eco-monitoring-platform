@@ -1,14 +1,15 @@
 package me.neobliz1.ecomonitoring.platform.analysis.domain.service;
 
 import lombok.experimental.UtilityClass;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants;
 
 import java.time.Duration;
 
 @UtilityClass
 public class TelemetryUtils {
 
-    private static final double MAX_LATITUDE = 85.05112878;
-    private static final double MIN_LATITUDE = -85.05112878;
+    private static final double MAX_LATITUDE = 85.051;
+    private static final double MIN_LATITUDE = -85.051;
     private static final double MAX_LONGITUDE = 180.0;
     private static final double MIN_LONGITUDE = -180.0;
 
@@ -37,6 +38,6 @@ public class TelemetryUtils {
     }
 
     private static double roundCoordinate(double c) {
-        return Math.round(c*10.0)/10.0;
+        return Math.round(c*AnalysisConstants.SCALE_COFF)/AnalysisConstants.SCALE_COFF;
     }
 }

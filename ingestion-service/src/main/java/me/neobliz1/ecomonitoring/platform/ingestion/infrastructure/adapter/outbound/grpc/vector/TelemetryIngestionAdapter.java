@@ -56,7 +56,8 @@ public class TelemetryIngestionAdapter implements TelemetryIngestionService {
             }
             return true;
         } catch(StatusRuntimeException e) {
-            if(Status.Code.DEADLINE_EXCEEDED.equals(e.getStatus().getCode())) {
+            Status status = e.getStatus();
+            if(status!=null && Status.Code.DEADLINE_EXCEEDED.equals(status.getCode())) {
                 throw new PipelineTimeoutException();
             }
             throw e;

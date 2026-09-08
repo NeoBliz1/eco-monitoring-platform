@@ -1,5 +1,7 @@
 package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.support;
 
+import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.SCALE_COFF;
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.HASHTAG_DELIMITER;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.SCHEMA_REGISTRY_URL;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.getConsumerConf;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.getProducerConf;
@@ -119,6 +121,7 @@ public abstract class IntegrationTestSupport extends AssertionTestSupport {
         setupKafkaProducer();
         setupConsumersWithRebalanceListeners();
         kafkaHistoryListener = new TestKafkaListener<>(historyTopicConsumer);
+        waitForConsumerAssignment();
     }
 
     @AfterEach
@@ -135,6 +138,15 @@ public abstract class IntegrationTestSupport extends AssertionTestSupport {
         String bootstrapServersCsv = String.join(",", kafkaProperties.getBootstrapServers());
         Map<String, Object> producerProps = getProducerConf("client", "client-secret-pass", bootstrapServersCsv, schemaRegistryUrl);
         testProducer = new KafkaProducer<>(producerProps);
+    }
+
+    private void waitForConsumerAssignment() {
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(15))
+                .pollInterval(Duration.ofMillis(100))
+                .until(() -> kafkaHistoryListener.isAssignedAndReady());
+
+        log.info("Test infrastructure synchronization confirmed via thread-safe listener wrappers.");
     }
 
     private void setupConsumersWithRebalanceListeners() {
@@ -205,7 +217,7 @@ public abstract class IntegrationTestSupport extends AssertionTestSupport {
     private void clearRocksDbSt() {
         if(streamsBuilderFactoryBean!=null) {
             streamsBuilderFactoryBean.stop();
-            File rocksDbDirectory = new File("/tmp/kafka-streams/analysis-state");
+            File rocksDbDirectory = new File("kafka-state");
             FileSystemUtils.deleteRecursively(rocksDbDirectory);
             streamsBuilderFactoryBean.start();
         }
@@ -237,9 +249,9 @@ public abstract class IntegrationTestSupport extends AssertionTestSupport {
     }
 
     protected String calculateGridCellKey(double latitude, double longitude) {
-        return String.format("%.1f#%.1f",
-                Math.round(latitude*10.0)/10.0,
-                Math.round(longitude*10.0)/10.0);
+        double lat = Math.round(latitude*SCALE_COFF)/SCALE_COFF;
+        double lon = Math.round(longitude*SCALE_COFF)/SCALE_COFF;
+        return lat+HASHTAG_DELIMITER+lon;
     }
 
     protected double[][] getEdgeCaseCoordinates() {

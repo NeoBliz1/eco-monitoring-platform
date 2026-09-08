@@ -1,6 +1,7 @@
 services:
   grafana-storage-init:
-    image: hashicorp/vault:2.0.0
+    # image: hashicorp/vault:2.0.0
+    image: hashicorp/vault@sha256:e40c741ed95bb271425e3e6ca6c222d620cf8682f6f7a1b1e7c9d49d0aba484b
     user: "0:0"
     depends_on:
       clickhouse-db:
@@ -16,7 +17,8 @@ services:
         echo "🔒 Host local persistent storage layer successfully hardened to 0750 (472:472)!"
 
   grafana-vault-init:
-    image: hashicorp/vault:2.0.0
+    # image: hashicorp/vault:2.0.0
+    image: hashicorp/vault@sha256:e40c741ed95bb271425e3e6ca6c222d620cf8682f6f7a1b1e7c9d49d0aba484b
     user: "100:1000"
     depends_on:
       grafana-storage-init:
@@ -35,7 +37,8 @@ services:
     command: [ "vault agent -exit-after-auth -config=/etc/vault/agent.hcl" ]
 
   grafana:
-    image: grafana/grafana-oss:13.0.2
+    # image: grafana/grafana-oss:13.0.2
+    image: grafana/grafana-oss@sha256:5dad0df181cb644a14e13617b913b261a54f7d4fd4510721dba420929f35bea2
     ports:
       - "3000:3000"
     networks:

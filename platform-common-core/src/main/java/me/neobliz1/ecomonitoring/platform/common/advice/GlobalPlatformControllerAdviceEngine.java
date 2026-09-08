@@ -48,7 +48,13 @@ public class GlobalPlatformControllerAdviceEngine {
         String exDescription = messageSource.getMessage(errCode, null, locale)+(exMsg==null?"":exMsg);
 
         log.error("{}: {}", errCode, exDescription);
-        String httpStatus = errCode.substring(4, 7);
+        String httpStatus;
+        try {
+            httpStatus = errCode.substring(4, 7);
+        } catch(StringIndexOutOfBoundsException e) {
+            log.error("Malformed error code, cannot extract HTTP status: {}", errCode);
+            httpStatus = "500";
+        }
         return new ResponseEntity<>(new ErrorEnvelopeDto(errCode, exDescription, Instant.now().toEpochMilli()),
                 HttpStatus.valueOf(Integer.parseInt(httpStatus)));
     }

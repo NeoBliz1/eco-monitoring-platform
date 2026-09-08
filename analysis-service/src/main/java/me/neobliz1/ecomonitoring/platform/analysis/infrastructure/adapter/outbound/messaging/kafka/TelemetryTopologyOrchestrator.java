@@ -23,6 +23,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.Repartitioned;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -61,7 +62,7 @@ public class TelemetryTopologyOrchestrator implements TelemetryAnalysisService {
         weatherPacketSerde.configure(serdeConfig, false);
         registerTransactionalStateStores(streamsBuilder);
         KStream<String, WeatherPacket> deduplicatedStream = runTransactionalDeduplicationPipeline(streamsBuilder);
-        runTransactionalAggregationStream(streamsBuilder, serdeConfig);
+        runTransactionalAggregationStream(deduplicatedStream, serdeConfig);
         return deduplicatedStream;
     }
 
@@ -96,41 +97,31 @@ public class TelemetryTopologyOrchestrator implements TelemetryAnalysisService {
                 kafkaIngestionLiveTopic,
                 Consumed.with(Serdes.String(), weatherPacketSerde)
         );
-        // Execute real-time message deduplication checks
         KStream<String, WeatherPacket> deduplicatedStream = rawInputStream.process(
                 () -> new TelemetryDeduplicationProcessor(deduplicationInterval),
                 AnalysisConstants.DEDUPLICATE_ROCKS_DB
         );
-        // we should use record key only with coordinates so that similar coordinates
-        // are grouped in the same accumStore and can be processed together
-        KStream<String, WeatherPacket> reKeyedStream = deduplicatedStream.selectKey((key, packet) -> {
-            Location location = packet.getLocation();
-            double latGrid = clampLatitude(location.getLatitude());
-            double lonGrid = clampLongitude(location.getLongitude());
-            return latGrid+HASHTAG_DELIMITER+lonGrid;
-        });
-        reKeyedStream.to(
+        deduplicatedStream.to(
                 kafkaAnalysisRawTopic,
                 Produced.with(Serdes.String(), weatherPacketSerde)
         );
         return deduplicatedStream;
     }
 
-    private void runTransactionalAggregationStream(StreamsBuilder streamsBuilder,
+    private void runTransactionalAggregationStream(KStream<String, WeatherPacket> upstreamStream,
                                                    Map<String, String> serdeConfig) {
-        // Consume from the raw analysis topic where records have been co-partitioned by location
-        KStream<String, WeatherPacket> cleanInputStream = streamsBuilder.stream(
-                kafkaAnalysisRawTopic,
-                Consumed.with(Serdes.String(), weatherPacketSerde)
-        );
-        // Process records. All stations matching a spatial coordinate hit this EXACT local store.
-        KStream<String, WeatherMap> historyStream = cleanInputStream.process(
+        KStream<String, WeatherPacket> repartitionedByLocationStream = upstreamStream.selectKey((key, packet) -> {
+            Location location = packet.getLocation();
+            double latGrid = clampLatitude(location.getLatitude());
+            double lonGrid = clampLongitude(location.getLongitude());
+            return latGrid+HASHTAG_DELIMITER+lonGrid;
+        }).repartition(Repartitioned.with(Serdes.String(), weatherPacketSerde).withName("spatial-repartition-stream"));
+        KStream<String, WeatherMap> historyStream = repartitionedByLocationStream.process(
                 () -> new TelemetryAggregationProcessor(persistentService, aggregationSecondsPerInterval),
                 AnalysisConstants.ZERO_LOSS_ACCUMULATION_STORE
         );
         Serde<WeatherMap> weatherMapSerde = new KafkaProtobufSerde<>(WeatherMap.class);
         weatherMapSerde.configure(serdeConfig, false);
-        // Stream the final integrated ten-minutes WeatherMaps out to the history topic
         historyStream.to(
                 kafkaAnalysisHistoryTopic,
                 Produced.with(Serdes.String(), weatherMapSerde)

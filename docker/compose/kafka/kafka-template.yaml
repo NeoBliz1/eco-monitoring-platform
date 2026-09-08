@@ -1,6 +1,7 @@
 services:
   vault-init-base:
-    image: hashicorp/vault:2.0.0
+    # image: hashicorp/vault:2.0.0
+    image: hashicorp/vault@sha256:e40c741ed95bb271425e3e6ca6c222d620cf8682f6f7a1b1e7c9d49d0aba484b
     user: "100:1000"
     depends_on:
       vault-server:
@@ -18,7 +19,8 @@ services:
         exec vault agent -exit-after-auth -config=/tmp/runtime_agent.hcl
 
   kafka-base:
-    image: confluentinc/cp-kafka:8.2.0
+    #image: confluentinc/cp-kafka:8.2.0
+    image: confluentinc/cp-kafka@sha256:acbbf674f2ed40e5d0a8ca51beb0f00692c866fc22b5ce06f8cadbdc54cd4436
     networks:
       - eco-net
     user: "1000:1000"
@@ -47,6 +49,8 @@ services:
       EXTRA_ARGS: "-Djava.security.auth.login.config=/run/secrets/kafka_server_jaas"
       KAFKA_CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
       CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+      KAFKA_MESSAGE_MAX_BYTES: 10485760
+      KAFKA_REPLICA_FETCH_MAX_BYTES: 10485760
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2

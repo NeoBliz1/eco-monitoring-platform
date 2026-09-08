@@ -2,8 +2,18 @@
     <configuration default="false" name="IngestionBootEngine" type="SpringBootApplicationConfigurationType"
                    factoryName="Spring Boot" nameIsGenerated="true">
         <option name="ACTIVE_PROFILES" value="dev,local"/>
+        <envs>
+            <env name="OTEL_EXPORTER_OTLP_TRACES_ENDPOINT" value="http://127.0.0.1:4317"/>
+            <env name="OTEL_EXPORTER_OTLP_TRACES_PROTOCOL" value="grpc"/>
+            <env name="OTEL_LOGS_EXPORTER" value="none"/>
+            <env name="OTEL_METRICS_EXPORTER" value="none"/>
+            <env name="OTEL_SERVICE_NAME" value="eco-monitoring-ingestion"/>
+            <env name="OTEL_TRACES_EXPORTER" value="otlp"/>
+        </envs>
         <module name="ingestion-service"/>
         <option name="SPRING_BOOT_MAIN_CLASS" value="me.neobliz1.ecomonitoring.platform.ingestion.IngestionBootEngine"/>
+        <option name="VM_PARAMETERS"
+                value="-javaagent:$USER_HOME$/.m2/repository/io/opentelemetry/javaagent/opentelemetry-javaagent/2.31.1/opentelemetry-javaagent-2.31.1.jar"/>
         <method v="2">
             <option name="Make" enabled="true"/>
         </method>

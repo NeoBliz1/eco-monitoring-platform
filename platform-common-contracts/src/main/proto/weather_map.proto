@@ -8,6 +8,8 @@ message WeatherMap {
   int64 timestamp_bucket = 1;
   int32 interval_minutes = 2;
   map<string, GridCellLayers> grid_cells = 3;
+  // W3C Trace context metadata allocation field ("00-traceId-spanId-flags")
+  string trace_parent = 4;
 }
 
 message GridCellLayers {

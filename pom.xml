@@ -13,6 +13,7 @@
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <maven-compiler-plugin-version>3.15.0</maven-compiler-plugin-version>
+        <maven-exec-plugin-version>3.6.3</maven-exec-plugin-version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring-boot.version>4.1.0</spring-boot.version>
         <springdoc.version>3.1.0</springdoc.version>
@@ -30,6 +31,8 @@
         <os-maven-plugin.version>1.7.1</os-maven-plugin.version>
         <protobuf-plugin.version>0.6.1</protobuf-plugin.version>
         <grpc.version>1.82.0</grpc.version>
+        <opentelemetry-javaagent.version>2.31.1</opentelemetry-javaagent.version>
+        <opentelemetry.version>1.65.0</opentelemetry.version>
         <reactor-grpc.version>1.2.4</reactor-grpc.version>
         <dotenv-java.version>3.2.0</dotenv-java.version>
         <kafka.version>4.3.0</kafka.version>
@@ -79,6 +82,13 @@
             </dependency>
 
             <!-- 2. Official Ecosystem BOM Imports (Order Matters!) -->
+            <dependency>
+                <groupId>io.opentelemetry</groupId>
+                <artifactId>opentelemetry-bom</artifactId>
+                <version>${opentelemetry.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <dependency>
                 <groupId>io.grpc</groupId>
                 <artifactId>grpc-bom</artifactId>
@@ -351,6 +361,19 @@
                             </goals>
                         </execution>
                     </executions>
+                </plugin>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>exec-maven-plugin</artifactId>
+                    <version>${maven-exec-plugin-version}</version>
+                    <dependencies>
+                        <dependency>
+                            <groupId>io.opentelemetry.javaagent</groupId>
+                            <artifactId>opentelemetry-javaagent</artifactId>
+                            <version>${opentelemetry-javaagent.version}</version>
+                            <type>jar</type>
+                        </dependency>
+                    </dependencies>
                 </plugin>
             </plugins>
         </pluginManagement>

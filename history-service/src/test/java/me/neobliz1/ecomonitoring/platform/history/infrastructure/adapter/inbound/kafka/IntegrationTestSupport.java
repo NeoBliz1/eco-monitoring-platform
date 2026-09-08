@@ -61,13 +61,13 @@ import java.util.concurrent.ExecutionException;
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @ImportGrpcClients(
         types = HistoryServiceGrpc.HistoryServiceBlockingStub.class,
-        prefix = "history-service"
+        target = "history-service"
 )
 @SpringBootTest(
         classes = HistoricalBootEngine.class,
         properties = {
-                "spring.grpc.client.channels.history-service.address=static://localhost:8192",
-                "spring.grpc.client.channels.history-service.secure=false"
+                "spring.grpc.client.channel.history-service.target=static://localhost:8192",
+                "spring.grpc.client.channel.history-service.secure=false"
         }
 )
 public class IntegrationTestSupport {

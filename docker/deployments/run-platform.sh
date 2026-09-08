@@ -186,6 +186,26 @@ else
 	echo "⚠️  Warning: Local .env file not found, skipping."
 fi
 
+get_env_val() {
+    local target_key="$1"
+    for item in "${ENV_PAYLOAD[@]}"; do
+        if [[ "$item" == "$target_key="* ]]; then
+            echo "${item#*=}"
+            return 0
+        fi
+    done
+	echo "❌ FATAL: Unable to resolve $target_key."
+	exit 1
+}
+OTEL_INGESTION_NAME=$(get_env_val SPRING_INGESTION_APPLICATION_NAME)
+OTEL_ANALYSIS_NAME=$(get_env_val SPRING_ANALYSIS_APPLICATION_NAME)
+OTEL_HISTORY_NAME=$(get_env_val SPRING_HISTORY_APPLICATION_NAME)
+
+AGENT_PATH="/home/muser/.m2/repository/io/opentelemetry/javaagent/opentelemetry-javaagent/2.31.1/opentelemetry-javaagent-2.31.1.jar"
+INGESTION_OTEL_OPTS="-javaagent:$AGENT_PATH"
+ANALYSIS_OTEL_OPTS="-javaagent:$AGENT_PATH"
+HISTORY_OTEL_OPTS="-javaagent:$AGENT_PATH"
+
 INGESTION_DEBUG_OPTS=""
 ANALYSIS_DEBUG_OPTS=""
 HISTORY_DEBUG_OPTS=""
@@ -199,13 +219,13 @@ pkill -15 -f "history-service.jar" 2>/dev/null || true
 pkill -15 -f "go-service" 2>/dev/null || true
 echo "📡 Spawning background processes..."
 # shellcheck disable=SC2086
-env "${ENV_PAYLOAD[@]}" java $INGESTION_DEBUG_OPTS ${JVM_MEM_OPTS:-} -Dspring.profiles.active="prod,local" -jar ingestion-service.jar >ingestion.log 2>&1 &
+env "${ENV_PAYLOAD[@]}" OTEL_SERVICE_NAME="$OTEL_INGESTION_NAME" java $INGESTION_OTEL_OPTS $INGESTION_DEBUG_OPTS ${JVM_MEM_OPTS:-} -Dspring.profiles.active="prod,local" -jar ingestion-service.jar >ingestion.log 2>&1 &
 PID_INGESTION=$!
 # shellcheck disable=SC2086
-env "${ENV_PAYLOAD[@]}" java $ANALYSIS_DEBUG_OPTS ${JVM_MEM_OPTS:-} -Dspring.profiles.active="prod,local" -jar analysis-service.jar >analysis.log 2>&1 &
+env "${ENV_PAYLOAD[@]}" OTEL_SERVICE_NAME="$OTEL_ANALYSIS_NAME" java $ANALYSIS_OTEL_OPTS $ANALYSIS_DEBUG_OPTS ${JVM_MEM_OPTS:-} -Dspring.profiles.active="prod,local" -jar analysis-service.jar >analysis.log 2>&1 &
 PID_ANALYSIS=$!
 # shellcheck disable=SC2086
-env "${ENV_PAYLOAD[@]}" java $HISTORY_DEBUG_OPTS ${JVM_MEM_OPTS:-} -Dspring.profiles.active="prod,local" -jar history-service.jar >history.log 2>&1 &
+env "${ENV_PAYLOAD[@]}" OTEL_SERVICE_NAME="$OTEL_HISTORY_NAME" java $HISTORY_OTEL_OPTS $HISTORY_DEBUG_OPTS ${JVM_MEM_OPTS:-} -Dspring.profiles.active="prod,local" -jar history-service.jar >history.log 2>&1 &
 PID_HISTORY=$!
 
 if [ -d "${PROJECT_ROOT:-.}/bin/gateway" ]; then

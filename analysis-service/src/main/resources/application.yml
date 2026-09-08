@@ -1,11 +1,11 @@
 spring:
   grpc:
     client:
-      channels:
+      channel:
         history-service:
-          name: ${SPRING_HISTORY_APPLICATION_NAME}
-          address: "discovery:///${SPRING_HISTORY_APPLICATION_NAME}"
-          secure: false
+          target: "dns:///${SPRING_HISTORY_APPLICATION_NAME}.service.consul"
+          ssl:
+            enabled: false
   profiles:
     # profile for include common configs from common-core module
     include:
@@ -48,6 +48,9 @@ spring:
         state.dir: "${user.dir}/kafka-state"
         security.protocol: "SASL_PLAINTEXT"
         sasl.mechanism: "SCRAM-SHA-512"
+        max.request.size: 10485760
+        max.partition.fetch.bytes: 10485760
+        fetch.max.bytes: 10485760
         sasl.jaas.config: "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"${kafka_client:${KAFKA_CLIENT}}\" password=\"${kafka_client_password:${KAFKA_CLIENT_PASSWORD}}\";"
 
 server:

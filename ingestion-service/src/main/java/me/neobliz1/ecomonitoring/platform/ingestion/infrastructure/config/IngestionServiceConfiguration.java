@@ -41,8 +41,9 @@ public class IngestionServiceConfiguration {
     }
 
     @Bean
-    public TelemetryPayloadMapper vectorPayloadMapper() {
-        return new TelemetryPayloadMapper();
+    public TelemetryPayloadMapper vectorPayloadMapper(@NonNull @Value("${spring.kafka.streams.properties.schema.registry.url}") String schemaRegistryUrl,
+                                                      @NonNull @Value("${spring.kafka.topic.weather-live}") String kafkaIngestionLiveTopic) {
+        return new TelemetryPayloadMapper(schemaRegistryUrl, kafkaIngestionLiveTopic);
     }
 
     @Bean(destroyMethod = "shutdown")

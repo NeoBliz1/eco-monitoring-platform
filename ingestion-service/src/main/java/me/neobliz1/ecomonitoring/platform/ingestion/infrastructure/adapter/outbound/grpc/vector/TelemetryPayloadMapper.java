@@ -9,10 +9,10 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import jakarta.annotation.PostConstruct;
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
-import org.springframework.beans.factory.annotation.Value;
 import vector.EventWrapper;
 import vector.Log;
 import vector.PushEventsRequest;
@@ -28,11 +28,8 @@ import java.util.Map;
 public class TelemetryPayloadMapper {
 
     private SchemaRegistryClient schemaRegistryClient;
-
-    @Value("${spring.kafka.streams.properties.schema.registry.url}")
-    private String schemaRegistryUrl;
-    @Value("${spring.kafka.topic.weather-live}")
-    private String kafkaIngestionLiveTopic;
+    private final String schemaRegistryUrl;
+    private final String kafkaIngestionLiveTopic;
 
     @PostConstruct
     public void init() {
@@ -44,7 +41,7 @@ public class TelemetryPayloadMapper {
         );
     }
 
-    public PushEventsRequest toPushRequest(WeatherPacket packet) {
+    public PushEventsRequest toPushRequest(@NonNull WeatherPacket packet) {
         byte[] verifiedConfluentBytes = serializeToConfluentProtobuf(packet);
 
         vector.Value byteValue = vector.Value.newBuilder()

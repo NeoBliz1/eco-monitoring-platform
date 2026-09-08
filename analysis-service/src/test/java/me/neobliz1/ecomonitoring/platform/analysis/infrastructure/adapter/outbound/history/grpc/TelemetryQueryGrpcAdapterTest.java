@@ -51,7 +51,7 @@ class TelemetryQueryGrpcAdapterTest {
                 )
                 .withBean(SslBundles.class, () -> Mockito.mock(SslBundles.class))
                 .withUserConfiguration(MockHistoryServerConfig.class)
-                .withBean(TelemetryQueryGrpcAdapter.class);
+                .withBean(TelemetryQueryGrpcAdapter.class, 600);
     }
 
     @AfterEach

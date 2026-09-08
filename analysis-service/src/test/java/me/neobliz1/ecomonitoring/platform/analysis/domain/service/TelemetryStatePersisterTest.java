@@ -12,6 +12,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryPersistenceRepository;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.record.WeatherMapRecord;
 import me.neobliz1.ecomonitoring.platform.model.exception.ProtocolBufferTranslationException;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.AirQualityReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.AmbientReading;
@@ -93,7 +94,7 @@ class TelemetryStatePersisterTest {
     void shouldReturnEmptyList_whenAggregationHistoryReceivesEmptyMap() {
         Map<Long, Map<String, List<WeatherPacket>>> emptyMatrix = new HashMap<>();
 
-        List<TelemetryStatePersister.WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(emptyMatrix);
+        List<WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(emptyMatrix);
 
         assertThat(result).isEmpty();
     }
@@ -101,12 +102,11 @@ class TelemetryStatePersisterTest {
     @Test
     void shouldSaveGridCellAndReturnRecord_whenAggregationHistoryReceivesSingleBucket() {
         Map<Long, Map<String, List<WeatherPacket>>> matrix = buildMatrixWithSingleBucket();
-        String floorBucketKey = String.valueOf(SINGLE_BUCKET_TIMESTAMP);
 
-        List<TelemetryStatePersister.WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(matrix);
+        List<WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(matrix);
 
         assertThat(result).hasSize(1);
-        assertThat(result.getFirst().key()).isEqualTo(floorBucketKey);
+        assertThat(result.getFirst().key()).isEqualTo(SAMPLE_GEOSHAH);
         verify(telemetryRepository).saveHistoricalGridCell(eq(SAMPLE_GEOSHAH), any(byte[].class));
     }
 
@@ -119,7 +119,7 @@ class TelemetryStatePersisterTest {
         matrix.put(MATRIX_BUCKET_TIMESTAMP, spatial);
         matrix.put(bucket2, spatial);
 
-        List<TelemetryStatePersister.WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(matrix);
+        List<WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(matrix);
 
         assertThat(result).hasSize(2);
     }
@@ -156,7 +156,7 @@ class TelemetryStatePersisterTest {
     void shouldSetIntervalMinutesOnWeatherMap_whenAggregationHistoryCalled() {
         Map<Long, Map<String, List<WeatherPacket>>> matrix = buildMatrixWithSingleBucket();
 
-        List<TelemetryStatePersister.WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(matrix);
+        List<WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(matrix);
 
         assertThat(result.getFirst().payload().getIntervalMinutes()).isEqualTo(1);
     }
@@ -169,7 +169,7 @@ class TelemetryStatePersisterTest {
         spatial.put(SAMPLE_GEOSHAH, List.of(buildWeatherPacket()));
         matrix.put(expectedBucket, spatial);
 
-        List<TelemetryStatePersister.WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(matrix);
+        List<WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(matrix);
 
         assertThat(result.getFirst().payload().getTimestampBucket()).isEqualTo(expectedBucket);
     }
@@ -186,7 +186,7 @@ class TelemetryStatePersisterTest {
         spatial.put(SAMPLE_GEOSHAH, threePackets);
         matrix.put(MATRIX_BUCKET_TIMESTAMP, spatial);
 
-        List<TelemetryStatePersister.WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(matrix);
+        List<WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(matrix);
 
         GridCellLayers cellLayers = result.getFirst().payload().getGridCellsMap().get(SAMPLE_GEOSHAH);
         assertThat(cellLayers.getReadingCount()).isEqualTo(3);
@@ -218,7 +218,7 @@ class TelemetryStatePersisterTest {
         spatial.put(SAMPLE_GEOSHAH, List.of(packet));
         matrix.put(MATRIX_BUCKET_TIMESTAMP, spatial);
 
-        List<TelemetryStatePersister.WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(matrix);
+        List<WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(matrix);
 
         GridCellLayers cellLayers = result.getFirst().payload().getGridCellsMap().get(SAMPLE_GEOSHAH);
         assertThat(cellLayers.getAvgTemperature()).isCloseTo(expectedTemp, withinPercentage(1));
@@ -231,7 +231,7 @@ class TelemetryStatePersisterTest {
     void shouldSetGeohashOnGridCellLayers_whenAggregationMatrixContainsSpatialKey() {
         Map<Long, Map<String, List<WeatherPacket>>> matrix = buildMatrixWithSingleBucket();
 
-        List<TelemetryStatePersister.WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(matrix);
+        List<WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(matrix);
 
         assertThat(result.getFirst().payload().getGridCellsMap()).containsKey(SAMPLE_GEOSHAH);
     }
@@ -240,9 +240,9 @@ class TelemetryStatePersisterTest {
     void shouldReturnCorrectWeatherMapRecordKey_whenAggregationMatrixContainsBucket() {
         Map<Long, Map<String, List<WeatherPacket>>> matrix = buildMatrixWithSingleBucket();
 
-        List<TelemetryStatePersister.WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(matrix);
+        List<WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(matrix);
 
-        assertThat(result.getFirst().key()).isEqualTo(String.valueOf(SINGLE_BUCKET_TIMESTAMP));
+        assertThat(result.getFirst().key()).isEqualTo(SAMPLE_GEOSHAH);
     }
 
     @Test
@@ -252,7 +252,7 @@ class TelemetryStatePersisterTest {
         spatial.put(SAMPLE_GEOSHAH, List.of(buildWeatherPacket()));
         matrix.put(MATRIX_BUCKET_TIMESTAMP, spatial);
 
-        List<TelemetryStatePersister.WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(matrix);
+        List<WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(matrix);
 
         assertThat(result).hasSize(1);
         assertThat(result.getFirst().payload().getGridCellsMap()).isNotEmpty();

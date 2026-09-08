@@ -18,6 +18,7 @@ public class TestKafkaListener<T> implements AutoCloseable {
     private final List<T> receivedPackets = new CopyOnWriteArrayList<>();
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final AtomicBoolean running = new AtomicBoolean(true);
+    private final AtomicBoolean assignedAndReady = new AtomicBoolean(false);
 
     public TestKafkaListener(Consumer<String, T> consumer) {
         this.consumer = consumer;
@@ -28,13 +29,24 @@ public class TestKafkaListener<T> implements AutoCloseable {
         try {
             while(running.get()) {
                 ConsumerRecords<String, T> records = consumer.poll(Duration.ofMillis(100));
+
+                if(!assignedAndReady.get()) {
+                    assignedAndReady.set(true);
+                }
+
                 for(ConsumerRecord<String, T> record : records) {
                     receivedPackets.add(record.value());
                 }
             }
+        } catch(Exception e) {
+            assignedAndReady.set(false);
         } finally {
             consumer.close();
         }
+    }
+
+    public boolean isAssignedAndReady() {
+        return assignedAndReady.get();
     }
 
     @Override

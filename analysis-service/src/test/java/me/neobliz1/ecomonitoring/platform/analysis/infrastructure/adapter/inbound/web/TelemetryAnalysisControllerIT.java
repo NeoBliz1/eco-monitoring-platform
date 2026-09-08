@@ -1,6 +1,6 @@
 package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.inbound.web;
 
-import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.LATEST_WEATHER_MAP_ENDPOINT;
+import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.WEATHER_MAP_ENDPOINT;
 import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.WEATHER_MAP_URI;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.waitForConsulServicesToBeHealthy;
 import static org.awaitility.Awaitility.await;
@@ -17,6 +17,7 @@ import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.suppor
 import me.neobliz1.ecomonitoring.platform.model.exception.EcoPlatformErrorCode;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -94,7 +95,7 @@ public class TelemetryAnalysisControllerIT extends IntegrationTestSupport {
     public void shouldReturnWeatherMap_whenValidRequestWithinSameBucket() throws Exception {
         long targetTimestamp = currentBucketFloor+300000;
 
-        mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
+        mockMvc.perform(get(WEATHER_MAP_URI+WEATHER_MAP_ENDPOINT)
                         .param(TARGET_TIMESTAMP_PARAM, String.valueOf(targetTimestamp))
                         .param(MIN_LAT_PARAM, String.valueOf(VALID_MIN_LAT))
                         .param(MAX_LAT_PARAM, String.valueOf(VALID_MAX_LAT))
@@ -106,14 +107,14 @@ public class TelemetryAnalysisControllerIT extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.timestampBucket").value(currentBucketFloor))
                 .andExpect(jsonPath("$.intervalMinutes").value(10))
                 .andExpect(jsonPath("$.gridCells").exists())
-                .andExpect(jsonPath("$.gridCells.*.avgTemperature").value(22.5))
-                .andExpect(jsonPath("$.gridCells.*.avgHumidity").value(55.0))
-                .andExpect(jsonPath("$.gridCells.*.avgPressure").value(1013.25));
+                .andExpect(jsonPath("$.gridCells.*.avgTemperature").value(Matchers.everyItem(Matchers.is(22.5))))
+                .andExpect(jsonPath("$.gridCells.*.avgHumidity").value(Matchers.everyItem(Matchers.is(55.0))))
+                .andExpect(jsonPath("$.gridCells.*.avgPressure").value(Matchers.everyItem(Matchers.is(1013.25))));
     }
 
     @Test
     public void shouldReturnWeatherMap_whenValidRequestWithCurrentTimestamp() throws Exception {
-        mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
+        mockMvc.perform(get(WEATHER_MAP_URI+WEATHER_MAP_ENDPOINT)
                         .param(TARGET_TIMESTAMP_PARAM, String.valueOf(Instant.now().toEpochMilli()))
                         .param(MIN_LAT_PARAM, String.valueOf(VALID_MIN_LAT))
                         .param(MAX_LAT_PARAM, String.valueOf(VALID_MAX_LAT))
@@ -125,16 +126,16 @@ public class TelemetryAnalysisControllerIT extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.timestampBucket").value(currentBucketFloor))
                 .andExpect(jsonPath("$.intervalMinutes").value(10))
                 .andExpect(jsonPath("$.gridCells").exists())
-                .andExpect(jsonPath("$.gridCells.*.avgTemperature").value(22.5))
-                .andExpect(jsonPath("$.gridCells.*.avgHumidity").value(55.0))
-                .andExpect(jsonPath("$.gridCells.*.avgPressure").value(1013.25));
+                .andExpect(jsonPath("$.gridCells.*.avgTemperature").value(Matchers.everyItem(Matchers.is(22.5))))
+                .andExpect(jsonPath("$.gridCells.*.avgHumidity").value(Matchers.everyItem(Matchers.is(55.0))))
+                .andExpect(jsonPath("$.gridCells.*.avgPressure").value(Matchers.everyItem(Matchers.is(1013.25))));
     }
 
     @Test
     void shouldEvictCacheDataAutomatically_whenTenSecondsElapsed() throws Exception {
         long targetTimestamp = currentBucketFloor+300000;
 
-        mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
+        mockMvc.perform(get(WEATHER_MAP_URI+WEATHER_MAP_ENDPOINT)
                         .param(TARGET_TIMESTAMP_PARAM, String.valueOf(targetTimestamp))
                         .param(MIN_LAT_PARAM, String.valueOf(VALID_MIN_LAT))
                         .param(MAX_LAT_PARAM, String.valueOf(VALID_MAX_LAT))
@@ -157,7 +158,7 @@ public class TelemetryAnalysisControllerIT extends IntegrationTestSupport {
                     assertNull(activeWrapper, "The cache record should have been evicted automatically after 10s!");
                 });
 
-        mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
+        mockMvc.perform(get(WEATHER_MAP_URI+WEATHER_MAP_ENDPOINT)
                         .param(TARGET_TIMESTAMP_PARAM, String.valueOf(targetTimestamp))
                         .param(MIN_LAT_PARAM, String.valueOf(VALID_MIN_LAT))
                         .param(MAX_LAT_PARAM, String.valueOf(VALID_MAX_LAT))
@@ -172,7 +173,7 @@ public class TelemetryAnalysisControllerIT extends IntegrationTestSupport {
         long targetTimestamp = currentBucketFloor+86400000;
         String exMsg = "Weather map data not found for the requested time interval and coordinates.";
 
-        mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
+        mockMvc.perform(get(WEATHER_MAP_URI+WEATHER_MAP_ENDPOINT)
                         .param(TARGET_TIMESTAMP_PARAM, String.valueOf(targetTimestamp))
                         .param(MIN_LAT_PARAM, String.valueOf(VALID_MIN_LAT))
                         .param(MAX_LAT_PARAM, String.valueOf(VALID_MAX_LAT))
@@ -188,7 +189,7 @@ public class TelemetryAnalysisControllerIT extends IntegrationTestSupport {
     public void shouldReturnBadRequest_whenLatitudeExceedsUpperBoundary() throws Exception {
         String exMsg = "Coordinates out of legal boundaries. Valid ranges: latitude -90 to 90, longitude -180 to 180.";
 
-        mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
+        mockMvc.perform(get(WEATHER_MAP_URI+WEATHER_MAP_ENDPOINT)
                         .param(TARGET_TIMESTAMP_PARAM, String.valueOf(currentBucketFloor))
                         .param(MIN_LAT_PARAM, "89.0")
                         .param(MAX_LAT_PARAM, "91.0")
@@ -204,7 +205,7 @@ public class TelemetryAnalysisControllerIT extends IntegrationTestSupport {
     public void shouldReturnBadRequest_whenLongitudeExceedsUpperBoundary() throws Exception {
         String exMsg = "Coordinates out of legal boundaries. Valid ranges: latitude -90 to 90, longitude -180 to 180.";
 
-        mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
+        mockMvc.perform(get(WEATHER_MAP_URI+WEATHER_MAP_ENDPOINT)
                         .param(TARGET_TIMESTAMP_PARAM, String.valueOf(currentBucketFloor))
                         .param(MIN_LAT_PARAM, "55.0")
                         .param(MAX_LAT_PARAM, "56.0")
@@ -220,7 +221,7 @@ public class TelemetryAnalysisControllerIT extends IntegrationTestSupport {
     public void shouldReturnBadRequest_whenCoordinatesSquareExceedsMaximumDelta() throws Exception {
         String exMsg = "Requested bounding box area is too large. Maximum delta allowed is 5.0 degrees.";
 
-        mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
+        mockMvc.perform(get(WEATHER_MAP_URI+WEATHER_MAP_ENDPOINT)
                         .param(TARGET_TIMESTAMP_PARAM, String.valueOf(currentBucketFloor))
                         .param(MIN_LAT_PARAM, "50.0")
                         .param(MAX_LAT_PARAM, "60.0")
@@ -236,7 +237,7 @@ public class TelemetryAnalysisControllerIT extends IntegrationTestSupport {
     public void shouldReturnBadRequest_whenTimestampIsNegative() throws Exception {
         String exMsg = "Invalid request parameters: getWeatherMapByTimeAndCoordinatesSquare.targetTimestamp: Timestamp cannot be negative";
 
-        mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
+        mockMvc.perform(get(WEATHER_MAP_URI+WEATHER_MAP_ENDPOINT)
                         .param(TARGET_TIMESTAMP_PARAM, "-1000")
                         .param(MIN_LAT_PARAM, "55.0")
                         .param(MAX_LAT_PARAM, "56.0")
@@ -253,7 +254,7 @@ public class TelemetryAnalysisControllerIT extends IntegrationTestSupport {
         String exMsg = "Invalid request parameters: getWeatherMapByTimeAndCoordinatesSquare.targetTimestamp: "
                 +"Timestamp cannot be unreasonably far in the future (Max: Year 2100)";
 
-        mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
+        mockMvc.perform(get(WEATHER_MAP_URI+WEATHER_MAP_ENDPOINT)
                         .param(TARGET_TIMESTAMP_PARAM, "4102444800001")
                         .param(MIN_LAT_PARAM, "55.0")
                         .param(MAX_LAT_PARAM, "56.0")
@@ -269,7 +270,7 @@ public class TelemetryAnalysisControllerIT extends IntegrationTestSupport {
     public void shouldReturnBadRequest_whenLatitudeBelowLowerBoundary() throws Exception {
         String exMsg = "Coordinates out of legal boundaries. Valid ranges: latitude -90 to 90, longitude -180 to 180.";
 
-        mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
+        mockMvc.perform(get(WEATHER_MAP_URI+WEATHER_MAP_ENDPOINT)
                         .param(TARGET_TIMESTAMP_PARAM, String.valueOf(currentBucketFloor))
                         .param(MIN_LAT_PARAM, "-91.0")
                         .param(MAX_LAT_PARAM, "-89.0")
@@ -285,7 +286,7 @@ public class TelemetryAnalysisControllerIT extends IntegrationTestSupport {
     public void shouldReturnBadRequest_whenLongitudeBelowLowerBoundary() throws Exception {
         String exMsg = "Coordinates out of legal boundaries. Valid ranges: latitude -90 to 90, longitude -180 to 180.";
 
-        mockMvc.perform(get(WEATHER_MAP_URI+LATEST_WEATHER_MAP_ENDPOINT)
+        mockMvc.perform(get(WEATHER_MAP_URI+WEATHER_MAP_ENDPOINT)
                         .param(TARGET_TIMESTAMP_PARAM, String.valueOf(currentBucketFloor))
                         .param(MIN_LAT_PARAM, "55.0")
                         .param(MAX_LAT_PARAM, "56.0")

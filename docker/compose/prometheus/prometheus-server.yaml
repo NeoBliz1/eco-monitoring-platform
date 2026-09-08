@@ -1,6 +1,7 @@
 services:
   prometheus-vault-init:
-    image: hashicorp/vault:2.0.0
+    # image: hashicorp/vault:2.0.0
+    image: hashicorp/vault@sha256:e40c741ed95bb271425e3e6ca6c222d620cf8682f6f7a1b1e7c9d49d0aba484b
     user: "100:1000"
     depends_on:
       vault-server:
@@ -17,7 +18,8 @@ services:
     command: [ "vault agent -exit-after-auth -config=/etc/vault/agent.hcl" ]
 
   prometheus-server:
-    image: prom/prometheus:v3
+    #image: prom/prometheus:v3
+    image: prom/prometheus@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0
     ports:
       - "9090:9090"
     networks:
@@ -65,7 +67,8 @@ services:
           --web.enable-lifecycle
 
   postgres-exporter:
-    image: prometheuscommunity/postgres-exporter:v0.20.1
+    #image: prometheuscommunity/postgres-exporter:v0.20.1
+    image: prometheuscommunity/postgres-exporter@sha256:ac5ec343104fae0e2d84a27bb8d69b38430a11910c5382cad85d478d2bab713e
     depends_on:
       prometheus-server:
         condition: service_healthy

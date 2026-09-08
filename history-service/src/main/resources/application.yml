@@ -6,6 +6,9 @@ spring:
       - common-web
   application:
     name: ${SPRING_HISTORY_APPLICATION_NAME}
+  grpc:
+    server:
+      port: ${HISTORY_APPLICATION_GRPC_PORT}
   config:
     import: "optional:consul:${SPRING_CLOUD_CONSUL_HOST}:${SPRING_CLOUD_CONSUL_PORT}/"
   cloud:
@@ -68,9 +71,6 @@ spring:
       ddl-auto: validate
 server:
   port: ${HISTORY_APPLICATION_SERVER_PORT}
-grpc:
-  server:
-    port: ${HISTORY_APPLICATION_GRPC_PORT}
 
 ---
 spring:

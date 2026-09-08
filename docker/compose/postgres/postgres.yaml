@@ -1,6 +1,7 @@
 services:
   postgres-vault-init:
-    image: hashicorp/vault:2.0.0
+    # image: hashicorp/vault:2.0.0
+    image: hashicorp/vault@sha256:e40c741ed95bb271425e3e6ca6c222d620cf8682f6f7a1b1e7c9d49d0aba484b
     user: "100:1000"
     depends_on:
       vault-server:
@@ -17,7 +18,8 @@ services:
     command: [ "vault agent -exit-after-auth -config=/etc/vault/agent.hcl" ]
 
   pg-db-init:
-    image: postgres:18.4-alpine3.24
+    # image: postgres:18.4-alpine3.24
+    image: postgres@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
     networks:
       - eco-net
     volumes:
@@ -32,7 +34,8 @@ services:
     command: [ "/usr/local/bin/init-postgres.sh" ]
 
   pg-db:
-    image: postgres:18.4-alpine3.24
+    # image: postgres:18.4-alpine3.24
+    image: postgres@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
     depends_on:
       pg-db-init:
         condition: service_completed_successfully

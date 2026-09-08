@@ -1,6 +1,7 @@
 services:
   schema-registry-vault-init:
-    image: hashicorp/vault:2.0.0
+    # image: hashicorp/vault:2.0.0
+    image: hashicorp/vault@sha256:e40c741ed95bb271425e3e6ca6c222d620cf8682f6f7a1b1e7c9d49d0aba484b
     user: "100:1000"
     depends_on:
       kafka-1:
@@ -23,7 +24,8 @@ services:
     command: [ "vault agent -exit-after-auth -config=/etc/vault/agent.hcl" ]
 
   schema-registry:
-    image: confluentinc/cp-schema-registry:8.2.0
+    # image: confluentinc/cp-schema-registry:8.2.0
+    image: confluentinc/cp-schema-registry@sha256:7ec0b15c6d5a64aa95b4201db5231ea58952b035869b95bed45624468ce10b34
     ports:
       - "8085:8081"
     networks:

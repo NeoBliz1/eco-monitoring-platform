@@ -4,7 +4,7 @@ public interface UriConstant {
 
     // Analysis service
     String WEATHER_MAP_URI = "/api/v1/weather-map";
-    String LATEST_WEATHER_MAP_ENDPOINT = "/latest";
+    String WEATHER_MAP_ENDPOINT = "/spatial";
 
     // Ingestion service
     String TELEMETRY_URI = "/api/v1/telemetry";

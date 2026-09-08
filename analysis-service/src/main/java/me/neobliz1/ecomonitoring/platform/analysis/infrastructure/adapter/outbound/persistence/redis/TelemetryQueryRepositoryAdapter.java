@@ -68,11 +68,12 @@ public class TelemetryQueryRepositoryAdapter implements TelemetryQueryRepository
             }
         });
 
-        if(rawResultList==null || rawResultList.isEmpty()) {
+        if(rawResultList==null || rawResultList.isEmpty() || rawResultList.size()%2!=0) {
             throw new WeatherMapDataNotFoundException();
         }
 
         Map<String, byte[]> filteredMatrix = new HashMap<>(rawResultList.size()/2);
+        // rawResult contains bute serialized sequences {k1, v1, k2, v2 ... kn, vn}
         for(int i = 0; i<rawResultList.size(); i += 2) {
             String key = new String(rawResultList.get(i), StandardCharsets.UTF_8);
             byte[] binaryPayload = rawResultList.get(i+1);

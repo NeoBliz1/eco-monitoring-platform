@@ -6,6 +6,8 @@ import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.TELE
 
 import io.github.neobliz1.validproto.annotation.ValidProto;
 import io.github.neobliz1.validproto.annotation.ValidatedProto;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -17,6 +19,7 @@ import me.neobliz1.ecomonitoring.platform.ingestion.domain.port.inbound.Telemetr
 import me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.adapter.inbound.web.docs.ValidationErrorResponse;
 import me.neobliz1.ecomonitoring.platform.model.exception.PipelineTimeoutException;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -39,6 +42,25 @@ public class TelemetryInvocationController {
 
     private final TelemetryIngestionService telemetryIngestionService;
 
+    private static @NotNull WeatherPacket injectTraceStringToWeatherPacket(WeatherPacket packet) {
+        SpanContext activeContext = Span.current().getSpanContext();
+        String traceParentString = String.format("00-%s-%s-%s",
+                activeContext.getTraceId(),
+                activeContext.getSpanId(),
+                activeContext.getTraceFlags().asHex());
+        return WeatherPacket.newBuilder(packet)
+                .setTraceParent(traceParentString)
+                .build();
+    }
+
+    public static ResponseEntity<Void> getResponseEntity(Boolean isAccepted) {
+        if(Boolean.TRUE.equals(isAccepted)) {
+            return ResponseEntity.status(HttpStatus.ACCEPTED).build();
+        } else {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        }
+    }
+
     @Operation(
             summary = "Ingest Reactive Sensor Data",
             description = "Asynchronously processes incoming streaming climatic packages with a strict 200ms timeout barrier boundary constraint."
@@ -58,7 +80,9 @@ public class TelemetryInvocationController {
     })
     @PostMapping(value = REACTIVE_TELEMETRY_ENDPOINT_URI, consumes = MediaType.APPLICATION_PROTOBUF_VALUE)
     public Mono<ResponseEntity<Void>> receivedReactiveSensorStationData(@ValidProto @RequestBody WeatherPacket packet) {
-        return telemetryIngestionService.processTelemetryPacket(packet)
+        WeatherPacket tracedPacket = injectTraceStringToWeatherPacket(packet);
+
+        return telemetryIngestionService.processTelemetryPacket(tracedPacket)
                 .timeout(Duration.ofMillis(200))
                 .publishOn(Schedulers.parallel())
                 .map(TelemetryInvocationController::getResponseEntity)
@@ -89,14 +113,8 @@ public class TelemetryInvocationController {
     })
     @PostMapping(value = BLOCKING_TELEMETRY_ENDPOINT_URI, consumes = MediaType.APPLICATION_PROTOBUF_VALUE)
     public ResponseEntity<Void> receivedSensorStationDataVirtual(@ValidProto @RequestBody WeatherPacket packet) {
-        return getResponseEntity(telemetryIngestionService.processTelemetryPacketVirtual(packet));
-    }
+        WeatherPacket tracedPacket = injectTraceStringToWeatherPacket(packet);
 
-    public static ResponseEntity<Void> getResponseEntity(Boolean isAccepted) {
-        if(Boolean.TRUE.equals(isAccepted)) {
-            return ResponseEntity.status(HttpStatus.ACCEPTED).build();
-        } else {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-        }
+        return getResponseEntity(telemetryIngestionService.processTelemetryPacketVirtual(tracedPacket));
     }
 }

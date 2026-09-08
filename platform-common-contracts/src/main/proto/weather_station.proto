@@ -20,6 +20,9 @@ message WeatherPacket {
 
   // Readings: Must have at least 1 sensor reading in the list
   repeated SensorReading readings = 4 [(buf.validate.field).repeated.min_items = 1];
+
+  // W3C Trace context metadata allocation field ("00-traceId-spanId-flags")
+  string trace_parent = 5;
 }
 
 message Location {

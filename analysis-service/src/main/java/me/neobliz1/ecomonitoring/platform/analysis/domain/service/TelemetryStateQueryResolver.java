@@ -42,6 +42,7 @@ public class TelemetryStateQueryResolver implements TelemetryQueryService {
                 .setIntervalMinutes((int) Duration.ofSeconds(aggregationSecondsPerInterval).toMinutes());
         filteredDataMatrix.forEach((key, valueBytes) -> {
             try {
+                if(valueBytes==null) return;
                 GridCellLayers gridCellLayers = GridCellLayers.parseFrom(valueBytes);
                 weatherMapBuilder.putGridCells(key, gridCellLayers);
             } catch(InvalidProtocolBufferException e) {
