@@ -20,7 +20,9 @@ public class TelemetryQueryGrpcAdapter implements TelemetryQueryArchive {
 
     @Override
     public @NonNull WeatherMap findFilteredGridDataBySpatialBoxInArchive(long activeBucketFloor, double minLat, double maxLat, double minLon, double maxLon) {
-        log.info("Executing microservice cross-call to history-service cluster node discovered via Consul");
+        if(log.isDebugEnabled()) {
+            log.debug("Querying history-service for spatial box [{}#{}#{}#{}]", minLat, maxLat, minLon, maxLon);
+        }
 
         SpatialBoxRequest request = SpatialBoxRequest.newBuilder()
                 .setTimestampBucket(activeBucketFloor)

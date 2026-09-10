@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.config;
+package me.neobliz1.ecomonitoring.platform.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.ByteString;
@@ -7,18 +7,17 @@ import com.google.protobuf.Message;
 import com.google.protobuf.MessageOrBuilder;
 import com.google.protobuf.Parser;
 import io.swagger.v3.core.jackson.ModelResolver;
-import io.swagger.v3.oas.models.OpenAPI;
-import io.swagger.v3.oas.models.info.Info;
-import io.swagger.v3.oas.models.info.License;
 import jakarta.annotation.PostConstruct;
-import me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.adapter.inbound.web.docs.ProtobufMessageMixIn;
+import me.neobliz1.ecomonitoring.platform.common.docs.ProtobufMessageMixIn;
 import org.springdoc.core.utils.SpringDocUtils;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 
 import java.util.Map;
 
 @Configuration
+@Profile("dev")
 public class SwaggerProtobufConfig {
 
     @Bean
@@ -27,16 +26,6 @@ public class SwaggerProtobufConfig {
         mapper.addMixIn(Message.class, ProtobufMessageMixIn.class);
         mapper.addMixIn(MessageOrBuilder.class, ProtobufMessageMixIn.class);
         return new ModelResolver(mapper);
-    }
-
-    @Bean
-    public OpenAPI ecomonitoringPipelineOpenAPI() {
-        return new OpenAPI()
-                .info(new Info()
-                        .title("EcoMonitoring Telemetry Ingestion Pipeline")
-                        .version("1.0.0")
-                        .description("High-performance sensory data serialization ingestion engine running on Reactive Streams & Virtual Threads.")
-                        .license(new License().name("Apache 2.0").url("https://springdoc.org")));
     }
 
     @PostConstruct
@@ -54,7 +43,7 @@ public class SwaggerProtobufConfig {
             );
             SpringDocUtils.getConfig().addRequestWrapperToIgnore(Class.forName("com.google.protobuf.GeneratedMessageV3"));
         } catch(ClassNotFoundException e) {
-            // Safe fallback if class hierarchy differs in specific protobuf version stream
+            // Ignore if protobuf version differs
         }
     }
 }

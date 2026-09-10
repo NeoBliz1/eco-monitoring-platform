@@ -1,5 +1,7 @@
 package me.neobliz1.ecomonitoring.platform.config;
 
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.DEV_PROFILE;
+
 import io.github.cdimascio.dotenv.Dotenv;
 import io.github.cdimascio.dotenv.DotenvEntry;
 import lombok.NonNull;
@@ -29,7 +31,7 @@ public class DevDotenvEnvironmentPostProcessor implements EnvironmentPostProcess
         }
         boolean devIsActive = Arrays.stream(activeProfiles.split(","))
                 .map(String::trim)
-                .anyMatch(profile -> profile.equals("dev"));
+                .anyMatch(profile -> profile.equals(DEV_PROFILE));
         if(!devIsActive) {
             return;
         }

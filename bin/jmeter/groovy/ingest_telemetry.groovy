@@ -9,24 +9,27 @@ import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.OpticalReading
 import java.time.Instant
 import java.util.concurrent.ThreadLocalRandom
 
-final double MIN_LAT = 40.5000d
-final double MAX_LAT = 40.9000d
-final double MIN_LON = -74.2500d
-final double MAX_LON = -73.7000d
+final double MIN_LAT = 35.000d
+final double MAX_LAT = 45.000d
+final double MIN_LON = -104.000d
+final double MAX_LON = -91.250d
 
-final String POST_METHOD = "POST"
-final String CONTENT_TYPE_HEADER = "Content-Type"
-final String PROTOBUF_MEDIA_TYPE = "application/x-protobuf"
 final String BASE_INGESTION_URL = "http://localhost:8000/api/v1/telemetry/mono"
+final String TX_ID_CONFIRMATION_URL = "http://localhost:8000/api/v1/tx-ingestion-history/weather-packet-tx-id"
 
 final def random = ThreadLocalRandom.current()
 
 final double lat = MIN_LAT + (random.nextDouble() * (MAX_LAT - MIN_LAT))
 final double lon = MIN_LON + (random.nextDouble() * (MAX_LON - MIN_LON))
-final double alt = random.nextDouble() * 300.0
 
-final String stationNum = String.format("%05d", random.nextInt(1, 10000))
-final String compositeStationId = "000001" + stationNum
+final double alt = random.nextDouble() * 300.0
+final int cityNum = random.nextInt(1, 2001)
+
+final String cityId = String.format("%06d", cityNum)
+final String stationNum = String.format("%05d", random.nextInt(1, 10001))
+
+final String compositeStationId = cityId + stationNum
+
 final long epochMilli = Instant.now().toEpochMilli()
 
 def location = Location.newBuilder()
@@ -92,32 +95,56 @@ def packetBuilder = WeatherPacket.newBuilder()
 readingsList.each { reading -> packetBuilder.addReadings(reading) }
 byte[] protoBytes = packetBuilder.build().toByteArray()
 
-HttpURLConnection connection = null
-try {
-    def url = new URI(BASE_INGESTION_URL).toURL()
-    connection = (HttpURLConnection) url.openConnection()
-    connection.setRequestMethod(POST_METHOD)
-    connection.setRequestProperty(CONTENT_TYPE_HEADER, PROTOBUF_MEDIA_TYPE)
-    connection.setDoOutput(true)
+def postRequest(String url, byte[] body, String contentType) {
+    HttpURLConnection conn = null
+    try {
+        def uri = new URI(url).toURL()
+        conn = (HttpURLConnection) uri.openConnection()
+        conn.setRequestMethod("POST")
+        conn.setRequestProperty("Content-Type", contentType)
+        conn.setConnectTimeout(5000)
+        conn.setReadTimeout(5000)
+        conn.setDoOutput(true)
 
-    connection.getOutputStream().write(protoBytes)
-    int responseCode = connection.getResponseCode()
-
-    SampleResult.setResponseCode(String.valueOf(responseCode))
-    SampleResult.setResponseMessage(connection.getResponseMessage())
-    SampleResult.setSuccessful(responseCode >= 200 && responseCode < 300)
-    SampleResult.setSentBytes(protoBytes.length)
-
-    if (responseCode >= 400) {
-        connection.getErrorStream()?.readAllBytes()
-    } else {
-        connection.getInputStream()?.readAllBytes()
+        conn.getOutputStream().write(body)
+        int responseCode = conn.getResponseCode()
+        if (responseCode >= 400) {
+            conn.getErrorStream()?.readAllBytes()
+        } else {
+            conn.getInputStream()?.readAllBytes()
+        }
+        return responseCode
+    } catch (Exception e) {
+        log.error("Request failed: " + e.getMessage())
+        return 500
+    } finally {
+        conn?.disconnect()
     }
+}
+
+def ingestionTask = CompletableFuture.supplyAsync {
+    postRequest(BASE_INGESTION_URL, protoBytes, "application/x-protobuf")
+}
+
+def txId = "sample-tx-id"
+def confirmationTask = CompletableFuture.supplyAsync {
+    postRequest(TX_ID_CONFIRMATION_URL, txId.getBytes("UTF-8"), "text/plain")
+}
+
+try {
+    CompletableFuture.allOf(ingestionTask, confirmationTask).get(10, TimeUnit.SECONDS)
+
+    int codeIngestion = ingestionTask.get()
+    int codeConfirmation = confirmationTask.get()
+
+    boolean isSuccess = (codeIngestion >= 200 && codeIngestion < 300) && (codeConfirmation >= 200 && codeConfirmation < 300)
+
+    SampleResult.setResponseCode(String.valueOf(codeIngestion))
+    SampleResult.setResponseMessage("Ingestion Status: " + codeIngestion + " | Confirmation Status: " + codeConfirmation)
+    SampleResult.setSuccessful(isSuccess)
+    SampleResult.setSentBytes(protoBytes.length + txId.getBytes("UTF-8").length)
+
 } catch (Exception e) {
     SampleResult.setSuccessful(false)
-    SampleResult.setResponseMessage("Ingestion Failure: " + e.getMessage())
-} finally {
-    if (connection != null) {
-        connection.disconnect()
-    }
+    SampleResult.setResponseMessage("Parallel Request Synchronization Failure: " + e.getMessage())
 }

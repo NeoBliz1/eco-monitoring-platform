@@ -1,7 +1,10 @@
 package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.support;
 
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.SCALE_COFF;
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.COMMON_PROFILE;
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.DEV_PROFILE;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.HASHTAG_DELIMITER;
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.LOCAL_PROFILE;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.SCHEMA_REGISTRY_URL;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.getConsumerConf;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.getProducerConf;
@@ -71,7 +74,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 @Slf4j
 @Testcontainers
-@ActiveProfiles({ "dev", "common", "local" })
+@ActiveProfiles({ DEV_PROFILE, COMMON_PROFILE, LOCAL_PROFILE })
 @SpringBootTest(classes = AnalysisBootEngine.class)
 @TestPropertySource(locations = "classpath:.env.test")
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)

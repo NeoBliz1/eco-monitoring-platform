@@ -1,8 +1,14 @@
 package me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.inbound.kafka;
 
+import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.TX_ID_INGESTION_HISTORY_URI;
+import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.WEATHER_PACKET_TX_ID_INGESTION;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.GEOHASH_ALPHA;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.INTERVAL_MINUTES;
+import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.TX_DEFAULT_ID;
+import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.createValidBase;
+import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.getCustomWeatherMap;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.loadEnvironmentMap;
+import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.performValidPost;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -10,7 +16,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherGridCellMetric;
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherMapBucket;
+import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherTelemetryStationTransaction;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalWeatherMapJpaRepository;
+import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.GridCellLayers;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 import me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils;
@@ -36,7 +44,7 @@ public class HistoricalTelemetryListenerIT extends IntegrationTestSupport {
 
     @Container
     @SuppressWarnings("unused")
-    public static final ComposeContainer ENVIRONMENT = new ComposeContainer(new File("../docker/history-test-docker-compose.yaml"))
+    public static final ComposeContainer ENVIRONMENT = new ComposeContainer(new File(DOCKER_HISTORY_TEST_DOCKER_COMPOSE_YAML))
             .withEnv(loadEnvironmentMap())
             .withExposedService(PG_DB, PG_DB_PORT)
             .withRemoveVolumes(true)
@@ -46,9 +54,69 @@ public class HistoricalTelemetryListenerIT extends IntegrationTestSupport {
     private HistoricalWeatherMapJpaRepository queryRepositoryAdapter;
 
     @BeforeAll
-    static void beforeAll() {
+    static void initInfra() {
         IntegrationTestSupport.beforeAll();
         runLiquibaseMigrationsOnTestComposeCluster();
+    }
+
+    @Test
+    void shouldRemoveTxIdIngestion_whenWeatherMapWithMatchingTxIdIsProcessedViaKafka() throws Exception {
+        String stationId = "00000100001";
+        WeatherPacket.Builder validBase = createValidBase();
+        long timestamp = validBase.getTimestamp();
+        String uniqueTxId = stationId+":"+timestamp;
+        WeatherMap weatherMap = getCustomWeatherMap(timestamp, "42.5#12.5", 25.0f);
+        String fullEndpointUri = TX_ID_INGESTION_HISTORY_URI+WEATHER_PACKET_TX_ID_INGESTION;
+
+        performValidPost(webTestClient, fullEndpointUri, validBase.setStationId(stationId));
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(10))
+                .pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> {
+                    List<WeatherTelemetryStationTransaction> ingestionRecords = txIdsRepository.findAll();
+                    assertEquals(1, ingestionRecords.size());
+                    WeatherTelemetryStationTransaction record = ingestionRecords.getFirst();
+                    assertEquals(uniqueTxId, record.getTxIdIngestion());
+                });
+        sendPacket(timestamp, weatherMap);
+
+        Awaitility.await()
+                .atMost(Duration.ofMinutes(1))
+                .pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> {
+                    List<WeatherTelemetryStationTransaction> allRecords = txIdsRepository.findAll();
+                    assertTrue(allRecords.isEmpty(), "TxId should be removed from ingestion table after WeatherMap processing");
+                });
+    }
+
+    @Test
+    void shouldRemoveTxIdHistory_whenWeatherMapWithMatchingTxIdIsProcessedViaController() throws Exception {
+        String stationId = "00000100001";
+        WeatherPacket.Builder validBase = createValidBase();
+        long timestamp = validBase.getTimestamp();
+        String uniqueTxId = stationId+":"+timestamp;
+        WeatherMap weatherMap = getCustomWeatherMap(timestamp, "42.5#12.5", 25.0f);
+        String fullEndpointUri = TX_ID_INGESTION_HISTORY_URI+WEATHER_PACKET_TX_ID_INGESTION;
+
+        sendPacket(timestamp, weatherMap);
+        Awaitility.await()
+                .atMost(Duration.ofMinutes(1))
+                .pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> {
+                    List<WeatherTelemetryStationTransaction> ingestionRecords = txIdsRepository.findAll();
+                    assertEquals(1, ingestionRecords.size());
+                    WeatherTelemetryStationTransaction record = ingestionRecords.getFirst();
+                    assertEquals(uniqueTxId, record.getTxIdHistory());
+                });
+        performValidPost(webTestClient, fullEndpointUri, validBase.setStationId(stationId));
+
+        Awaitility.await()
+                .atMost(Duration.ofMinutes(1))
+                .pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> {
+                    List<WeatherTelemetryStationTransaction> allRecords = txIdsRepository.findAll();
+                    assertTrue(allRecords.isEmpty(), "TxId should be removed from ingestion table after WeatherMap processing");
+                });
     }
 
     @Test
@@ -96,11 +164,14 @@ public class HistoricalTelemetryListenerIT extends IntegrationTestSupport {
         WeatherMapBucket secondBucket = getWeatherMapBucket(targetTimestampBucket);
         long bucketRowCount = queryJpaRepositoryAdapter.count();
         UUID capturedSecondUuid = uuidCaptor.getValue();
+        List<WeatherTelemetryStationTransaction> txIds = txIdsRepository.findAll();
 
         assertEquals(1L, bucketRowCount);
         assertNotEquals(expectedBucketId, capturedSecondUuid);
         assertEquals(expectedBucketId, secondBucket.getId());
         assertEquals(targetTimestampBucket, secondBucket.getTimestampBucket());
+        assertEquals(1, txIds.size());
+        assertEquals(TX_DEFAULT_ID, txIds.getFirst().getTxIdHistory());
     }
 
     @Test

@@ -1,3 +1,5 @@
 databaseChangeLog:
   - include:
       file: changes/001-initial-schema.yaml
+  - include:
+      file: changes/002-add-telemetry-transactions.yaml

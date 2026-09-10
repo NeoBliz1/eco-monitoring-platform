@@ -2,9 +2,6 @@ package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.config;
 
 import static me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils.resolveSchemaRegistryServer;
 
-import io.swagger.v3.oas.models.OpenAPI;
-import io.swagger.v3.oas.models.info.Info;
-import io.swagger.v3.oas.models.info.License;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -166,21 +163,10 @@ public class AnalysisServiceConfig {
         resolveSchemaRegistryServer(discoveryClient, environment);
     }
 
-    @Bean
-    public OpenAPI ecomonitoringAnalysisOpenAPI() {
-        return new OpenAPI()
-                .info(new Info()
-                        .title("EcoMonitoring Analytics & Stream Processing Engine")
-                        .version("1.0.0")
-                        .description("Stateful real-time data analysis matrix engineered with Kafka Streams. "
-                                +"Features transactional deduplication windows, zero-loss spatial aggregation, and localized RocksDB topologies.")
-                        .license(new License().name("Apache 2.0").url("https://springdoc.org")));
-    }
-
     private void resolveKafkaBootstrapServers() {
         List<String> serviceAddress = PlatformCommonUtils.discoverServiceAddressesFromConsulServerByName(discoveryClient,
                 environment, kafkaServiceName);
         kafkaProperties.setBootstrapServers(serviceAddress);
-        log.info("Consul dynamically routed Kafka to: {}", serviceAddress);
+        log.info("Kafka bootstrap servers: {}", serviceAddress);
     }
 }

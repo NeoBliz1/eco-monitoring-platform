@@ -1,5 +1,6 @@
 package me.neobliz1.ecomonitoring.platform.analysis.domain.service;
 
+import static me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.util.AggregationUtils.addTelemetryTransactionIds;
 import static me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.util.AggregationUtils.getGridCellsByteArray;
 import static me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.util.AggregationUtils.getWeatherMapBuilder;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.HASHTAG_DELIMITER;
@@ -39,6 +40,7 @@ public class TelemetryStatePersister implements TelemetryPersistentService {
                 spatialMap.forEach((spatialKey, packetsList) -> {
 
                     val weatherMapBuilder = getWeatherMapBuilder(bucketTime, aggregationSecondsPerInterval);
+                    addTelemetryTransactionIds(packetsList, weatherMapBuilder);
                     byte[] gridCellsByteArray = getGridCellsByteArray(spatialKey, packetsList, weatherMapBuilder);
 
                     try {

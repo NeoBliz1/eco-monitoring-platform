@@ -45,12 +45,12 @@ public class KafkaListenerConfig {
         DefaultErrorHandler errorHandler = new DefaultErrorHandler(new FixedBackOff(Duration.ofSeconds(backoffInterval).toMillis(),
                 FixedBackOff.UNLIMITED_ATTEMPTS));
         errorHandler.setRetryListeners((record, exception, deliveryAttempt) -> {
-            log.error("🚨 ING_CRASH [Attempt {}] - Partition: {} Offset: {}",
+            log.error("ING_CRASH [Attempt {}] - Partition: {} Offset: {}",
                     deliveryAttempt, record.partition(), record.offset());
             if(nonNull(exception)) {
-                log.error("🚨 Exception: {}", exception.getLocalizedMessage());
+                log.error("Exception: {}", exception.getLocalizedMessage());
                 if(nonNull(exception.getCause()))
-                    log.error("🚨 Inner Exception Cause: {}", exception.getCause().getLocalizedMessage());
+                    log.error("Inner Exception Cause: {}", exception.getCause().getLocalizedMessage());
             }
         });
         return errorHandler;

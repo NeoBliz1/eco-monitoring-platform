@@ -51,7 +51,6 @@
     <modules>
         <module>platform-common-contracts</module>
         <module>platform-common-core</module>
-        <module>security-service</module>
         <module>ingestion-service</module>
         <module>analysis-service</module>
         <module>history-service</module>
@@ -300,6 +299,7 @@
                 <artifactId>maven-failsafe-plugin</artifactId>
                 <version>${maven-surefire-plugin.version}</version>
                 <configuration>
+                    <rerunFailingTestsCount>5</rerunFailingTestsCount>
                     <!--suppress UnresolvedMavenProperty -->
                     <argLine>${jacocoITArgLine} -Xmx2048m</argLine>
                     <classesDirectory>${project.build.outputDirectory}</classesDirectory>

@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.NonNull;
@@ -30,32 +31,16 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping(WEATHER_MAP_URI)
+@Tag(name = "Telemetry Analysis")
 public class TelemetryAnalysisController {
 
     private final TelemetryQueryService queryService;
 
-    @Operation(
-            summary = "Query Weather Map Matrix",
-            description = "Fetches a computed geo-spatial weather map matching a target epoch time-slice constraint bounded "
-                    +"within a defined coordinate box."
-    )
+    @Operation(summary = "Query weather map matrix")
     @ApiResponses(value = {
-            @ApiResponse(
-                    responseCode = "200",
-                    description = "Weather matrix generated successfully as a structured JSON string representation",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = WeatherMapResponse.class))
-            ),
-            @ApiResponse(
-                    responseCode = "400",
-                    description = "Bad Request - Parameter validation constraints failed (e.g. negative timestamp, "
-                            +"incorrect list size, or data type mismatch)",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorEnvelopeDto.class))
-            ),
-            @ApiResponse(
-                    responseCode = "404",
-                    description = "Not Found - No telemetry matrix metrics found or compiled within the requested coordinates box perimeter",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorEnvelopeDto.class))
-            )
+            @ApiResponse(responseCode = "200", description = "OK", content = @Content(mediaType = "application/json", schema = @Schema(implementation = WeatherMapResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Bad request", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorEnvelopeDto.class))),
+            @ApiResponse(responseCode = "404", description = "Not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorEnvelopeDto.class)))
     })
     @GetMapping(value = WEATHER_MAP_ENDPOINT, produces = MediaType.APPLICATION_JSON_VALUE)
     @Cacheable(

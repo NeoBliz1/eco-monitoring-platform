@@ -27,3 +27,13 @@ spring:
 
 server:
     port: ${INGESTION_APPLICATION_SERVER_PORT}
+
+springdoc:
+  openapi:
+    info:
+      title: "EcoMonitoring Telemetry Ingestion"
+      version: "1.0.0"
+      description: "Telemetry data ingestion via gRPC and HTTP."
+      license:
+        name: "Apache 2.0"
+        url: "https://springdoc.org"

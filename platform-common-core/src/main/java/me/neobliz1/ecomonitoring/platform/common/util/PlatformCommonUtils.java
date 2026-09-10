@@ -4,6 +4,7 @@ import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstan
 
 import lombok.experimental.UtilityClass;
 import lombok.extern.slf4j.Slf4j;
+import me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants;
 import me.neobliz1.ecomonitoring.platform.model.exception.ServiceInstanceNotFoundException;
 import org.springframework.cloud.client.ServiceInstance;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
@@ -19,7 +20,6 @@ import java.util.Map;
 public class PlatformCommonUtils {
 
     public static final String LOCAL_HOST = "127.0.0.1";
-    public static final String LOCAL_PROFILE = "local";
 
     public static ServiceAddressRecord discoverServiceAddressFromConsulServerByName(DiscoveryClient discoveryClient,
                                                                              ConfigurableEnvironment environment,
@@ -31,7 +31,7 @@ public class PlatformCommonUtils {
 
         if(!instances.isEmpty()) {
             ServiceInstance redisInstance = instances.getFirst();
-            if(!environment.acceptsProfiles(Profiles.of(LOCAL_PROFILE))) {
+            if(!environment.acceptsProfiles(Profiles.of(PlatformConstants.LOCAL_PROFILE))) {
                 resolvedHost = redisInstance.getHost();
             }
             resolvedPort = redisInstance.getPort();
@@ -52,7 +52,7 @@ public class PlatformCommonUtils {
             throw new ServiceInstanceNotFoundException(serviceName);
         }
 
-        boolean isDevelopment = environment.acceptsProfiles(Profiles.of(LOCAL_PROFILE));
+        boolean isDevelopment = environment.acceptsProfiles(Profiles.of(PlatformConstants.LOCAL_PROFILE));
 
         return instances.stream()
                 .map(instance -> {
@@ -70,7 +70,7 @@ public class PlatformCommonUtils {
                 new MapPropertySource("consulDynamicSchemaRegistryProps",
                         Map.of("spring.kafka.streams.properties.schema.registry.url", schemaRegistryUrl))
         );
-        log.info("Consul dynamically routed Schema registry to: {}", schemaRegistryUrl);
+        log.info("Schema registry URL: {}", schemaRegistryUrl);
     }
 
     public record ServiceAddressRecord(String resolvedHost, int resolvedPort) {

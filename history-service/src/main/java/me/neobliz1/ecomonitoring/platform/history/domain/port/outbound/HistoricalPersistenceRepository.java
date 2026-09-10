@@ -8,6 +8,5 @@ import java.util.UUID;
 public interface HistoricalPersistenceRepository {
 
     WeatherMapBucket upsertBucket(UUID id, Long timestampBucket, Integer intervalMinutes);
-
     void persistTelemetryRecord(WeatherMap weatherMap);
 }

@@ -10,6 +10,7 @@ message WeatherMap {
   map<string, GridCellLayers> grid_cells = 3;
   // W3C Trace context metadata allocation field ("00-traceId-spanId-flags")
   string trace_parent = 4;
+  repeated string telemetry_transactions_id = 5;
 }
 
 message GridCellLayers {

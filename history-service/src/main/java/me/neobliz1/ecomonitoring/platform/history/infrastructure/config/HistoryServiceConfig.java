@@ -1,5 +1,6 @@
 package me.neobliz1.ecomonitoring.platform.history.infrastructure.config;
 
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.TX_CHAIN_CONFIRMATION_PROFILE;
 import static me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils.resolveSchemaRegistryServer;
 
 import com.zaxxer.hikari.HikariDataSource;
@@ -14,8 +15,10 @@ import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.inbound
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.inbound.kafka.HistoricalTelemetryListener;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalPersistenceRepositoryAdapter;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalQueryRepositoryAdapter;
+import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalTxIdRepositoryAdapter;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalWeatherGridCellJpaRepository;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalWeatherMapJpaRepository;
+import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalWeatherTelemetryTxIdsJpaRepository;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.mapper.WeatherMapConverter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.jdbc.autoconfigure.DataSourceProperties;
@@ -24,7 +27,9 @@ import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.http.converter.protobuf.ProtobufHttpMessageConverter;
 
 import javax.sql.DataSource;
 import java.time.Duration;
@@ -70,9 +75,16 @@ public class HistoryServiceConfig {
     }
 
     @Bean
+    @Profile(TX_CHAIN_CONFIRMATION_PROFILE)
+    public HistoricalTxIdRepositoryAdapter historicalTxIdRepositoryAdapter(HistoricalWeatherTelemetryTxIdsJpaRepository jpaTxIdsRepository) {
+        return new HistoricalTxIdRepositoryAdapter(jpaTxIdsRepository);
+    }
+
+    @Bean
     public HistoricalPersistenceRepository historicalPersistenceRepository(HistoricalDataConvertService weatherMapConverter,
-                                                                           HistoricalWeatherMapJpaRepository weatherMapJpaRepository) {
-        return new HistoricalPersistenceRepositoryAdapter(weatherMapConverter, weatherMapJpaRepository);
+                                                                           HistoricalWeatherMapJpaRepository weatherMapJpaRepository,
+                                                                           HistoricalTxIdRepositoryAdapter txIdAdapter) {
+        return new HistoricalPersistenceRepositoryAdapter(weatherMapConverter, weatherMapJpaRepository, txIdAdapter);
     }
 
     @Bean
@@ -89,13 +101,14 @@ public class HistoryServiceConfig {
     @Bean
     @Primary
     public DataSource dataSource(DataSourceProperties properties) {
-        log.debug("📡 Resolving datasource matrix location coordinates via Consul Discovery client...");
         PlatformCommonUtils.ServiceAddressRecord serviceAddress = PlatformCommonUtils.discoverServiceAddressFromConsulServerByName(discoveryClient,
                 environment, dataSourceServiceName);
-        String computedJdbcUrl = String.format("jdbc:postgresql://%s:%d/%s?currentSchema=%s", serviceAddress.resolvedHost(), serviceAddress.resolvedPort(),
+        String jdbcUrl = String.format("jdbc:postgresql://%s:%d/%s?currentSchema=%s", serviceAddress.resolvedHost(), serviceAddress.resolvedPort(),
                 dbName, dbSchemaName);
-        log.debug("✅ Dynamically generated target JDBC connection path: {}", computedJdbcUrl);
-        properties.setUrl(computedJdbcUrl);
+        if(log.isDebugEnabled()) {
+            log.debug("Resolved JDBC URL from Consul: {}", jdbcUrl);
+        }
+        properties.setUrl(jdbcUrl);
         HikariDataSource hikariDataSource = properties.initializeDataSourceBuilder()
                 .type(HikariDataSource.class)
                 .build();
@@ -104,8 +117,13 @@ public class HistoryServiceConfig {
         hikariDataSource.setMinimumIdle(minIdle);
         hikariDataSource.setIdleTimeout(Duration.ofSeconds(idleTimeout).toMillis());
         hikariDataSource.setConnectionTimeout(Duration.ofSeconds(connectionTimeout).toMillis());
-        log.info("✅ HikariCP Concurrency Connection Pool instantiated successfully targeting: {}", computedJdbcUrl);
+        log.info("HikariCP pool initialized: {}", jdbcUrl);
         return hikariDataSource;
+    }
+
+    @Bean
+    public ProtobufHttpMessageConverter protobufHttpMessageConverter() {
+        return new ProtobufHttpMessageConverter();
     }
 
     @PostConstruct
@@ -118,6 +136,8 @@ public class HistoryServiceConfig {
         List<String> serviceAddress = PlatformCommonUtils.discoverServiceAddressesFromConsulServerByName(discoveryClient,
                 environment, kafkaServiceName);
         kafkaProperties.setBootstrapServers(serviceAddress);
-        log.info("Consul dynamically routed Kafka to: {}", serviceAddress);
+        if(log.isDebugEnabled()) {
+            log.debug("Kafka bootstrap servers resolved via Consul: {}", serviceAddress);
+        }
     }
 }

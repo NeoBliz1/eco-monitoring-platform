@@ -15,8 +15,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import me.neobliz1.ecomonitoring.platform.common.docs.ValidationErrorResponse;
 import me.neobliz1.ecomonitoring.platform.ingestion.domain.port.inbound.TelemetryIngestionService;
-import me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.adapter.inbound.web.docs.ValidationErrorResponse;
 import me.neobliz1.ecomonitoring.platform.model.exception.PipelineTimeoutException;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import org.jetbrains.annotations.NotNull;
@@ -37,7 +37,7 @@ import java.util.concurrent.TimeoutException;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping(TELEMETRY_URI)
-@Tag(name = "Telemetry Ingestion", description = "High-throughput pipelines for multi-sensor climatic logs")
+@Tag(name = "Telemetry Ingestion")
 public class TelemetryInvocationController {
 
     private final TelemetryIngestionService telemetryIngestionService;
@@ -61,22 +61,11 @@ public class TelemetryInvocationController {
         }
     }
 
-    @Operation(
-            summary = "Ingest Reactive Sensor Data",
-            description = "Asynchronously processes incoming streaming climatic packages with a strict 200ms timeout barrier boundary constraint."
-    )
+    @Operation(summary = "Ingest reactive sensor data")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "202", description = "Payload processed and accepted into pipeline successfully", content = @Content),
-            @ApiResponse(
-                    responseCode = "400",
-                    description = "Malformed Protobuf payload structure or validation rules failed",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ValidationErrorResponse.class))
-            ),
-            @ApiResponse(
-                    responseCode = "504",
-                    description = "Pipeline Timeout Error - Processing exceeded designated thread response window limit",
-                    content = @Content
-            )
+            @ApiResponse(responseCode = "202", description = "Accepted"),
+            @ApiResponse(responseCode = "400", description = "Bad request", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ValidationErrorResponse.class))),
+            @ApiResponse(responseCode = "504", description = "Gateway timeout")
     })
     @PostMapping(value = REACTIVE_TELEMETRY_ENDPOINT_URI, consumes = MediaType.APPLICATION_PROTOBUF_VALUE)
     public Mono<ResponseEntity<Void>> receivedReactiveSensorStationData(@ValidProto @RequestBody WeatherPacket packet) {
@@ -95,21 +84,10 @@ public class TelemetryInvocationController {
                 });
     }
 
-    @Operation(
-            summary = "Ingest Virtual-Thread Sensor Data",
-            description = "Handles incoming station data over blocking execution patterns routed directly across underlying virtual thread allocations."
-    )
+    @Operation(summary = "Ingest blocking sensor data")
     @ApiResponses(value = {
-            @ApiResponse(
-                    responseCode = "202",
-                    description = "Station data committed into storage buffer completely",
-                    content = @Content
-            ),
-            @ApiResponse(
-                    responseCode = "400",
-                    description = "Malformed Protobuf payload structure or validation rules failed",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = ValidationErrorResponse.class))
-            )
+            @ApiResponse(responseCode = "202", description = "Accepted"),
+            @ApiResponse(responseCode = "400", description = "Bad request", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ValidationErrorResponse.class)))
     })
     @PostMapping(value = BLOCKING_TELEMETRY_ENDPOINT_URI, consumes = MediaType.APPLICATION_PROTOBUF_VALUE)
     public ResponseEntity<Void> receivedSensorStationDataVirtual(@ValidProto @RequestBody WeatherPacket packet) {

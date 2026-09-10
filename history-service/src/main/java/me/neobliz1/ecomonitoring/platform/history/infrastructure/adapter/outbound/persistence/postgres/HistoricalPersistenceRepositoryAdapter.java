@@ -7,6 +7,7 @@ import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherMap
 import me.neobliz1.ecomonitoring.platform.history.domain.port.inbound.HistoricalDataConvertService;
 import me.neobliz1.ecomonitoring.platform.history.domain.port.outbound.HistoricalPersistenceRepository;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
+import org.jspecify.annotations.Nullable;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +19,8 @@ public class HistoricalPersistenceRepositoryAdapter implements HistoricalPersist
 
     private final HistoricalDataConvertService weatherMapConverter;
     private final HistoricalWeatherMapJpaRepository jpaRepository;
+    @Nullable
+    private final HistoricalTxIdRepositoryAdapter txIdAdapter;
 
     @Override
     @Transactional(isolation = Isolation.READ_COMMITTED)
@@ -30,8 +33,14 @@ public class HistoricalPersistenceRepositoryAdapter implements HistoricalPersist
                 weatherMap.getIntervalMinutes());
         weatherMapConverter.extractTelemetryFromWeatherMap(weatherMap, bucket);
         jpaRepository.saveAndFlush(bucket);
+        if(txIdAdapter!=null) {
+            if(log.isDebugEnabled()) {
+                log.debug("Confirmation profile active. Executing transaction batch log tracking.");
+            }
+            txIdAdapter.processTxIdsHistoryBatch(weatherMap);
+        }
         if(log.isDebugEnabled()) {
-            log.debug("✅ Successfully persisted WeatherMap snapshot bucket: {}", bucket.getTimestampBucket());
+            log.debug("Successfully persisted WeatherMap snapshot bucket: {}", bucket.getTimestampBucket());
         }
     }
 

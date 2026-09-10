@@ -55,12 +55,6 @@ spring:
         spring.deserializer.value.delegate.class: "io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer"
         specific.protobuf.value.type: "me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap"
     properties:
-      # The new group.protocol KIP-848. Client-Side Rebalance Protocol eliminates these latency spikes completely:
-      #  - Zero Group Freezes: Partitions are safely re-assigned on the fly without halting adjacent active threads.
-      #  - Server-Assigned Load Balancing: The Kafka broker handles the heavy lifting, reducing the complex background
-      #    calculations required by Spring Boot Java Virtual Machine.
-      #  - Lightning Fast Failover: If an instance crashes, its partitions are instantly rerouted to sibling instances
-      #     without triggering a cascading rebalance loop.
       group.protocol: "consumer"
       security.protocol: "SASL_PLAINTEXT"
       sasl.mechanism: "SCRAM-SHA-512"
@@ -69,8 +63,19 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
+
 server:
   port: ${HISTORY_APPLICATION_SERVER_PORT}
+
+springdoc:
+  openapi:
+    info:
+      title: "EcoMonitoring History Service"
+      version: "1.0.0"
+      description: "Historical telemetry data storage and queries."
+      license:
+        name: "Apache 2.0"
+        url: "https://springdoc.org"
 
 ---
 spring:

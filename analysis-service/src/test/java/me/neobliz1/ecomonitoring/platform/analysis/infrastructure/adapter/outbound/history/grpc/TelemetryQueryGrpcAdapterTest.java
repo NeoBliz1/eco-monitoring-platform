@@ -112,14 +112,18 @@ class TelemetryQueryGrpcAdapterTest {
             return new MockHistoryService();
         }
 
-        @Bean
-        public HistoryServiceGrpc.HistoryServiceBlockingStub historyServiceBlockingStub() {
-            ManagedChannel testNetworkChannel = ManagedChannelBuilder
+        @Bean(destroyMethod = "shutdownNow")
+        public ManagedChannel historyTestNetworkChannel() {
+            return ManagedChannelBuilder
                     .forAddress("localhost", 9099)
                     .directExecutor()
                     .usePlaintext()
                     .build();
-            return HistoryServiceGrpc.newBlockingStub(testNetworkChannel);
+        }
+
+        @Bean
+        public HistoryServiceGrpc.HistoryServiceBlockingStub historyServiceBlockingStub(ManagedChannel historyTestNetworkChannel) {
+            return HistoryServiceGrpc.newBlockingStub(historyTestNetworkChannel);
         }
     }
 

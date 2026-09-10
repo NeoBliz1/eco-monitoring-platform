@@ -2,6 +2,7 @@ package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbo
 
 import lombok.experimental.UtilityClass;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryAnalysisAccumulator;
+import me.neobliz1.ecomonitoring.platform.common.util.PlatformContractsUtils;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.SensorReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.GridCellLayers;
@@ -18,6 +19,13 @@ public class AggregationUtils {
         return WeatherMap.newBuilder()
                 .setTimestampBucket(bucketTime)
                 .setIntervalMinutes((int) Duration.ofSeconds(aggregationSecondsPerInterval).toMinutes());
+    }
+
+    public static void addTelemetryTransactionIds(List<WeatherPacket> packetsList, WeatherMap.Builder weatherMapBuilder) {
+        for(WeatherPacket packet : packetsList) {
+            String uniqueTxId = PlatformContractsUtils.getUniqueTxId(packet);
+            weatherMapBuilder.addTelemetryTransactionsId(uniqueTxId);
+        }
     }
 
     public static byte[] getGridCellsByteArray(String spatialKey, List<WeatherPacket> packetsList, WeatherMap.Builder weatherMapBuilder) {

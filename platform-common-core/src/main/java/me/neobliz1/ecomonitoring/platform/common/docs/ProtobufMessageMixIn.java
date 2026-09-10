@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.adapter.inbound.web.docs;
+package me.neobliz1.ecomonitoring.platform.common.docs;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 

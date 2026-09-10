@@ -2,9 +2,8 @@ databaseChangeLog:
   - changeSet:
       id: 001-initialize-weather-map-storage-idempotent-final
       author: neobliz1
-      comment: Defensive schema initialization handling existing structures and missing columns without crashing
+      comment: Defensive schema initialization handling existing structures and missing columns
       changes:
-
         # =========================================================================
         # 1. MASTER TABLE INITIALIZATION (weather_map_buckets)
         # =========================================================================
@@ -13,30 +12,25 @@ databaseChangeLog:
             splitStatements: true
             endDelimiter: ;
             sql: |
-              -- Create master table base if it does not exist at all
               CREATE TABLE IF NOT EXISTS weather_map_buckets (
                 id UUID NOT NULL,
                 CONSTRAINT pk_weather_map_buckets PRIMARY KEY (id)
               );
 
-              -- Append missing attributes safely without breaking existing fields
               ALTER TABLE weather_map_buckets ADD COLUMN IF NOT EXISTS timestamp_bucket BIGINT;
               ALTER TABLE weather_map_buckets ADD COLUMN IF NOT EXISTS interval_minutes INT;
               ALTER TABLE weather_map_buckets ADD COLUMN IF NOT EXISTS version BIGINT DEFAULT 0;
 
-              -- Enforce required data integrity constraints on the master columns
               ALTER TABLE weather_map_buckets ALTER COLUMN timestamp_bucket SET NOT NULL;
               ALTER TABLE weather_map_buckets ALTER COLUMN interval_minutes SET NOT NULL;
               ALTER TABLE weather_map_buckets ALTER COLUMN version SET NOT NULL;
 
-              -- Drop and cleanly rebuild structural table constraints to prevent duplicate errors
               ALTER TABLE weather_map_buckets DROP CONSTRAINT IF EXISTS uq_bucket_time_window;
               ALTER TABLE weather_map_buckets ADD CONSTRAINT uq_bucket_time_window UNIQUE (timestamp_bucket, interval_minutes);
 
               ALTER TABLE weather_map_buckets DROP CONSTRAINT IF EXISTS chk_bucket_timestamp_positive;
               ALTER TABLE weather_map_buckets ADD CONSTRAINT chk_bucket_timestamp_positive CHECK (timestamp_bucket > 0);
 
-              -- Recreate performance index for fast descending time sorting
               DROP INDEX IF EXISTS idx_bucket_time_desc;
               CREATE INDEX idx_bucket_time_desc ON weather_map_buckets (timestamp_bucket DESC);
 
@@ -48,14 +42,12 @@ databaseChangeLog:
             splitStatements: true
             endDelimiter: ;
             sql: |
-              -- Create child metrics table structure with its composite primary key if missing
               CREATE TABLE IF NOT EXISTS weather_grid_cell_metrics (
                 bucket_id UUID NOT NULL,
                 geohash VARCHAR NOT NULL,
                 CONSTRAINT pk_grid_cell_metrics_compound PRIMARY KEY (bucket_id, geohash)
               );
 
-              -- Re-verify and map the cascading foreign key constraint
               ALTER TABLE weather_grid_cell_metrics DROP CONSTRAINT IF EXISTS fk_metrics_to_bucket;
               ALTER TABLE weather_grid_cell_metrics ADD CONSTRAINT fk_metrics_to_bucket 
                 FOREIGN KEY (bucket_id) REFERENCES weather_map_buckets(id) ON DELETE CASCADE;
@@ -68,11 +60,9 @@ databaseChangeLog:
             splitStatements: true
             endDelimiter: ;
             sql: |
-              -- Add core track count column
               ALTER TABLE weather_grid_cell_metrics ADD COLUMN IF NOT EXISTS reading_count INT;
               ALTER TABLE weather_grid_cell_metrics ALTER COLUMN reading_count SET NOT NULL;
 
-              -- Add all sparse numeric metric fields safely
               ALTER TABLE weather_grid_cell_metrics ADD COLUMN IF NOT EXISTS avg_temperature DOUBLE PRECISION;
               ALTER TABLE weather_grid_cell_metrics ADD COLUMN IF NOT EXISTS avg_humidity DOUBLE PRECISION;
               ALTER TABLE weather_grid_cell_metrics ADD COLUMN IF NOT EXISTS avg_pressure DOUBLE PRECISION;
@@ -100,7 +90,6 @@ databaseChangeLog:
             splitStatements: true
             endDelimiter: ;
             sql: |
-              -- Overwrite or establish metric valid threshold parameters safely
               ALTER TABLE weather_grid_cell_metrics DROP CONSTRAINT IF EXISTS chk_reading_count_positive;
               ALTER TABLE weather_grid_cell_metrics ADD CONSTRAINT chk_reading_count_positive CHECK (reading_count >= 1);
               

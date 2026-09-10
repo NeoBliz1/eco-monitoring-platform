@@ -1,0 +1,25 @@
+databaseChangeLog:
+  - changeSet:
+      id: 002-add-weather-telemetry-station-transaction-ids
+      author: neobliz1
+      comment: Flat transactional mapping table optimized with a surrogate key
+      changes:
+        - sql:
+            dbms: postgresql
+            splitStatements: true
+            endDelimiter: ;
+            sql: |
+              CREATE TABLE IF NOT EXISTS weather_telemetry_station_transaction_ids (
+                id UUID NOT NULL,
+                tx_id_ingestion VARCHAR(50),
+                tx_id_history VARCHAR(50),
+                CONSTRAINT pk_weather_telemetry_station_tx PRIMARY KEY (id),
+                CONSTRAINT uq_tx_id_ingestion_flat UNIQUE (tx_id_ingestion),
+                CONSTRAINT uq_tx_id_history_flat UNIQUE (tx_id_history)
+              );
+
+              DROP INDEX IF EXISTS idx_weather_tx_ingestion;
+              CREATE INDEX idx_weather_tx_ingestion ON weather_telemetry_station_transaction_ids (tx_id_ingestion);
+
+              DROP INDEX IF EXISTS idx_weather_tx_history;
+              CREATE INDEX idx_weather_tx_history ON weather_telemetry_station_transaction_ids (tx_id_history);

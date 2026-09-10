@@ -4,6 +4,7 @@ import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisC
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import me.neobliz1.ecomonitoring.platform.common.util.PlatformContractsUtils;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -32,7 +33,7 @@ public class TelemetryDeduplicationProcessor implements Processor<String, Weathe
         }
 
         WeatherPacket packet = record.value();
-        String uniqueTxId = packet.getStationId()+":"+packet.getTimestamp();
+        String uniqueTxId = PlatformContractsUtils.getUniqueTxId(packet);
         long recordTimestamp = record.timestamp();
 
         // Check local sliding window for duplicates

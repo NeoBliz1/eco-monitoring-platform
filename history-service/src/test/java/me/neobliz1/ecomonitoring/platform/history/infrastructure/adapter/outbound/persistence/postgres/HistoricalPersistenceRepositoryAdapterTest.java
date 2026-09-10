@@ -30,18 +30,20 @@ class HistoricalPersistenceRepositoryAdapterTest {
 
     @Mock
     private HistoricalDataConvertService weatherMapConverter;
-
     @Mock
     private HistoricalWeatherMapJpaRepository jpaRepository;
+    @Mock
+    private HistoricalWeatherTelemetryTxIdsJpaRepository txIdsRepository;
 
     @InjectMocks
     private HistoricalPersistenceRepositoryAdapter adapter;
 
     @Test
     void shouldPersistTelemetryRecord_whenValidWeatherMapProvided() {
-        WeatherMap weatherMap = mock(WeatherMap.class);
-        doReturn(BUCKET_TIME).when(weatherMap).getTimestampBucket();
-        doReturn(INTERVAL_MINS).when(weatherMap).getIntervalMinutes();
+        WeatherMap weatherMap = WeatherMap.newBuilder()
+                .setTimestampBucket(BUCKET_TIME)
+                .setIntervalMinutes(INTERVAL_MINS)
+                .addTelemetryTransactionsId("000001:"+BUCKET_TIME).build();
         WeatherMapBucket bucket = new WeatherMapBucket(UUID.randomUUID(), BUCKET_TIME, INTERVAL_MINS);
         doReturn(bucket).when(jpaRepository).upsertBucket(any(UUID.class), eq(BUCKET_TIME), eq(INTERVAL_MINS));
 

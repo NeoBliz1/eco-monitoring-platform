@@ -72,6 +72,7 @@ public class WeatherTestUtils {
     public static final float VAL_VIS = 8000.0f;
     public static final int VAL_COUNT = 15;
     public static final int INTERVAL_MINUTES = 10;
+    public static final String TX_DEFAULT_ID = "000001:1111111111";
 
     public static void performValidPost(WebTestClient webTestClient, String uri, WeatherPacket.Builder builder) {
         byte[] rawProtoBytes = builder.build().toByteArray();
@@ -203,7 +204,7 @@ public class WeatherTestUtils {
     }
 
     public static void waitForConsulServicesToBeHealthy(List<String> requiredServices) {
-        log.info("⏳ Waiting for all specific Consul discovery nodes to pass healthchecks...");
+        log.info("Waiting for all specific Consul discovery nodes to pass healthchecks...");
         try(HttpClient client = HttpClient.newHttpClient()) {
             Awaitility.await()
                     .atMost(Duration.ofMinutes(5))
@@ -219,20 +220,20 @@ public class WeatherTestUtils {
                             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
                             String body = response.body();
                             if(isNull(body)) {
-                                log.info("▶️ Service '{}' status is unknow, response body is null", service);
+                                log.info("Service '{}' status is unknown, response body is null", service);
                                 return false;
                             }
                             String trimBody = body.trim();
                             if("[]".equals(trimBody) || trimBody.isEmpty()) {
-                                log.info("▶️ Service '{}' is not registered yet...", service);
+                                log.info("Service '{}' is not registered yet...", service);
                                 return false;
                             }
                             if(trimBody.contains("\"Status\":\"critical\"") || trimBody.contains("\"Status\":\"warning\"")) {
-                                log.info("⚠️ Service '{}' has checks that are failing or warming up...", service);
+                                log.info("Service '{}' has checks that are failing or warming up...", service);
                                 return false;
                             }
                             if(!trimBody.contains("\"Status\":\"passing\"")) {
-                                log.info("🔄 Service '{}' is in an intermediate state...", service);
+                                log.info("Service '{}' is in an intermediate state...", service);
                                 return false;
                             }
                         }
@@ -240,14 +241,16 @@ public class WeatherTestUtils {
                     });
         }
 
-        log.info("✅ All requested cluster services are verified healthy in Consul!");
+        log.info("All requested cluster services are verified healthy in Consul!");
     }
 
     public static @NonNull WeatherMap getWeatherMap() {
         GridCellLayers cellLayers = getGridCellLayers(null);
+        long timestampBucket = Instant.now().toEpochMilli();
         return WeatherMap.newBuilder()
-                .setTimestampBucket(Instant.now().toEpochMilli())
+                .setTimestampBucket(timestampBucket)
                 .setIntervalMinutes(INTERVAL_MINUTES)
+                .addTelemetryTransactionsId(TX_DEFAULT_ID)
                 .putGridCells(GEOHASH_ALPHA, cellLayers)
                 .build();
     }
@@ -281,6 +284,7 @@ public class WeatherTestUtils {
         return WeatherMap.newBuilder()
                 .setTimestampBucket(timestamp)
                 .setIntervalMinutes(INTERVAL_MINUTES)
+                .addTelemetryTransactionsId(STATION_ID+":"+timestamp)
                 .putGridCells(geohash, cellLayers)
                 .build();
     }

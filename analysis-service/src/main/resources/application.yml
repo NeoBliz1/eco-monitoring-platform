@@ -61,6 +61,16 @@ management:
     enable:
       lettuce: true
 
+springdoc:
+  openapi:
+    info:
+      title: "EcoMonitoring Analytics & Stream Processing"
+      version: "1.0.0"
+      description: "Real-time telemetry analysis with Kafka Streams."
+      license:
+        name: "Apache 2.0"
+        url: "https://springdoc.org"
+
 ---
 spring:
   config:

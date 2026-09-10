@@ -76,7 +76,7 @@ public class TelemetryPayloadMapper {
             serializer.configure(serializerConfig, false);
             return serializer.serialize(kafkaIngestionLiveTopic, packet);
         } catch(Exception e) {
-            log.error("Failed to perform Confluent Protobuf serialization for packet ID: {}", packet.getStationId(), e);
+            log.error("Protobuf serialization failed for station: {}", packet.getStationId(), e);
             throw e;
         }
     }

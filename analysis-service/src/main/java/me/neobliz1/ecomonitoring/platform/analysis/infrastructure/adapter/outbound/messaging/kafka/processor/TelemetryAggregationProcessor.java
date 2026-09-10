@@ -17,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryPersistentService;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryUtils;
+import me.neobliz1.ecomonitoring.platform.common.util.PlatformContractsUtils;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.Location;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
@@ -83,11 +84,11 @@ public class TelemetryAggregationProcessor implements Processor<String, WeatherP
         WeatherPacket packet = record.value();
         Span streamSpan = getStreamSpan(record, packet);
         try(Scope ignored = streamSpan.makeCurrent()) {
-            String uniqueTxId = packet.getStationId()+":"+packet.getTimestamp();
+            String uniqueTxId = PlatformContractsUtils.getUniqueTxId(packet);
             String storageKey = String.format("%017d", TelemetryUtils.getAggregationBucketFloorInterval(packet.getTimestamp(), secondsPerInterval))
                     +HASHTAG_DELIMITER+record.key()+HASHTAG_DELIMITER+uniqueTxId;
             if(log.isDebugEnabled()) {
-                log.debug("Storing taskId {}, Storing storageKey {}", this.context.taskId().toString(), storageKey);
+                log.debug("Storing storageKey {} for task {}", storageKey, context.taskId());
             }
             accumStore.put(storageKey, packet);
             Location location = packet.getLocation();
@@ -115,7 +116,7 @@ public class TelemetryAggregationProcessor implements Processor<String, WeatherP
         String startRangeKey = String.format("%017d", 0L);
         String endRangeKey = String.format("%017d", currentWindowFloor-1)+HASHTAG_DELIMITER+"\uFFFF";
         if(log.isDebugEnabled()) {
-            log.debug("Executing targeted state store range scan from key [{}] to [{}]", startRangeKey, endRangeKey);
+            log.debug("Range scan from [{}] to [{}]", startRangeKey, endRangeKey);
         }
         try(KeyValueIterator<String, WeatherPacket> iterator = accumStore.range(startRangeKey, endRangeKey)) {
             while(iterator.hasNext()) {
@@ -128,7 +129,7 @@ public class TelemetryAggregationProcessor implements Processor<String, WeatherP
 
                 String spatialKey = parts[0]+HASHTAG_DELIMITER+parts[1]+HASHTAG_DELIMITER+parts[2];
                 if(log.isDebugEnabled()) {
-                    log.debug("Run flushAccumulatedWindows {}", spatialKey);
+                    log.debug("Flushing spatialKey {}", spatialKey);
                 }
                 extractionMatrix.computeIfAbsent(bucketTime, k -> new HashMap<>())
                         .computeIfAbsent(spatialKey, k -> new ArrayList<>())
@@ -136,7 +137,7 @@ public class TelemetryAggregationProcessor implements Processor<String, WeatherP
                 keysToRemove.add(key);
             }
         } catch(Exception e) {
-            log.error("Processing of the current package {} has fallen, error msg: {}", currentWindowFloor, e.getMessage());
+            log.error("Failed to flush aggregation window {}", currentWindowFloor, e);
         }
 
         if(!extractionMatrix.isEmpty()) {

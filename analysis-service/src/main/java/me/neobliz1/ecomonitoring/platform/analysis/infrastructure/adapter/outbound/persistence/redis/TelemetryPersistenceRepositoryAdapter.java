@@ -38,9 +38,10 @@ public class TelemetryPersistenceRepositoryAdapter implements TelemetryPersisten
                 .subscribeOn(Schedulers.boundedElastic())
                 .subscribe(
                         success -> {
-                            if(log.isDebugEnabled())
+                            if(log.isDebugEnabled()) {
                                 log.debug("Sliding window geohash: {}, station: {}, timestamp: {} successfully written",
                                         geohashKey, stationField, timestampFormatted);
+                            }
                         },
                         error -> log.warn("Sliding window geohash: {}, station: {}, timestamp: {}, {}",
                                 geohashKey, stationField, timestampFormatted, error.getMessage())

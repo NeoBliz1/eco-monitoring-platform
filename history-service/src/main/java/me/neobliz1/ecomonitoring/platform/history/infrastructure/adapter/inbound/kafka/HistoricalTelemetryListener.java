@@ -22,23 +22,23 @@ public class HistoricalTelemetryListener {
     public void consumeHistoricalWeatherMap(ConsumerRecord<String, WeatherMap> record, Acknowledgment ack) {
         WeatherMap weatherMap = record.value();
         if(weatherMap==null) {
-            log.warn("⚠️ Received null WeatherMap payload from partition {} at offset {}. Skipping corrupt record.",
+            log.warn("Received null WeatherMap payload from partition {} at offset {}. Skipping corrupt record.",
                     record.partition(), record.offset());
             ack.acknowledge();
             return;
         }
         if(log.isDebugEnabled()) {
-            log.debug("📡 Received aggregated WeatherMap stream chunk from Kafka. Bucket: [{}], Cells size: [{}]",
+            log.debug("Received aggregated WeatherMap stream chunk from Kafka. Bucket: [{}], Cells size: [{}]",
                     weatherMap.getTimestampBucket(), weatherMap.getGridCellsCount());
         }
         try {
             historicalPersistenceRepository.persistTelemetryRecord(weatherMap);
             ack.acknowledge();
             if(log.isDebugEnabled()) {
-                log.debug("✅ Offset committed safely to Kafka broker channel for bucket: {}", weatherMap.getTimestampBucket());
+                log.debug("Offset committed to Kafka broker for bucket: {}", weatherMap.getTimestampBucket());
             }
         } catch(Exception e) {
-            log.error("❌ Transaction pipeline collapsed while storing WeatherMap bucket [{}]. Offset will NOT be acknowledged! Error: {}",
+            log.error("Failed to store WeatherMap bucket [{}]. Offset will NOT be acknowledged. Error: {}",
                     weatherMap.getTimestampBucket(), e.getMessage(), e);
             throw e;
         }
