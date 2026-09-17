@@ -33,7 +33,7 @@ databaseChangeLog:
 
               DROP INDEX IF EXISTS idx_bucket_time_desc;
               CREATE INDEX idx_bucket_time_desc ON weather_map_buckets (timestamp_bucket DESC);
-
+              CREATE UNIQUE INDEX IF NOT EXISTS uk_timestamp_interval ON weather_map_buckets (timestamp_bucket, interval_minutes);
         # =========================================================================
         # 2. CHILD TABLE CORE STRUCTURAL INITIALIZATION (weather_grid_cell_metrics)
         # =========================================================================

@@ -1,7 +1,7 @@
 package me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.inbound.web;
 
-import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.TX_ID_INGESTION_HISTORY_URI;
-import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.WEATHER_PACKET_TX_ID_INGESTION;
+import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstants.TX_ID_INGESTION_HISTORY_URI;
+import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstants.WEATHER_PACKET_TX_ID_INGESTION;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.TX_CHAIN_CONFIRMATION_PROFILE;
 
 import io.github.neobliz1.validproto.annotation.ValidProto;

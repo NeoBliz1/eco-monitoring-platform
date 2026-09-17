@@ -28,6 +28,14 @@ public class AggregationUtils {
         }
     }
 
+    public static void addTelemetryTraceParents(List<WeatherPacket> packetsList, WeatherMap.Builder weatherMapBuilder) {
+        for(WeatherPacket packet : packetsList) {
+            if(packet.hasField(WeatherPacket.getDescriptor().findFieldByNumber(5)) && !packet.getTraceParent().isEmpty()) {
+                weatherMapBuilder.addTelemetryTraceParents(packet.getTraceParent());
+            }
+        }
+    }
+
     public static byte[] getGridCellsByteArray(String spatialKey, List<WeatherPacket> packetsList, WeatherMap.Builder weatherMapBuilder) {
         GridCellLayers.Builder cellBuilder = aggregatePackets(packetsList);
         cellBuilder.setGeohash(spatialKey);

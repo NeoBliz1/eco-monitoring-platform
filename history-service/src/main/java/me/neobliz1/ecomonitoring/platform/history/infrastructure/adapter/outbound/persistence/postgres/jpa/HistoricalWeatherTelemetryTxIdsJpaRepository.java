@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres;
+package me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa;
 
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherTelemetryStationTransaction;
 import org.springframework.data.jpa.repository.JpaRepository;

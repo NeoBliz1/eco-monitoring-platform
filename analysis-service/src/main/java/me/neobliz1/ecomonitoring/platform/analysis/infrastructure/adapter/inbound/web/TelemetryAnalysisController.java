@@ -1,7 +1,7 @@
 package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.inbound.web;
 
-import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.WEATHER_MAP_ENDPOINT;
-import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.WEATHER_MAP_URI;
+import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstants.WEATHER_MAP_ENDPOINT;
+import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstants.WEATHER_MAP_URI;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;

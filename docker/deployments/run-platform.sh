@@ -225,7 +225,7 @@ PID_INGESTION=$!
 env "${ENV_PAYLOAD[@]}" OTEL_SERVICE_NAME="$OTEL_ANALYSIS_NAME" java $ANALYSIS_OTEL_OPTS $ANALYSIS_DEBUG_OPTS ${JVM_MEM_OPTS:-} -Dspring.profiles.active="prod,local" -jar analysis-service.jar >analysis.log 2>&1 &
 PID_ANALYSIS=$!
 # shellcheck disable=SC2086
-env "${ENV_PAYLOAD[@]}" OTEL_SERVICE_NAME="$OTEL_HISTORY_NAME" java $HISTORY_OTEL_OPTS $HISTORY_DEBUG_OPTS ${JVM_MEM_OPTS:-} -Dspring.profiles.active="prod,local" -jar history-service.jar >history.log 2>&1 &
+env "${ENV_PAYLOAD[@]}" OTEL_SERVICE_NAME="$OTEL_HISTORY_NAME" java $HISTORY_OTEL_OPTS $HISTORY_DEBUG_OPTS ${JVM_MEM_OPTS:-} -Dspring.profiles.active="prod,local,weather-packet-chain-confirmation" -jar history-service.jar >history.log 2>&1 &
 PID_HISTORY=$!
 
 if [ -d "${PROJECT_ROOT:-.}/bin/gateway" ]; then

@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.config;
+package me.neobliz1.ecomonitoring.platform.common.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.ByteString;

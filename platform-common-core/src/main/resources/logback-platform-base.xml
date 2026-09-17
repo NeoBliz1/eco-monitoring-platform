@@ -74,7 +74,7 @@
         <logger name="org.springframework" level="WARN"/>
         <logger name="org.apache.kafka" level="WARN"/>
         <logger name="io.confluent.kafka.serializers" level="WARN"/>
-        <logger name="me.neobliz1.ecomonitoring" level="INFO"/>
+        <logger name="me.neobliz1.ecomonitoring" level="DEBUG"/>
         <root level="INFO">
             <appender-ref ref="ASYNC_STRUCTURED_JSON"/>
         </root>

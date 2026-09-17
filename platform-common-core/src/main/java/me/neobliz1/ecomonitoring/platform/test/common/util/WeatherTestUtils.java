@@ -255,7 +255,7 @@ public class WeatherTestUtils {
                 .build();
     }
 
-    private static @NonNull GridCellLayers getGridCellLayers(@Nullable Float temp) {
+    public static @NonNull GridCellLayers getGridCellLayers(@Nullable Float temp) {
         return GridCellLayers.newBuilder()
                 .setReadingCount(VAL_COUNT)
                 .setAvgTemperature(isNull(temp)?VAL_TEMP:temp)
@@ -276,6 +276,18 @@ public class WeatherTestUtils {
                 .setAvgSolarRadiationWm2(VAL_SOLAR)
                 .setAvgLux(VAL_LUX)
                 .setAvgVisibilityM(VAL_VIS)
+                .build();
+    }
+
+    public static @NonNull WeatherMap getCustomWeatherMap(long timestamp, int interval, String geohash, float temp) {
+        GridCellLayers cellLayers = getGridCellLayers(temp);
+        String mockStationId = "00000100001";
+
+        return WeatherMap.newBuilder()
+                .setTimestampBucket(timestamp)
+                .setIntervalMinutes(interval)
+                .addTelemetryTransactionsId(mockStationId+":"+timestamp)
+                .putGridCells(geohash, cellLayers)
                 .build();
     }
 

@@ -23,3 +23,30 @@ databaseChangeLog:
 
               DROP INDEX IF EXISTS idx_weather_tx_history;
               CREATE INDEX idx_weather_tx_history ON weather_telemetry_station_transaction_ids (tx_id_history);
+  - changeSet:
+      id: 003-add-weather-telemetry-dlt-archive
+      author: neobliz1
+      comment: Storage archive for corrupt or unprocessable dead letter payloads
+      changes:
+        - sql:
+            dbms: postgresql
+            splitStatements: true
+            endDelimiter: ;
+            sql: |
+              CREATE TABLE IF NOT EXISTS weather_telemetry_dlt_records (
+                id UUID NOT NULL,
+                original_topic VARCHAR(255) NOT NULL,
+                partition_id INT NOT NULL,
+                original_offset BIGINT NOT NULL,
+                exception_message TEXT,
+                exception_stacktrace TEXT,
+                raw_payload_bytes BYTEA,
+                exiled_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT pk_weather_telemetry_dlt PRIMARY KEY (id)
+              );
+
+              DROP INDEX IF EXISTS idx_weather_dlt_lookup;
+              CREATE INDEX idx_weather_dlt_lookup ON weather_telemetry_dlt_records (original_topic, partition_id);
+
+              DROP INDEX IF EXISTS idx_weather_dlt_timestamp;
+              CREATE INDEX idx_weather_dlt_timestamp ON weather_telemetry_dlt_records (exiled_at);

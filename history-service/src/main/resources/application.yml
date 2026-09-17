@@ -41,8 +41,17 @@ spring:
     driver-class-name: org.postgresql.Driver
     database: ${SPRING_DATA_DB_NAME}
     schema-name: ${POSTGRES_DB_SCHEMA}
+  data:
+    redis:
+      service-name: ${SPRING_DATA_REDIS_SERVICE_NAME}
+      password: ${redis_password:${SPRING_DATA_REDIS_PASSWORD}}
   kafka:
     service-name: ${KAFKA_SERVICE_NAME}
+    properties:
+      group.protocol: "consumer"
+      security.protocol: "SASL_PLAINTEXT"
+      sasl.mechanism: "SCRAM-SHA-512"
+      sasl.jaas.config: "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"${kafka_client:${KAFKA_CLIENT}}\" password=\"${kafka_client_password:${KAFKA_CLIENT_PASSWORD}}\";"
     consumer:
       group-id: "eco-history-consumer-group"
       auto-offset-reset: "earliest"
@@ -50,19 +59,44 @@ spring:
       enable-auto-commit: false
       key-deserializer: "org.apache.kafka.common.serialization.StringDeserializer"
       value-deserializer: "org.springframework.kafka.support.serializer.ErrorHandlingDeserializer"
-      ack-mode: manual_immediate
       properties:
         spring.deserializer.value.delegate.class: "io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer"
         specific.protobuf.value.type: "me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap"
-    properties:
-      group.protocol: "consumer"
-      security.protocol: "SASL_PLAINTEXT"
-      sasl.mechanism: "SCRAM-SHA-512"
-      sasl.jaas.config: "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"${kafka_client:${KAFKA_CLIENT}}\" password=\"${kafka_client_password:${KAFKA_CLIENT_PASSWORD}}\";"
+    producer:
+      acks: all
+      retries: 2147483647
+      key-serializer: "org.apache.kafka.common.serialization.StringSerializer"
+      value-serializer: "io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer"
   jpa:
-    open-in-view: false
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        order_inserts: true
+        order_updates: true
+        generate_statistics: true
+        jdbc:
+          batch_size: 50
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          jakarta:
+            cache:
+              redisson:
+                fallback: false
+                singleServerConfig:
+                  connectionPoolSize: 64
+                  connectionMinimumIdleSize: 24
+                config: >
+                  {
+                    "weather_map_buckets": {"ttl": 1800000},
+                    "weather_map_buckets.gridCells": {"ttl": 1800000},
+                    "weather_grid_cell_metrics": {"ttl": 1800000},
+                    "default-query-results-region": {"ttl": 300000},
+                    "default-update-timestamps-region": {"ttl": 0}
+                  }
 
 server:
   port: ${HISTORY_APPLICATION_SERVER_PORT}

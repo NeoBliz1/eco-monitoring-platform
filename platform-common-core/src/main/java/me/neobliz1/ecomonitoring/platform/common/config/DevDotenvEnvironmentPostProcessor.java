@@ -1,4 +1,4 @@
-package me.neobliz1.ecomonitoring.platform.config;
+package me.neobliz1.ecomonitoring.platform.common.config;
 
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.DEV_PROFILE;
 

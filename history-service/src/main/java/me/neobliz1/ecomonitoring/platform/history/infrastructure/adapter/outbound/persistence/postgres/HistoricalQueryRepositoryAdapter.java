@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherGridCellMetric;
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherMapBucket;
 import me.neobliz1.ecomonitoring.platform.history.domain.port.outbound.HistoricalQueryRepository;
+import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherGridCellJpaRepository;
+import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherMapJpaRepository;
 
 import java.util.List;
 import java.util.Optional;

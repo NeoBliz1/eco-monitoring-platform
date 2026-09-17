@@ -1,7 +1,8 @@
 include:
-  - compose/consul/consul.yaml
+  - ./compose/history-test/consul.yaml
   - ./compose/vault/vault.yaml
   - ./compose/kafka/kafka.yaml
+  - ./compose/redis/redis.yaml
   - ./compose/history-test/postgres.yaml
   - ./compose/kafka/kafka-init-topics.yaml
   - ./compose/schema-registry/schema-registry.yaml
@@ -10,6 +11,7 @@ volumes:
   kafka_data_1: { }
   kafka_data_2: { }
   kafka_data_3: { }
+  redis_persistence_file: { }
   vault_storage: { }
   vault_tokens: { }
   ram_secrets_kafka_1:
@@ -30,6 +32,12 @@ volumes:
       type: tmpfs
       device: tmpfs
       o: "size=64m,mode=0770,uid=100,gid=1000,noswap,noexec,nosuid,nodev"
+  ram_secrets_redis:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "size=64m,mode=0770,uid=999,gid=1000,noswap,noexec,nosuid,nodev"
   ram_secrets_registry:
     driver: local
     driver_opts:

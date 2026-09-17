@@ -1,0 +1,31 @@
+spring:
+  kafka:
+    consumer:
+      backoff:
+        interval: 2
+        max-attempts: 3
+  datasource:
+    data-pool:
+      name: "EcoHistoryTelemetry-HikariPool"
+      max-pool-size: 24
+      min-idle: 5
+      idle-timeout: 30 # seconds
+      connection-timeout: 10 # seconds
+  data:
+    hibernate:
+      cache:
+        level1:
+          invalidation-topic-name: "pubsub:l1-evict:"
+          l1-cache-ttl-minutes: 5
+          l1-cache-max-size: 2000
+        level2:
+          region:
+            weather-map-bucket:
+              l2-cache-ttl-after-access-minutes: 1
+              l2-cache-max-size: 4
+            weather-grid-cells:
+              l2-cache-ttl-after-access-minutes: 1
+              l2-cache-max-size: 4
+            spatial-query-results:
+              l2-cache-ttl-after-write-minutes: 1
+              l2-cache-max-size: 4

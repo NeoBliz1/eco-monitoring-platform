@@ -1,5 +1,7 @@
 package me.neobliz1.ecomonitoring.platform.history.domain.model.entity;
 
+import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.METRICS_REGION;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
@@ -7,27 +9,40 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.MapsId;
+import jakarta.persistence.PostLoad;
+import jakarta.persistence.PostPersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.Cache;
+import org.hibernate.annotations.CacheConcurrencyStrategy;
+import org.jspecify.annotations.NonNull;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Persistable;
 
 import java.util.UUID;
 
 @Getter
 @Setter
+@Entity
+@Cacheable
 @NoArgsConstructor
 @Table(name = WeatherGridCellMetric.TABLE_NAME)
-@Entity(name = WeatherGridCellMetric.TABLE_NAME)
-public class WeatherGridCellMetric {
+@Cache(region = METRICS_REGION, usage = CacheConcurrencyStrategy.READ_WRITE)
+public class WeatherGridCellMetric implements Persistable<WeatherGridCellMetricId> {
 
     public static final String TABLE_NAME = "weather_grid_cell_metrics";
 
     @EmbeddedId
-    @Getter(AccessLevel.NONE)
+    @Getter
     @Setter(AccessLevel.NONE)
-    private WeatherGridCellMetricId id = new WeatherGridCellMetricId();
+    private WeatherGridCellMetricId id;
+
+    @Transient
+    private boolean isNewRecord = true;
 
     @MapsId("bucketId")
     @ManyToOne(fetch = FetchType.LAZY)
@@ -80,20 +95,35 @@ public class WeatherGridCellMetric {
     @Column(name = "avg_visibility_m")
     private Double avgVisibilityM;
 
+    public WeatherGridCellMetric(@NonNull WeatherMapBucket bucket, @NonNull String geohash) {
+        this.bucket = bucket;
+        this.id = new WeatherGridCellMetricId(bucket.getId(), geohash);
+        setGeohash(geohash);
+    }
+
     public String getGeohash() {
         return id.getGeohash();
     }
 
-    public void setGeohash(String geohash) {
+    public void setGeohash(@NonNull String geohash) {
         id.setGeohash(geohash);
     }
-
     public UUID getBucketId() {
         return id.getBucketId();
     }
-
     public void setBucketId(UUID uuid) {
         id.setBucketId(uuid);
+    }
+
+    @Override
+    public boolean isNew() {
+        return this.isNewRecord;
+    }
+
+    @PostLoad
+    @PostPersist
+    public void markNotNew() {
+        this.isNewRecord = false;
     }
 }
 

@@ -1,8 +1,8 @@
 package me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.adapter.inbound.web;
 
-import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.BLOCKING_TELEMETRY_ENDPOINT_URI;
-import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.REACTIVE_TELEMETRY_ENDPOINT_URI;
-import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.TELEMETRY_URI;
+import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstants.BLOCKING_TELEMETRY_ENDPOINT_URI;
+import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstants.REACTIVE_TELEMETRY_ENDPOINT_URI;
+import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstants.TELEMETRY_URI;
 
 import io.github.neobliz1.validproto.annotation.ValidProto;
 import io.github.neobliz1.validproto.annotation.ValidatedProto;

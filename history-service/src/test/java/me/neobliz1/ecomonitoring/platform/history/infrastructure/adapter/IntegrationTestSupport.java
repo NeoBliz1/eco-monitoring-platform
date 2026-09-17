@@ -1,13 +1,15 @@
-package me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.inbound.kafka;
+package me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter;
 
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.COMMON_PROFILE;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.DEV_PROFILE;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.LOCAL_PROFILE;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.TX_CHAIN_CONFIRMATION_PROFILE;
-import static me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.inbound.kafka.HistoricalTelemetryListenerIT.ENVIRONMENT;
+import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.BUCKETS_REGION;
+import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.QUERIES_REGION;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.INTERVAL_MINUTES;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.getProducerConf;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.getTestKafkaAdminConf;
+import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.loadEnvironmentMap;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.waitForConsulServicesToBeHealthy;
 import static org.hibernate.jpa.SpecHints.HINT_SPEC_FETCH_GRAPH;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -26,8 +28,10 @@ import lombok.extern.slf4j.Slf4j;
 import me.neobliz1.ecomonitoring.platform.history.HistoricalBootEngine;
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherMapBucket;
 import me.neobliz1.ecomonitoring.platform.history.domain.port.outbound.HistoricalQueryRepository;
-import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalWeatherMapJpaRepository;
-import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalWeatherTelemetryTxIdsJpaRepository;
+import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalPersistenceRepositoryAdapter;
+import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherGridCellJpaRepository;
+import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherMapJpaRepository;
+import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherTelemetryTxIdsJpaRepository;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -36,7 +40,6 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.config.TopicConfig;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -45,11 +48,12 @@ import org.springframework.boot.grpc.client.autoconfigure.GrpcClientAutoConfigur
 import org.springframework.boot.kafka.autoconfigure.KafkaProperties;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
+import org.springframework.cache.CacheManager;
 import org.springframework.grpc.client.ImportGrpcClients;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.testcontainers.containers.ComposeContainer;
 import weather.history.HistoryServiceGrpc;
 
 import java.io.File;
@@ -65,7 +69,6 @@ import java.util.concurrent.ExecutionException;
 @AutoConfigureWebTestClient
 @TestPropertySource(locations = "classpath:.env.test")
 @ImportAutoConfiguration(GrpcClientAutoConfiguration.class)
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @ImportGrpcClients(
         types = HistoryServiceGrpc.HistoryServiceBlockingStub.class,
         target = "history-service"
@@ -78,40 +81,29 @@ import java.util.concurrent.ExecutionException;
         }
 )
 @ActiveProfiles({ DEV_PROFILE, COMMON_PROFILE, LOCAL_PROFILE, TX_CHAIN_CONFIRMATION_PROFILE })
-public class IntegrationTestSupport {
+public abstract class IntegrationTestSupport {
 
     public static final String PG_DB = "pg-db";
     public static final int PG_DB_PORT = 5432;
     public static final String DOCKER_HISTORY_TEST_DOCKER_COMPOSE_YAML = "../docker/history-test-docker-compose.yaml";
+    public static final ComposeContainer ENVIRONMENT;
 
-    protected Producer<String, WeatherMap> testProducer;
-    @Value("${spring.kafka.topic.weather-history}")
-    String kafkaHistoryTopic;
-    @Autowired
-    HistoricalQueryRepository queryRepositoryAdapter;
-    @Autowired
-    HistoricalWeatherMapJpaRepository queryJpaRepositoryAdapter;
-    @Autowired
-    HistoricalWeatherTelemetryTxIdsJpaRepository txIdsRepository;
-    @Autowired
-    HistoryServiceGrpc.HistoryServiceBlockingStub historyRemoteClientStub;
-    @Autowired
-    WebTestClient webTestClient;
-    @Value("${spring.kafka.streams.properties.schema.registry.url}")
-    private String schemaRegistryUrl;
-    @PersistenceContext
-    private EntityManager entityManager;
-    @Autowired
-    private KafkaProperties kafkaProperties;
+    static {
+        ENVIRONMENT = new ComposeContainer(new File(DOCKER_HISTORY_TEST_DOCKER_COMPOSE_YAML))
+                .withEnv(loadEnvironmentMap())
+                .withExposedService(PG_DB, PG_DB_PORT)
+                .withRemoveVolumes(true)
+                .withTailChildContainers(true);
 
-    @BeforeAll
-    protected static void beforeAll() {
+        ENVIRONMENT.start();
         waitForConsulServicesToBeHealthy(List.of(
                 "kafka",
                 "schema-registry",
                 "consul",
-                "pg-db"
-        ));
+                "pg-db",
+                "redis-cache")
+        );
+        runLiquibaseMigrationsOnTestComposeCluster();
     }
 
     protected static void runLiquibaseMigrationsOnTestComposeCluster() {
@@ -141,6 +133,32 @@ public class IntegrationTestSupport {
         }
     }
 
+    protected Producer<String, WeatherMap> testProducer;
+    @PersistenceContext
+    protected EntityManager entityManager;
+    @Value("${spring.kafka.topic.weather-history}")
+    String kafkaHistoryTopic;
+    @Autowired
+    HistoricalQueryRepository queryRepositoryAdapter;
+    @Autowired
+    HistoricalWeatherMapJpaRepository queryJpaRepositoryAdapter;
+    @Autowired
+    HistoricalWeatherGridCellJpaRepository metricsJpaRepository;
+    @Autowired
+    HistoricalWeatherTelemetryTxIdsJpaRepository txIdsRepository;
+    @Autowired
+    HistoryServiceGrpc.HistoryServiceBlockingStub historyRemoteClientStub;
+    @Autowired
+    WebTestClient webTestClient;
+    @Autowired
+    HistoricalPersistenceRepositoryAdapter adapter;
+    @Autowired
+    CacheManager springL1CacheManager;
+    @Value("${spring.kafka.streams.properties.schema.registry.url}")
+    private String schemaRegistryUrl;
+    @Autowired
+    private KafkaProperties kafkaProperties;
+
     @BeforeEach
     public void setupEcosystem() {
         setupKafkaProducer();
@@ -152,8 +170,13 @@ public class IntegrationTestSupport {
     public void teardownEcosystem() throws ExecutionException, InterruptedException {
         clearKafkaTopics();
         if(testProducer!=null) testProducer.close();
+        metricsJpaRepository.deleteAllInBatch();
         queryJpaRepositoryAdapter.deleteAllInBatch();
         txIdsRepository.deleteAllInBatch();
+        var bucketCache = springL1CacheManager.getCache(BUCKETS_REGION);
+        var queryCache = springL1CacheManager.getCache(QUERIES_REGION);
+        if(bucketCache!=null) bucketCache.clear();
+        if(queryCache!=null) queryCache.clear();
     }
 
     private void setupKafkaProducer() {

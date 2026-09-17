@@ -1,63 +1,45 @@
-package me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.inbound.kafka;
+package me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter;
 
-import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.TX_ID_INGESTION_HISTORY_URI;
-import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstant.WEATHER_PACKET_TX_ID_INGESTION;
+import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstants.TX_ID_INGESTION_HISTORY_URI;
+import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstants.WEATHER_PACKET_TX_ID_INGESTION;
+import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.BUCKETS_REGION;
+import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.QUERIES_REGION;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.GEOHASH_ALPHA;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.INTERVAL_MINUTES;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.TX_DEFAULT_ID;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.createValidBase;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.getCustomWeatherMap;
-import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.loadEnvironmentMap;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.performValidPost;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherGridCellMetric;
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherMapBucket;
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherTelemetryStationTransaction;
-import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalWeatherMapJpaRepository;
+import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherMapJpaRepository;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.GridCellLayers;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 import me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils;
-import org.junit.jupiter.api.BeforeAll;
+import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
-import org.testcontainers.containers.ComposeContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.shaded.org.awaitility.Awaitility;
 import weather.history.SpatialBoxRequest;
 
-import java.io.File;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
-@Testcontainers
-public class HistoricalTelemetryListenerIT extends IntegrationTestSupport {
-
-    @Container
-    @SuppressWarnings("unused")
-    public static final ComposeContainer ENVIRONMENT = new ComposeContainer(new File(DOCKER_HISTORY_TEST_DOCKER_COMPOSE_YAML))
-            .withEnv(loadEnvironmentMap())
-            .withExposedService(PG_DB, PG_DB_PORT)
-            .withRemoveVolumes(true)
-            .withTailChildContainers(true);
+class HistoricalTelemetryListenerIT extends IntegrationTestSupport {
 
     @MockitoSpyBean
     private HistoricalWeatherMapJpaRepository queryRepositoryAdapter;
-
-    @BeforeAll
-    static void initInfra() {
-        IntegrationTestSupport.beforeAll();
-        runLiquibaseMigrationsOnTestComposeCluster();
-    }
 
     @Test
     void shouldRemoveTxIdIngestion_whenWeatherMapWithMatchingTxIdIsProcessedViaKafka() throws Exception {
@@ -119,6 +101,17 @@ public class HistoricalTelemetryListenerIT extends IntegrationTestSupport {
                 });
     }
 
+    private static @NonNull SpatialBoxRequest getSpatialBoxRequest(long currentBucket, double minLat, double maxLat, double minLon, double maxLon) {
+        return SpatialBoxRequest.newBuilder()
+                .setTimestampBucket(currentBucket)
+                .setTimeIntervalInMinutes(INTERVAL_MINUTES)
+                .setMinLat(minLat)
+                .setMaxLat(maxLat)
+                .setMinLon(minLon)
+                .setMaxLon(maxLon)
+                .build();
+    }
+
     @Test
     void shouldPersistRecordAndAcknowledgeKafkaOffset_whenPayloadIsProcessedSuccessfully() throws Exception {
         WeatherMap weatherMap = WeatherTestUtils.getWeatherMap();
@@ -133,45 +126,15 @@ public class HistoricalTelemetryListenerIT extends IntegrationTestSupport {
                                 .isPresent()
                 ));
         WeatherMapBucket weatherMapBucket = getWeatherMapBucket(timestampBucket);
+        List<WeatherGridCellMetric> cells = metricsJpaRepository.findSpecificCellsForMerge(
+                weatherMapBucket.getId(),
+                List.of(WeatherTestUtils.GEOHASH_ALPHA)
+        );
 
         assertEquals(timestampBucket, weatherMapBucket.getTimestampBucket());
         assertEquals(INTERVAL_MINUTES, weatherMapBucket.getIntervalMinutes());
-        assertEquals(GEOHASH_ALPHA, weatherMapBucket.getGridCells().getFirst().getGeohash());
-    }
-
-    @Test
-    void shouldReturnExistingBucketWithFirstGeneratedId_whenDuplicatePayloadIsProcessedSerially() throws Exception {
-        WeatherMap weatherMap = WeatherTestUtils.getWeatherMap();
-        long targetTimestampBucket = weatherMap.getTimestampBucket();
-        ArgumentCaptor<UUID> uuidCaptor = ArgumentCaptor.forClass(UUID.class);
-
-        sendPacket(targetTimestampBucket, weatherMap);
-        Awaitility.await()
-                .atMost(Duration.ofSeconds(15))
-                .pollInterval(Duration.ofMillis(300))
-                .untilAsserted(() -> assertTrue(
-                        queryRepositoryAdapter.findByTimestampBucketAndIntervalMinutes(targetTimestampBucket, INTERVAL_MINUTES).isPresent()
-                ));
-        WeatherMapBucket firstBucket = getWeatherMapBucket(targetTimestampBucket);
-        UUID expectedBucketId = firstBucket.getId();
-        Mockito.clearInvocations(queryRepositoryAdapter);
-        sendPacket(targetTimestampBucket, weatherMap);
-        Awaitility.await()
-                .atMost(Duration.ofSeconds(15))
-                .pollInterval(Duration.ofMillis(300))
-                .untilAsserted(() -> Mockito.verify(queryRepositoryAdapter, Mockito.atLeastOnce())
-                        .upsertBucket(uuidCaptor.capture(), Mockito.eq(targetTimestampBucket), Mockito.eq(INTERVAL_MINUTES)));
-        WeatherMapBucket secondBucket = getWeatherMapBucket(targetTimestampBucket);
-        long bucketRowCount = queryJpaRepositoryAdapter.count();
-        UUID capturedSecondUuid = uuidCaptor.getValue();
-        List<WeatherTelemetryStationTransaction> txIds = txIdsRepository.findAll();
-
-        assertEquals(1L, bucketRowCount);
-        assertNotEquals(expectedBucketId, capturedSecondUuid);
-        assertEquals(expectedBucketId, secondBucket.getId());
-        assertEquals(targetTimestampBucket, secondBucket.getTimestampBucket());
-        assertEquals(1, txIds.size());
-        assertEquals(TX_DEFAULT_ID, txIds.getFirst().getTxIdHistory());
+        assertTrue(cells.stream()
+                .anyMatch(gridCellMetric -> GEOHASH_ALPHA.equals(gridCellMetric.getGeohash())));
     }
 
     @Test
@@ -222,6 +185,43 @@ public class HistoricalTelemetryListenerIT extends IntegrationTestSupport {
     }
 
     @Test
+    void shouldReturnExistingBucketWithFirstGeneratedId_whenDuplicatePayloadIsProcessedSerially() throws Exception {
+        WeatherMap weatherMap = WeatherTestUtils.getWeatherMap();
+        long targetTimestampBucket = weatherMap.getTimestampBucket();
+        ArgumentCaptor<WeatherMapBucket> bucketCaptor = ArgumentCaptor.forClass(WeatherMapBucket.class);
+
+        sendPacket(targetTimestampBucket, weatherMap);
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(15))
+                .pollInterval(Duration.ofMillis(300))
+                .untilAsserted(() -> assertTrue(
+                        queryRepositoryAdapter.findByTimestampBucketAndIntervalMinutes(targetTimestampBucket, INTERVAL_MINUTES).isPresent()
+                ));
+        WeatherMapBucket firstBucket = getWeatherMapBucket(targetTimestampBucket);
+        UUID expectedBucketId = firstBucket.getId();
+        Mockito.reset(queryRepositoryAdapter);
+        Objects.requireNonNull(springL1CacheManager.getCache(BUCKETS_REGION)).clear();
+        Objects.requireNonNull(springL1CacheManager.getCache(QUERIES_REGION)).clear();
+        sendPacket(targetTimestampBucket, weatherMap);
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(15))
+                .pollInterval(Duration.ofMillis(300))
+                .untilAsserted(() -> Mockito.verify(queryRepositoryAdapter, Mockito.atLeastOnce())
+                        .saveAndFlush(bucketCaptor.capture()));
+        WeatherMapBucket secondBucket = getWeatherMapBucket(targetTimestampBucket);
+        long bucketRowCount = queryJpaRepositoryAdapter.count();
+        WeatherMapBucket capturedSecondBucket = bucketCaptor.getAllValues().getLast();
+        List<WeatherTelemetryStationTransaction> txIds = txIdsRepository.findAll();
+
+        assertEquals(1L, bucketRowCount);
+        assertEquals(expectedBucketId, capturedSecondBucket.getId());
+        assertEquals(expectedBucketId, secondBucket.getId());
+        assertEquals(targetTimestampBucket, secondBucket.getTimestampBucket());
+        assertEquals(1, txIds.size());
+        assertEquals(TX_DEFAULT_ID, txIds.getFirst().getTxIdHistory());
+    }
+
+    @Test
     void shouldAccumulateDistinctGeohashMetricsIntoSingleBucket_whenTwoDistinctPayloadsArriveSerially() throws Exception {
         long timestampBucket = 2119234000L;
         WeatherMap alphaPayload = WeatherTestUtils.getCustomWeatherMap(timestampBucket, GEOHASH_ALPHA, 22.5f);
@@ -235,11 +235,12 @@ public class HistoricalTelemetryListenerIT extends IntegrationTestSupport {
                 .pollInterval(Duration.ofMillis(300))
                 .untilAsserted(() -> {
                     WeatherMapBucket weatherMapBucket = getWeatherMapBucket(timestampBucket);
-                    assertEquals(2, weatherMapBucket.getGridCells().size());
+                    List<WeatherGridCellMetric> cells = metricsJpaRepository.findAllByIdBucketId(weatherMapBucket.getId());
+                    assertEquals(2, cells.size());
                 });
         WeatherMapBucket targetBucket = getWeatherMapBucket(timestampBucket);
         long bucketRowCount = queryJpaRepositoryAdapter.count();
-        List<String> persistedGeohashes = targetBucket.getGridCells().stream()
+        List<String> persistedGeohashes = metricsJpaRepository.findAllByIdBucketId(targetBucket.getId()).stream()
                 .map(WeatherGridCellMetric::getGeohash)
                 .toList();
 
@@ -261,22 +262,8 @@ public class HistoricalTelemetryListenerIT extends IntegrationTestSupport {
         WeatherMap currentPacket2 = WeatherTestUtils.getCustomWeatherMap(currentBucket, "47.5#17.5", 26.5f);
         WeatherMap pastPacket1 = WeatherTestUtils.getCustomWeatherMap(pastBucket, "41.2#11.8", 12.0f);
         WeatherMap pastPacket2 = WeatherTestUtils.getCustomWeatherMap(pastBucket, "48.9#19.1", 14.5f);
-        SpatialBoxRequest currentRequest = SpatialBoxRequest.newBuilder()
-                .setTimestampBucket(currentBucket)
-                .setTimeIntervalInMinutes(INTERVAL_MINUTES)
-                .setMinLat(minLat)
-                .setMaxLat(maxLat)
-                .setMinLon(minLon)
-                .setMaxLon(maxLon)
-                .build();
-        SpatialBoxRequest pastRequest = SpatialBoxRequest.newBuilder()
-                .setTimestampBucket(pastBucket)
-                .setTimeIntervalInMinutes(INTERVAL_MINUTES)
-                .setMinLat(minLat)
-                .setMaxLat(maxLat)
-                .setMinLon(minLon)
-                .setMaxLon(maxLon)
-                .build();
+        SpatialBoxRequest currentRequest = getSpatialBoxRequest(currentBucket, minLat, maxLat, minLon, maxLon);
+        SpatialBoxRequest pastRequest = getSpatialBoxRequest(pastBucket, minLat, maxLat, minLon, maxLon);
 
         sendPacket(currentBucket, currentPacket1);
         sendPacket(currentBucket, currentPacket2);

@@ -1,7 +1,14 @@
 package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor;
 
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.DEDUPLICATE_ROCKS_DB;
+import static me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils.getWeatherPacketTextMapGetter;
 
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import me.neobliz1.ecomonitoring.platform.common.util.PlatformContractsUtils;
@@ -19,6 +26,7 @@ public class TelemetryDeduplicationProcessor implements Processor<String, Weathe
     private WindowStore<String, String> deduplicateStore;
     private ProcessorContext<String, WeatherPacket> context;
     private final long deduplication_interval;
+    private final Tracer tracer;
 
     @Override
     public void init(ProcessorContext<String, WeatherPacket> context) {
@@ -31,25 +39,41 @@ public class TelemetryDeduplicationProcessor implements Processor<String, Weathe
         if(record==null || record.value()==null) {
             return;
         }
-
         WeatherPacket packet = record.value();
         String uniqueTxId = PlatformContractsUtils.getUniqueTxId(packet);
-        long recordTimestamp = record.timestamp();
+        Span streamSpan = getStreamSpan(record, packet);
+        try(Scope ignored = streamSpan.makeCurrent()) {
 
-        // Check local sliding window for duplicates
-        try(WindowStoreIterator<String> iterator = deduplicateStore.fetch(
-                uniqueTxId,
-                recordTimestamp-deduplication_interval,
-                recordTimestamp+deduplication_interval)) {
-            if(iterator.hasNext()) {
-                log.warn("Duplicate record found for txId: {}", uniqueTxId);
-                return;
+            long recordTimestamp = record.timestamp();
+            try(WindowStoreIterator<String> iterator = deduplicateStore.fetch(
+                    uniqueTxId,
+                    recordTimestamp-deduplication_interval,
+                    recordTimestamp+deduplication_interval)) {
+                if(iterator.hasNext()) {
+                    log.warn("Duplicate record found for txId: {}", uniqueTxId);
+                    return;
+                }
             }
+            deduplicateStore.put(uniqueTxId, "COMMITTED", recordTimestamp);
+            context.forward(record);
+        } catch(Exception e) {
+            streamSpan.recordException(e);
+            streamSpan.setStatus(StatusCode.ERROR, e.getMessage());
+            throw e;
+        } finally {
+            streamSpan.end();
         }
+    }
 
-        // Mark as processed and forward down
-        deduplicateStore.put(uniqueTxId, "COMMITTED", recordTimestamp);
-        context.forward(record);
+    private Span getStreamSpan(Record<String, WeatherPacket> record, WeatherPacket packet) {
+        Context extractedContext = GlobalOpenTelemetry.getPropagators().getTextMapPropagator()
+                .extract(Context.current(), packet, getWeatherPacketTextMapGetter());
+        return tracer.spanBuilder("KafkaStreams_Deduplicate_Record")
+                .setParent(extractedContext)
+                .setAttribute("station.id", packet.getStationId())
+                .setAttribute("kafka.record.key", record.key())
+                .setAttribute("deduplication.interval.ms", deduplication_interval)
+                .startSpan();
     }
 }
 

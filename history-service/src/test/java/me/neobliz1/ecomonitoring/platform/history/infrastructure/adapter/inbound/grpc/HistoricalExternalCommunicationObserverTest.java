@@ -6,12 +6,14 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.github.neobliz1.validproto.config.HttpValidateProtoAutoConfiguration;
 import io.grpc.ForwardingServerCallListener;
 import io.grpc.Metadata;
+import io.grpc.Server;
 import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
@@ -37,6 +39,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.aop.framework.AopProxyUtils;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.grpc.server.advice.GrpcAdviceDiscoverer;
 import org.springframework.grpc.server.advice.GrpcAdviceExceptionHandler;
@@ -61,7 +66,7 @@ public class HistoricalExternalCommunicationObserverTest {
     private HistoricalQueryRepository historicalQueryRepository;
     private HistoricalDataConvertService weatherMapConverter;
     private HistoryServiceGrpc.HistoryServiceBlockingStub blockingStub;
-    private io.grpc.Server server;
+    private Server server;
 
     @BeforeAll
     static void setupSuite() {
@@ -203,7 +208,7 @@ public class HistoricalExternalCommunicationObserverTest {
         assertEquals(Status.Code.INTERNAL, exception.getStatus().getCode());
     }
 
-    private GrpcAdviceExceptionHandler configureAdviceHandler(org.springframework.context.ApplicationContext context) {
+    private GrpcAdviceExceptionHandler configureAdviceHandler(ApplicationContext context) {
         GrpcAdviceDiscoverer discoverer = new GrpcAdviceDiscoverer(context) {
             @Override
             public Map<String, Object> getAnnotatedBeans() {
@@ -276,8 +281,17 @@ public class HistoricalExternalCommunicationObserverTest {
         }
 
         @Bean
-        public HistoricalExternalCommunicationObserver historicalExternalCommunicationObserver(HistoricalQueryRepository queryRepo, HistoricalDataConvertService converter) {
-            return new HistoricalExternalCommunicationObserver(queryRepo, converter);
+        public HistoricalExternalCommunicationObserver historicalExternalCommunicationObserver(HistoricalQueryRepository queryRepo,
+                                                                                               HistoricalDataConvertService converter,
+                                                                                               CacheManager springL1CacheManager) {
+            return new HistoricalExternalCommunicationObserver(queryRepo, converter, springL1CacheManager);
+        }
+
+        @Bean
+        public CacheManager springL1CacheManager() {
+            CacheManager cacheManager = mock(CacheManager.class);
+            when(cacheManager.getCache(anyString())).thenReturn(mock(Cache.class));
+            return cacheManager;
         }
 
         @Bean

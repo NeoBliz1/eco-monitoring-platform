@@ -73,6 +73,16 @@ kafka-topics --create --if-not-exists \
   --config cleanup.policy=compact \
   --config retention.ms=-1
 
+kafka-topics --create --if-not-exists \
+  --bootstrap-server kafka-1:9092 \
+  --command-config /tmp/admin.properties \
+  --topic "${KAFKA_WEATHER_HISTORY_TOPIC}.DLT" \
+  --partitions 6 \
+  --replication-factor 3 \
+  --config min.insync.replicas=2 \
+  --config cleanup.policy=delete \
+  --config retention.ms=1209600000
+
 echo "🔍 VERIFICATION: Fetching live cluster structure for confirmation..."
 kafka-topics --bootstrap-server kafka-1:9092 \
   --command-config /tmp/admin.properties \

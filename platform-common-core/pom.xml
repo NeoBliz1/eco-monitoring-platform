@@ -100,5 +100,9 @@
             <groupId>org.springframework.grpc</groupId>
             <artifactId>spring-grpc-core</artifactId>
         </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-context</artifactId>
+        </dependency>
     </dependencies>
 </project>

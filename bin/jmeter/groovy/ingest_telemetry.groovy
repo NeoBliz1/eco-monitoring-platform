@@ -6,6 +6,8 @@ import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WindReading
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.PrecipitationReading
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.OpticalReading
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
 import java.time.Instant
 import java.util.concurrent.ThreadLocalRandom
 
@@ -128,7 +130,7 @@ def ingestionTask = CompletableFuture.supplyAsync {
 
 def txId = "sample-tx-id"
 def confirmationTask = CompletableFuture.supplyAsync {
-    postRequest(TX_ID_CONFIRMATION_URL, txId.getBytes("UTF-8"), "text/plain")
+    postRequest(TX_ID_CONFIRMATION_URL, protoBytes, "application/x-protobuf")
 }
 
 try {
@@ -136,7 +138,9 @@ try {
 
     int codeIngestion = ingestionTask.get()
     int codeConfirmation = confirmationTask.get()
-
+    if (codeConfirmation == 404) {
+        log.warn("404 Debug info - Target URL used: " + TX_ID_CONFIRMATION_URL)
+    }
     boolean isSuccess = (codeIngestion >= 200 && codeIngestion < 300) && (codeConfirmation >= 200 && codeConfirmation < 300)
 
     SampleResult.setResponseCode(String.valueOf(codeIngestion))

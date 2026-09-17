@@ -1,17 +1,22 @@
 package me.neobliz1.ecomonitoring.platform.common.util;
 
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.SCHEMA_REGISTRY;
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.SPRING_SCHEMA_REGISTRY_URL_PROP_NAME;
 
+import io.opentelemetry.context.propagation.TextMapGetter;
 import lombok.experimental.UtilityClass;
 import lombok.extern.slf4j.Slf4j;
 import me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants;
 import me.neobliz1.ecomonitoring.platform.model.exception.ServiceInstanceNotFoundException;
+import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
+import org.jspecify.annotations.NonNull;
 import org.springframework.cloud.client.ServiceInstance;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.env.Profiles;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -20,6 +25,37 @@ import java.util.Map;
 public class PlatformCommonUtils {
 
     public static final String LOCAL_HOST = "127.0.0.1";
+
+    public static @NonNull TextMapGetter<WeatherPacket> getWeatherPacketTextMapGetter() {
+        return new TextMapGetter<>() {
+            @Override
+            public Iterable<String> keys(@NonNull WeatherPacket carrier) {
+                return Collections.singletonList("traceparent");
+            }
+
+            @Override
+            public String get(WeatherPacket carrier, @NonNull String key) {
+                if("traceparent".equals(key) && carrier.hasField(WeatherPacket.getDescriptor().findFieldByNumber(5))) {
+                    return carrier.getTraceParent();
+                }
+                return null;
+            }
+        };
+    }
+
+    public static @NonNull TextMapGetter<String> getWeatherMapTextMapGetter() {
+        return new TextMapGetter<>() {
+            @Override
+            public Iterable<String> keys(@NonNull String carrier) {
+                return Collections.singletonList("traceparent");
+            }
+
+            @Override
+            public String get(String carrier, @NonNull String key) {
+                return "traceparent".equals(key)?carrier:null;
+            }
+        };
+    }
 
     public static ServiceAddressRecord discoverServiceAddressFromConsulServerByName(DiscoveryClient discoveryClient,
                                                                              ConfigurableEnvironment environment,
@@ -68,7 +104,7 @@ public class PlatformCommonUtils {
         String schemaRegistryUrl = String.format("http://%s:%s", registryRecord.resolvedHost(), registryRecord.resolvedPort());
         environment.getPropertySources().addFirst(
                 new MapPropertySource("consulDynamicSchemaRegistryProps",
-                        Map.of("spring.kafka.streams.properties.schema.registry.url", schemaRegistryUrl))
+                        Map.of(SPRING_SCHEMA_REGISTRY_URL_PROP_NAME, schemaRegistryUrl))
         );
         log.info("Schema registry URL: {}", schemaRegistryUrl);
     }

@@ -1,5 +1,6 @@
 package me.neobliz1.ecomonitoring.platform.history.infrastructure.config;
 
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.SPRING_SCHEMA_REGISTRY_URL_PROP_NAME;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.TX_CHAIN_CONFIRMATION_PROFILE;
 import static me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils.resolveSchemaRegistryServer;
 
@@ -16,13 +17,15 @@ import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.inbound
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalPersistenceRepositoryAdapter;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalQueryRepositoryAdapter;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalTxIdRepositoryAdapter;
-import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalWeatherGridCellJpaRepository;
-import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalWeatherMapJpaRepository;
-import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalWeatherTelemetryTxIdsJpaRepository;
+import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherGridCellJpaRepository;
+import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherMapJpaRepository;
+import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherTelemetryDltJpaRepository;
+import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherTelemetryTxIdsJpaRepository;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.mapper.WeatherMapConverter;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.jdbc.autoconfigure.DataSourceProperties;
 import org.springframework.boot.kafka.autoconfigure.KafkaProperties;
+import org.springframework.cache.CacheManager;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -43,25 +46,7 @@ public class HistoryServiceConfig {
     private final DiscoveryClient discoveryClient;
     private final KafkaProperties kafkaProperties;
     private final ConfigurableEnvironment environment;
-
-    @Value("${spring.kafka.service-name}")
-    private String kafkaServiceName;
-    @Value("${spring.datasource.service-name}")
-    private String dataSourceServiceName;
-    @Value("${spring.datasource.database}")
-    private String dbName;
-    @Value("${spring.datasource.schema-name}")
-    private String dbSchemaName;
-    @Value("${spring.datasource.data-pool.name}")
-    private String poolName;
-    @Value("${spring.datasource.data-pool.max-pool-size}")
-    private int maxPoolSize;
-    @Value("${spring.datasource.data-pool.min-idle}")
-    private int minIdle;
-    @Value("${spring.datasource.data-pool.idle-timeout}")
-    private int idleTimeout;
-    @Value("${spring.datasource.data-pool.connection-timeout}")
-    private int connectionTimeout;
+    private final HistoryInfrastructureProperties infraProps;
 
     @Bean
     public HistoricalQueryRepository historicalQueryRepository(HistoricalWeatherMapJpaRepository weatherMapJpaRepository,
@@ -70,8 +55,8 @@ public class HistoryServiceConfig {
     }
 
     @Bean
-    public HistoricalDataConvertService weatherMapConverter() {
-        return new WeatherMapConverter();
+    public HistoricalDataConvertService weatherMapConverter(HistoricalWeatherGridCellJpaRepository gridCellJpaRepository) {
+        return new WeatherMapConverter(gridCellJpaRepository);
     }
 
     @Bean
@@ -81,16 +66,21 @@ public class HistoryServiceConfig {
     }
 
     @Bean
-    public HistoricalPersistenceRepository historicalPersistenceRepository(HistoricalDataConvertService weatherMapConverter,
+    public HistoricalPersistenceRepository historicalPersistenceRepository(HistoricalWeatherTelemetryDltJpaRepository dltJpaRepository,
+                                                                           HistoricalWeatherGridCellJpaRepository gridCellJpaRepository,
+                                                                           HistoricalDataConvertService weatherMapConverter,
                                                                            HistoricalWeatherMapJpaRepository weatherMapJpaRepository,
-                                                                           HistoricalTxIdRepositoryAdapter txIdAdapter) {
-        return new HistoricalPersistenceRepositoryAdapter(weatherMapConverter, weatherMapJpaRepository, txIdAdapter);
+                                                                           @Autowired(required = false) HistoricalTxIdRepositoryAdapter txIdAdapter,
+                                                                           CacheManager springL1CacheManager) {
+        return new HistoricalPersistenceRepositoryAdapter(dltJpaRepository, gridCellJpaRepository, weatherMapConverter,
+                weatherMapJpaRepository, txIdAdapter, springL1CacheManager);
     }
 
     @Bean
     public HistoricalExternalCommunicationObserver historicalExternalCommunicationObserver(HistoricalQueryRepository queryRepositoryAdapter,
-                                                                                           HistoricalDataConvertService weatherMapConverter) {
-        return new HistoricalExternalCommunicationObserver(queryRepositoryAdapter, weatherMapConverter);
+                                                                                           HistoricalDataConvertService weatherMapConverter,
+                                                                                           CacheManager springL1CacheManager) {
+        return new HistoricalExternalCommunicationObserver(queryRepositoryAdapter, weatherMapConverter, springL1CacheManager);
     }
 
     @Bean
@@ -101,10 +91,12 @@ public class HistoryServiceConfig {
     @Bean
     @Primary
     public DataSource dataSource(DataSourceProperties properties) {
+        HistoryInfrastructureProperties.Datasource datasource = infraProps.getDatasource();
+        String dataSourceServiceName = datasource.getServiceName();
         PlatformCommonUtils.ServiceAddressRecord serviceAddress = PlatformCommonUtils.discoverServiceAddressFromConsulServerByName(discoveryClient,
                 environment, dataSourceServiceName);
         String jdbcUrl = String.format("jdbc:postgresql://%s:%d/%s?currentSchema=%s", serviceAddress.resolvedHost(), serviceAddress.resolvedPort(),
-                dbName, dbSchemaName);
+                datasource.getDatabase(), datasource.getSchemaName());
         if(log.isDebugEnabled()) {
             log.debug("Resolved JDBC URL from Consul: {}", jdbcUrl);
         }
@@ -112,11 +104,12 @@ public class HistoryServiceConfig {
         HikariDataSource hikariDataSource = properties.initializeDataSourceBuilder()
                 .type(HikariDataSource.class)
                 .build();
-        hikariDataSource.setPoolName(poolName);
-        hikariDataSource.setMaximumPoolSize(maxPoolSize);
-        hikariDataSource.setMinimumIdle(minIdle);
-        hikariDataSource.setIdleTimeout(Duration.ofSeconds(idleTimeout).toMillis());
-        hikariDataSource.setConnectionTimeout(Duration.ofSeconds(connectionTimeout).toMillis());
+        HistoryInfrastructureProperties.Datasource.DataPool dataPool = datasource.getDataPool();
+        hikariDataSource.setPoolName(dataPool.getName());
+        hikariDataSource.setMaximumPoolSize(dataPool.getMaxPoolSize());
+        hikariDataSource.setMinimumIdle(dataPool.getMinIdle());
+        hikariDataSource.setIdleTimeout(Duration.ofSeconds(dataPool.getIdleTimeout()).toMillis());
+        hikariDataSource.setConnectionTimeout(Duration.ofSeconds(dataPool.getConnectionTimeout()).toMillis());
         log.info("HikariCP pool initialized: {}", jdbcUrl);
         return hikariDataSource;
     }
@@ -130,9 +123,15 @@ public class HistoryServiceConfig {
     public void resolveEnvironmentBootstrapServers() {
         resolveKafkaBootstrapServers();
         resolveSchemaRegistryServer(discoveryClient, environment);
+        String schemaRegistryUrl = environment.getProperty(SPRING_SCHEMA_REGISTRY_URL_PROP_NAME);
+        infraProps.getKafka().getStreams().getProperties().getSchema().getRegistry().setUrl(schemaRegistryUrl);
     }
 
     private void resolveKafkaBootstrapServers() {
+        String kafkaServiceName = environment.getProperty("spring.kafka.service-name");
+        if(kafkaServiceName==null || kafkaServiceName.isBlank()) {
+            throw new IllegalStateException("Failed to resolve bootstrap servers: 'spring.kafka.service-name' property is missing or empty.");
+        }
         List<String> serviceAddress = PlatformCommonUtils.discoverServiceAddressesFromConsulServerByName(discoveryClient,
                 environment, kafkaServiceName);
         kafkaProperties.setBootstrapServers(serviceAddress);

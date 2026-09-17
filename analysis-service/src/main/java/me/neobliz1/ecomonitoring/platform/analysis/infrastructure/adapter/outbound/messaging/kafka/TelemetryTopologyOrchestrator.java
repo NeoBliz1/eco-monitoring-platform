@@ -6,6 +6,8 @@ import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstan
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.SCHEMA_REGISTRY_URL;
 
 import io.confluent.kafka.streams.serdes.protobuf.KafkaProtobufSerde;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Tracer;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +41,7 @@ import java.util.Map;
 public class TelemetryTopologyOrchestrator implements TelemetryAnalysisService {
 
     private final TelemetryPersistentService persistentService;
+    private final Tracer tracer = GlobalOpenTelemetry.getTracer("weather-analysis-topology");
 
     @Value("${spring.kafka.topic.weather-live}")
     private String kafkaIngestionLiveTopic;
@@ -98,7 +101,7 @@ public class TelemetryTopologyOrchestrator implements TelemetryAnalysisService {
                 Consumed.with(Serdes.String(), weatherPacketSerde)
         );
         KStream<String, WeatherPacket> deduplicatedStream = rawInputStream.process(
-                () -> new TelemetryDeduplicationProcessor(deduplicationInterval),
+                () -> new TelemetryDeduplicationProcessor(deduplicationInterval, tracer),
                 AnalysisConstants.DEDUPLICATE_ROCKS_DB
         );
         deduplicatedStream.to(
@@ -117,7 +120,7 @@ public class TelemetryTopologyOrchestrator implements TelemetryAnalysisService {
             return latGrid+HASHTAG_DELIMITER+lonGrid;
         }).repartition(Repartitioned.with(Serdes.String(), weatherPacketSerde).withName("spatial-repartition-stream"));
         KStream<String, WeatherMap> historyStream = repartitionedByLocationStream.process(
-                () -> new TelemetryAggregationProcessor(persistentService, aggregationSecondsPerInterval),
+                () -> new TelemetryAggregationProcessor(persistentService, aggregationSecondsPerInterval, tracer),
                 AnalysisConstants.ZERO_LOSS_ACCUMULATION_STORE
         );
         Serde<WeatherMap> weatherMapSerde = new KafkaProtobufSerde<>(WeatherMap.class);

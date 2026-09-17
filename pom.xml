@@ -39,6 +39,8 @@
         <confluent.version>8.2.0</confluent.version>
         <liquibase-maven-plugin.version>5.0.3</liquibase-maven-plugin.version>
         <postgresql.version>42.7.13</postgresql.version>
+        <hibernate-jcache.version>7.4.7.Final</hibernate-jcache.version>
+        <redisson-hibernate-72.version>4.7.0</redisson-hibernate-72.version>
         <jackson-databind.version>3.2.2</jackson-databind.version>
         <jackson-annotation.version>2.22</jackson-annotation.version>
         <jackson-datatype-protobuf.version>1.0.0</jackson-datatype-protobuf.version>
@@ -198,6 +200,17 @@
                 <version>${postgresql.version}</version>
             </dependency>
             <dependency>
+                <groupId>org.hibernate.orm</groupId>
+                <artifactId>hibernate-jcache</artifactId>
+                <version>${hibernate-jcache.version}</version>
+                <scope>compile</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.redisson</groupId>
+                <artifactId>redisson-hibernate-72</artifactId>
+                <version>${redisson-hibernate-72.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>tools.jackson.core</groupId>
                 <artifactId>jackson-databind</artifactId>
                 <version>${jackson-databind.version}</version>
@@ -299,7 +312,6 @@
                 <artifactId>maven-failsafe-plugin</artifactId>
                 <version>${maven-surefire-plugin.version}</version>
                 <configuration>
-                    <rerunFailingTestsCount>5</rerunFailingTestsCount>
                     <!--suppress UnresolvedMavenProperty -->
                     <argLine>${jacocoITArgLine} -Xmx2048m</argLine>
                     <classesDirectory>${project.build.outputDirectory}</classesDirectory>
@@ -307,10 +319,32 @@
                 </configuration>
                 <executions>
                     <execution>
+                        <id>default-integration-tests</id>
                         <goals>
                             <goal>integration-test</goal>
                             <goal>verify</goal>
                         </goals>
+                        <configuration>
+                            <rerunFailingTestsCount>0</rerunFailingTestsCount>
+                            <excludes>
+                                <exclude>**/TelemetryInvocationControllerIT.java</exclude>
+                            </excludes>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>flaky-vector-integration-tests</id>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                        <configuration>
+                            <includes>
+                                <include>**/TelemetryInvocationControllerIT.java</include>
+                            </includes>
+                            <forkCount>1</forkCount>
+                            <reuseForks>false</reuseForks>
+                            <rerunFailingTestsCount>5</rerunFailingTestsCount>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
