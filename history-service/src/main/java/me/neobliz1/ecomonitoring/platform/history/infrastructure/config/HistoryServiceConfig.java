@@ -22,6 +22,7 @@ import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outboun
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherTelemetryDltJpaRepository;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherTelemetryTxIdsJpaRepository;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.mapper.WeatherMapConverter;
+import me.neobliz1.ecomonitoring.platform.model.record.ServiceAddressRecord;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.jdbc.autoconfigure.DataSourceProperties;
 import org.springframework.boot.kafka.autoconfigure.KafkaProperties;
@@ -93,7 +94,7 @@ public class HistoryServiceConfig {
     public DataSource dataSource(DataSourceProperties properties) {
         HistoryInfrastructureProperties.Datasource datasource = infraProps.getDatasource();
         String dataSourceServiceName = datasource.getServiceName();
-        PlatformCommonUtils.ServiceAddressRecord serviceAddress = PlatformCommonUtils.discoverServiceAddressFromConsulServerByName(discoveryClient,
+        ServiceAddressRecord serviceAddress = PlatformCommonUtils.discoverServiceAddressFromConsulServerByName(discoveryClient,
                 environment, dataSourceServiceName);
         String jdbcUrl = String.format("jdbc:postgresql://%s:%d/%s?currentSchema=%s", serviceAddress.resolvedHost(), serviceAddress.resolvedPort(),
                 datasource.getDatabase(), datasource.getSchemaName());

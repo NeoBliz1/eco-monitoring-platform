@@ -6,6 +6,6 @@ public record WeatherMapBucketCacheDto(
         UUID id,
         long timestampBucket,
         int intervalMinutes,
-        int version
+        long version
 ) {
 }

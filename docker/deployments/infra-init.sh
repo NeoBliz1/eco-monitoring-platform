@@ -91,12 +91,13 @@ curl --silent --request PUT --url "${CONSUL_URL}" --header 'Content-Type: applic
 # ----------------------------------------------------
 # 🛡️ 1. EXTRACT VAULT INTERNAL TOKEN FROM STORAGE LAYER
 # ----------------------------------------------------
-VAULT_INTERNAL_TOKEN=$(docker run --rm -v docker_vault_tokens:/tmp/tokens redis:8.8.0-alpine cat /tmp/tokens/validator_token 2>/dev/null | tr -d ' \n\r' || echo "")
+REDIS_IMAGE="redis@sha256:9d317178eceac8454a2284a9e6df2466b93c745529947f0cd42a0fa9609d7005"
+VAULT_INTERNAL_TOKEN=$(docker run --rm -v docker_vault_tokens:/tmp/tokens "$REDIS_IMAGE" cat /tmp/tokens/validator_token 2>/dev/null | tr -d ' \n\r' || echo "")
 
 if [ -n "$VAULT_INTERNAL_TOKEN" ]; then
     echo "✅ [Init Worker] Successfully extracted validator token natively from named volume storage layer."
 else
-    echo "❌ FATAL: Unable to extract validator token from persistent vault_tokens volume layer."
+    echo "❌ FATAL: [Init Worker] Unable to extract validator token from persistent vault_tokens volume layer."
     exit 1
 fi
 

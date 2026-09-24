@@ -11,6 +11,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.MapsId;
 import jakarta.persistence.PostLoad;
 import jakarta.persistence.PostPersist;
+import jakarta.persistence.PostUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import lombok.AccessLevel;
@@ -121,6 +122,7 @@ public class WeatherGridCellMetric implements Persistable<WeatherGridCellMetricI
     }
 
     @PostLoad
+    @PostUpdate
     @PostPersist
     public void markNotNew() {
         this.isNewRecord = false;

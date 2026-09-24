@@ -3,7 +3,7 @@ include:
   - ./compose/kafka/kafka-init-topics.yaml
   - ./compose/schema-registry/schema-registry.yaml
   - ./compose/consul/consul.yaml
-  - ./compose/jaeger.yaml
+  - ./compose/jaeger/jaeger.yaml
   - ./compose/redis/redis.yaml
   - ./compose/postgres/postgres.yaml
   - ./compose/vector/vector-sidecar.yaml

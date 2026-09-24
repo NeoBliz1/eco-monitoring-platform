@@ -3,6 +3,7 @@ package me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.adapter.inbo
 import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstants.BLOCKING_TELEMETRY_ENDPOINT_URI;
 import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstants.REACTIVE_TELEMETRY_ENDPOINT_URI;
 import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstants.TELEMETRY_URI;
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.TRACE_PARENT_FORMAT;
 
 import io.github.neobliz1.validproto.annotation.ValidProto;
 import io.github.neobliz1.validproto.annotation.ValidatedProto;
@@ -42,25 +43,6 @@ public class TelemetryInvocationController {
 
     private final TelemetryIngestionService telemetryIngestionService;
 
-    private static @NotNull WeatherPacket injectTraceStringToWeatherPacket(WeatherPacket packet) {
-        SpanContext activeContext = Span.current().getSpanContext();
-        String traceParentString = String.format("00-%s-%s-%s",
-                activeContext.getTraceId(),
-                activeContext.getSpanId(),
-                activeContext.getTraceFlags().asHex());
-        return WeatherPacket.newBuilder(packet)
-                .setTraceParent(traceParentString)
-                .build();
-    }
-
-    public static ResponseEntity<Void> getResponseEntity(Boolean isAccepted) {
-        if(Boolean.TRUE.equals(isAccepted)) {
-            return ResponseEntity.status(HttpStatus.ACCEPTED).build();
-        } else {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-        }
-    }
-
     @Operation(summary = "Ingest reactive sensor data")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "202", description = "Accepted"),
@@ -94,5 +76,25 @@ public class TelemetryInvocationController {
         WeatherPacket tracedPacket = injectTraceStringToWeatherPacket(packet);
 
         return getResponseEntity(telemetryIngestionService.processTelemetryPacketVirtual(tracedPacket));
+    }
+
+
+    private static @NotNull WeatherPacket injectTraceStringToWeatherPacket(WeatherPacket packet) {
+        SpanContext activeContext = Span.current().getSpanContext();
+        String traceParentString = String.format(TRACE_PARENT_FORMAT,
+                activeContext.getTraceId(),
+                activeContext.getSpanId(),
+                activeContext.getTraceFlags().asHex());
+        return WeatherPacket.newBuilder(packet)
+                .setTraceParent(traceParentString)
+                .build();
+    }
+
+    public static ResponseEntity<Void> getResponseEntity(Boolean isAccepted) {
+        if(Boolean.TRUE.equals(isAccepted)) {
+            return ResponseEntity.status(HttpStatus.ACCEPTED).build();
+        } else {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        }
     }
 }

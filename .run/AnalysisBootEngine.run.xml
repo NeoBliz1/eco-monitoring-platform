@@ -18,7 +18,7 @@
         <module name="analysis-service"/>
         <option name="SPRING_BOOT_MAIN_CLASS" value="me.neobliz1.ecomonitoring.platform.analysis.AnalysisBootEngine"/>
         <option name="VM_PARAMETERS"
-                value="-javaagent:$USER_HOME$/.m2/repository/io/opentelemetry/javaagent/opentelemetry-javaagent/2.31.1/opentelemetry-javaagent-2.31.1.jar "/>
+                value="-Dio.netty.resolver.dns.defaultNameServer=10.10.5.253:8600 -javaagent:$MAVEN_REPOSITORY$/io/opentelemetry/javaagent/opentelemetry-javaagent/2.31.1/opentelemetry-javaagent-2.31.1.jar"/>
     <extension name="coverage">
       <pattern>
           <option name="PATTERN" value="me.neobliz1.ecomonitoring.platform.analysis.*"/>

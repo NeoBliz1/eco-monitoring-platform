@@ -4,7 +4,7 @@ import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 
 public interface TelemetryQueryArchive {
 
-    WeatherMap findFilteredGridDataBySpatialBoxInArchive(
+    WeatherMap findGridDataBySpatialBoxInHistoryService(
             long activeBucketFloor,
             double minLat,
             double maxLat,

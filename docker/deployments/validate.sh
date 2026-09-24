@@ -20,6 +20,7 @@ BLUE='\033[0;34m'
 NC='\033[0;0m'
 
 FAILED_TESTS=0
+REDIS_IMAGE="redis@sha256:9d317178eceac8454a2284a9e6df2466b93c745529947f0cd42a0fa9609d7005"
 
 log_header() { echo -e "\n${BLUE}======================================================================${NC}\n⚡ $1\n${BLUE}======================================================================${NC}"; }
 log_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
@@ -175,12 +176,12 @@ EXPECTED_TOPICS=(
 
 log_info "Querying active Kafka Broker quorum for configured topics..."
 
-VAULT_INTERNAL_TOKEN=$(docker run --rm -v docker_vault_tokens:/tmp/tokens redis:8.8.0-alpine cat /tmp/tokens/validator_token 2>/dev/null | tr -d ' \n\r' || echo "")
+VAULT_INTERNAL_TOKEN=$(docker run --rm -v docker_vault_tokens:/tmp/tokens "$REDIS_IMAGE" cat /tmp/tokens/validator_token 2>/dev/null | tr -d ' \n\r' || echo "")
 
 if [ -n "$VAULT_INTERNAL_TOKEN" ]; then
 	log_success "Successfully extracted validator token natively from named volume storage layer."
 else
-	log_error "Unable to extract validator token from persistent vault_tokens volume layer."
+	log_error "[Validator] Unable to extract validator token from persistent vault_tokens volume layer."
 	exit 1
 fi
 
@@ -368,7 +369,7 @@ log_header "SECURITY PURGE: Scrubbing plain-text volume tokens from disk..."
 
 docker run --rm \
   -v docker_vault_tokens:/tmp/tokens \
-  redis:8.8.0-alpine sh -c 'rm -rf /tmp/tokens/*' 2>/dev/null || true
+  "$REDIS_IMAGE" sh -c 'rm -rf /tmp/tokens/*' 2>/dev/null || true
 
 log_success "All validation and AppRole tokens have been successfully scrubbed from host storage! 🔒"
 

@@ -1,0 +1,14 @@
+station_id: "00000000001"
+timestamp: 1716300650000
+location {
+  latitude: 45.4642
+  longitude: 9.1900
+  altitude: 120.0
+}
+readings {
+  ambient {
+    temperature_c: 22.5
+    humidity_pct: 55.0
+    pressure_hpa: 1013.25
+  }
+}

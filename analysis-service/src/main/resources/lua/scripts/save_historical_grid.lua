@@ -1,4 +1,4 @@
--- KEYS[1]: individual_cell_key (e.g., weather:map:00001787473200000:55.0:-61.0)
+-- KEYS[1]: individual_cell_key (e.g., 00001787473200000#55.0#-61.0)
 -- ARGV[1]: lat
 -- ARGV[2]: lon
 -- ARGV[3]: serializedLayers (binary blob)

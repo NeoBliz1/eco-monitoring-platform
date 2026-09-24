@@ -1,12 +1,12 @@
 package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.persistence.redis;
 
-import static me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.util.AggregationUtils.validateSpatialKey;
-import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.HASHTAG_DELIMITER;
+import static me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.record.ParsedStorageKey.parseSpatialKey;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryPersistenceRepository;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.record.ParsedStorageKey;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -49,25 +49,22 @@ public class TelemetryPersistenceRepositoryAdapter implements TelemetryPersisten
     }
 
     @Override
-    public void saveHistoricalGridCell(@NonNull String geohash, byte @NonNull [] serializedLayers) {
-        String[] parts = geohash.split(HASHTAG_DELIMITER);
-        validateSpatialKey(parts, geohash);
-        byte[][] scriptArgs = parseArgsForStoreInRedis(parts[0], geohash, serializedLayers);
+    public void saveHistoricalGridCell(@NonNull String spatialKey, byte @NonNull [] serializedLayers) {
+        ParsedStorageKey parsedSpatialKey = parseSpatialKey(spatialKey);
+        byte[][] scriptArgs = parseArgsForStoreInRedis(parsedSpatialKey.bucketTime(), parsedSpatialKey, serializedLayers);
         protobufRedisTemplate.execute(
                 saveHistoricalGridScript,
                 RedisSerializer.byteArray(),
                 RedisSerializer.string(),
-                List.of(geohash),
+                List.of(spatialKey),
                 (Object[]) scriptArgs
         );
     }
 
-    private byte[] @NonNull [] parseArgsForStoreInRedis(@NonNull String recordKey, @NonNull String geohash,
+    private byte[] @NonNull [] parseArgsForStoreInRedis(@NonNull String recordKey, @NonNull ParsedStorageKey parseSpatialKey,
                                                         byte @NonNull [] serializedLayers) {
-        String[] parts = geohash.split(HASHTAG_DELIMITER);
-        validateSpatialKey(parts, geohash);
-        String lat = parts[1];
-        String lon = parts[2];
+        String lat = parseSpatialKey.lat();
+        String lon = parseSpatialKey.lon();
         long ttlInSeconds = Duration.ofHours(redisCacheTtlInterval).toSeconds();
         return new byte[][]{
                 lat.getBytes(StandardCharsets.UTF_8),

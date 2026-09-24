@@ -11,6 +11,7 @@ DEBUG_ANALYSIS=false
 DEBUG_HISTORY=false
 SKIP_INFRA_TEARDOWN=false
 CLEAR_LOGS=false
+REDIS_IMAGE="redis@sha256:9d317178eceac8454a2284a9e6df2466b93c745529947f0cd42a0fa9609d7005"
 
 for arg in "$@"; do
 	case $arg in
@@ -152,8 +153,8 @@ JVM_MEM_OPTS="-Xms256m -Xmx512m"
 ENV_PAYLOAD=()
 
 echo "🎟️  Extracting private AppRole credential strings from vault_tokens volume layer..."
-HISTORY_VAULT_ROLE_ID=$(docker run --rm -v docker_vault_tokens:/tmp/tokens redis:8.8.0-alpine cat /tmp/tokens/history-service_role_id 2>/dev/null | tr -d ' \n\r' || echo "")
-HISTORY_VAULT_SECRET_ID=$(docker run --rm -v docker_vault_tokens:/tmp/tokens redis:8.8.0-alpine cat /tmp/tokens/history-service_secret_id 2>/dev/null | tr -d ' \n\r' || echo "")
+HISTORY_VAULT_ROLE_ID=$(docker run --rm -v docker_vault_tokens:/tmp/tokens "$REDIS_IMAGE" cat /tmp/tokens/history-service_role_id 2>/dev/null | tr -d ' \n\r' || echo "")
+HISTORY_VAULT_SECRET_ID=$(docker run --rm -v docker_vault_tokens:/tmp/tokens "$REDIS_IMAGE" cat /tmp/tokens/history-service_secret_id 2>/dev/null | tr -d ' \n\r' || echo "")
 
 if [ -z "$HISTORY_VAULT_ROLE_ID" ] || [ -z "$HISTORY_VAULT_SECRET_ID" ]; then
 	echo "❌ FATAL: Unable to resolve AppRole identifiers for History Service from storage volume."
@@ -161,8 +162,8 @@ if [ -z "$HISTORY_VAULT_ROLE_ID" ] || [ -z "$HISTORY_VAULT_SECRET_ID" ]; then
 fi
 echo "✅ Successfully staged AppRole variables for History Service bootstrap sequence."
 
-ANALYSIS_VAULT_ROLE_ID=$(docker run --rm -v docker_vault_tokens:/tmp/tokens redis:8.8.0-alpine cat /tmp/tokens/analysis-service_role_id 2>/dev/null | tr -d ' \n\r' || echo "")
-ANALYSIS_VAULT_SECRET_ID=$(docker run --rm -v docker_vault_tokens:/tmp/tokens redis:8.8.0-alpine cat /tmp/tokens/analysis-service_secret_id 2>/dev/null | tr -d ' \n\r' || echo "")
+ANALYSIS_VAULT_ROLE_ID=$(docker run --rm -v docker_vault_tokens:/tmp/tokens "$REDIS_IMAGE" cat /tmp/tokens/analysis-service_role_id 2>/dev/null | tr -d ' \n\r' || echo "")
+ANALYSIS_VAULT_SECRET_ID=$(docker run --rm -v docker_vault_tokens:/tmp/tokens "$REDIS_IMAGE" cat /tmp/tokens/analysis-service_secret_id 2>/dev/null | tr -d ' \n\r' || echo "")
 if [ -z "$ANALYSIS_VAULT_ROLE_ID" ] || [ -z "$ANALYSIS_VAULT_SECRET_ID" ]; then
 	echo "❌ FATAL: Unable to resolve AppRole identifiers for Analysis Service from storage volume."
 	exit 1
@@ -201,7 +202,43 @@ OTEL_INGESTION_NAME=$(get_env_val SPRING_INGESTION_APPLICATION_NAME)
 OTEL_ANALYSIS_NAME=$(get_env_val SPRING_ANALYSIS_APPLICATION_NAME)
 OTEL_HISTORY_NAME=$(get_env_val SPRING_HISTORY_APPLICATION_NAME)
 
-AGENT_PATH="/home/muser/.m2/repository/io/opentelemetry/javaagent/opentelemetry-javaagent/2.31.1/opentelemetry-javaagent-2.31.1.jar"
+CONSUL_HOST=$(get_env_val SPRING_CLOUD_CONSUL_HOST)
+CONSUL_PORT=$(get_env_val SPRING_CLOUD_CONSUL_PORT)
+
+wait_for_consul_service() {
+    local service_name=$1
+    local max_attempts=40
+    local attempt=1
+    local wait_sec=3
+
+    # Construct standard health check url using your resolved variables
+    local target_health_url="http://${CONSUL_HOST}:${CONSUL_PORT}/v1/health/service/${service_name}?passing=true"
+
+    echo "⏳ Waiting for '$service_name' to report PASSING state at: $target_health_url"
+    while [ $attempt -le $max_attempts ]; do
+        local response
+        response=$(curl -s -m 2 "$target_health_url")
+
+        # Verify the array contains at least one node passing health evaluation
+        if [ -n "$response" ] && [ "$response" != "[]" ]; then
+            echo "✅ Service '$service_name' is verified HEALTHY in cluster network!"
+            return 0
+        fi
+
+        echo "   [Attempt $attempt/$max_attempts] Waiting for active state validation..."
+        sleep $wait_sec
+        attempt=$((attempt + 1))
+    done
+
+    echo "❌ FATAL: Timed out waiting for service '$service_name' to clear Consul health gates."
+    return 1
+}
+
+AGENT_PATH="$HOME/.m2/repository/io/opentelemetry/javaagent/opentelemetry-javaagent/2.31.1/opentelemetry-javaagent-2.31.1.jar"
+if [ ! -f "$AGENT_PATH" ]; then
+	echo "❌ FATAL: Compiled opentelemetry-javaagent directory path $AGENT_PATH does not exist."
+	exit 1
+fi
 INGESTION_OTEL_OPTS="-javaagent:$AGENT_PATH"
 ANALYSIS_OTEL_OPTS="-javaagent:$AGENT_PATH"
 HISTORY_OTEL_OPTS="-javaagent:$AGENT_PATH"
@@ -222,11 +259,26 @@ echo "📡 Spawning background processes..."
 env "${ENV_PAYLOAD[@]}" OTEL_SERVICE_NAME="$OTEL_INGESTION_NAME" java $INGESTION_OTEL_OPTS $INGESTION_DEBUG_OPTS ${JVM_MEM_OPTS:-} -Dspring.profiles.active="prod,local" -jar ingestion-service.jar >ingestion.log 2>&1 &
 PID_INGESTION=$!
 # shellcheck disable=SC2086
-env "${ENV_PAYLOAD[@]}" OTEL_SERVICE_NAME="$OTEL_ANALYSIS_NAME" java $ANALYSIS_OTEL_OPTS $ANALYSIS_DEBUG_OPTS ${JVM_MEM_OPTS:-} -Dspring.profiles.active="prod,local" -jar analysis-service.jar >analysis.log 2>&1 &
-PID_ANALYSIS=$!
-# shellcheck disable=SC2086
 env "${ENV_PAYLOAD[@]}" OTEL_SERVICE_NAME="$OTEL_HISTORY_NAME" java $HISTORY_OTEL_OPTS $HISTORY_DEBUG_OPTS ${JVM_MEM_OPTS:-} -Dspring.profiles.active="prod,local,weather-packet-chain-confirmation" -jar history-service.jar >history.log 2>&1 &
 PID_HISTORY=$!
+sleep 1.5
+if ! kill -0 "$PID_HISTORY" 2>/dev/null; then
+    echo "❌ ERROR: HISTORY SERVICE failed to start! Check bin/history.log"
+    pkill -15 -f "ingestion-service.jar" 2>/dev/null || true
+    exit 1
+fi
+
+if ! wait_for_consul_service "$OTEL_HISTORY_NAME"; then
+    echo "🚨 Health criteria gate failed. Cleaning up early tier allocations..."
+    pkill -15 -f "ingestion-service.jar" 2>/dev/null || true
+    pkill -15 -f "history-service.jar" 2>/dev/null || true
+    exit 1
+fi
+
+echo "📡 Spawning analysis engine components..."
+# shellcheck disable=SC2086
+env "${ENV_PAYLOAD[@]}" OTEL_SERVICE_NAME="$OTEL_ANALYSIS_NAME" java $ANALYSIS_OTEL_OPTS $ANALYSIS_DEBUG_OPTS ${JVM_MEM_OPTS:-} -Dspring.profiles.active="prod,local" -jar analysis-service.jar >analysis.log 2>&1 &
+PID_ANALYSIS=$!
 
 if [ -d "${PROJECT_ROOT:-.}/bin/gateway" ]; then
 	cd "${PROJECT_ROOT}/bin/gateway"

@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.inbound.TelemetryQueryService;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.service.SpatialRequestValidator;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.inbound.web.doc.WeatherMapResponse;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.record.WeatherMapRecord;
 import me.neobliz1.ecomonitoring.platform.model.dto.ErrorEnvelopeDto;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 import org.springframework.cache.annotation.Cacheable;
@@ -38,9 +39,9 @@ public class TelemetryAnalysisController {
 
     @Operation(summary = "Query weather map matrix")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "OK", content = @Content(mediaType = "application/json", schema = @Schema(implementation = WeatherMapResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Bad request", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorEnvelopeDto.class))),
-            @ApiResponse(responseCode = "404", description = "Not found", content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorEnvelopeDto.class)))
+            @ApiResponse(responseCode = "200", description = "OK", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = WeatherMapResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Bad request", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = ErrorEnvelopeDto.class))),
+            @ApiResponse(responseCode = "404", description = "Not found", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = ErrorEnvelopeDto.class)))
     })
     @GetMapping(value = WEATHER_MAP_ENDPOINT, produces = MediaType.APPLICATION_JSON_VALUE)
     @Cacheable(
@@ -58,8 +59,9 @@ public class TelemetryAnalysisController {
             @NonNull @RequestParam(name = "max-lon") Double maxLon
     ) {
         SpatialRequestValidator.validateCoordinatesBox(minLat, maxLat, minLon, maxLon);
-        WeatherMap mapByCoordinates = queryService.getLatestTimeIntervalWeatherMapByCoordinates(targetTimestamp, minLat,
+        WeatherMapRecord mapRecordByCoordinates = queryService.getLatestTimeIntervalWeatherMapByCoordinates(targetTimestamp, minLat,
                 maxLat, minLon, maxLon);
-        return ResponseEntity.ok(mapByCoordinates);
+        WeatherMap payload = mapRecordByCoordinates.payload();
+        return ResponseEntity.ok(payload);
     }
 }

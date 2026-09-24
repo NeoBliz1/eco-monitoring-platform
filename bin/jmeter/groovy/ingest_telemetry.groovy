@@ -9,7 +9,12 @@ import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.OpticalReading
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import java.time.Instant
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.ThreadLocalRandom
+
+final def safeLog = log
+
+Properties props = binding.hasVariable('props') ? binding.getVariable('props') : new Properties()
 
 final double MIN_LAT = 35.000d
 final double MAX_LAT = 45.000d
@@ -39,6 +44,24 @@ def location = Location.newBuilder()
         .setLongitude(lon)
         .setAltitude(alt)
         .build()
+
+def globalPool = props.computeIfAbsent("EXISTING_LOCATIONS", { k -> new CopyOnWriteArrayList() })
+
+double roundedLat = Math.round(lat * 1000.0d) / 1000.0d
+double roundedLon = Math.round(lon * 1000.0d) / 1000.0d
+def mapEntry = [lat: roundedLat, lon: roundedLon]
+int poolSize = globalPool.size()
+
+if (poolSize < 50000) {
+    globalPool.add(mapEntry)
+} else {
+    int randomIndex = ThreadLocalRandom.current().nextInt(poolSize)
+    try {
+        globalPool.set(randomIndex, mapEntry)
+    } catch (IndexOutOfBoundsException e) {
+        globalPool.add(mapEntry)
+    }
+}
 
 List<SensorReading> readingsList = new ArrayList<>()
 
@@ -117,7 +140,7 @@ def postRequest(String url, byte[] body, String contentType) {
         }
         return responseCode
     } catch (Exception e) {
-        log.error("Request failed: " + e.getMessage())
+        safeLog.error("Request failed: " + e.getMessage())
         return 500
     } finally {
         conn?.disconnect()

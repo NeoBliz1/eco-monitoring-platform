@@ -13,6 +13,7 @@ import lombok.val;
 import me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.cache.ClusterEvictingCaffeineCache;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.cache.SpringBootRedissonRegionFactory;
+import me.neobliz1.ecomonitoring.platform.model.record.ServiceAddressRecord;
 import org.hibernate.cfg.AvailableSettings;
 import org.jspecify.annotations.NonNull;
 import org.redisson.Redisson;
@@ -51,25 +52,6 @@ public class DatabaseCacheDynamicConfig {
         if(ttl!=null) {
             props.put(String.format("hibernate.cache.redisson.%s.expiration.time_to_live", region), ttl);
         }
-    }
-
-    @Bean(destroyMethod = "shutdown")
-    public RedissonClient dynamicRedissonClient(DiscoveryClient discoveryClient) {
-        val redis = infraProps.getData().getRedis();
-        PlatformCommonUtils.ServiceAddressRecord serviceAddress = PlatformCommonUtils.discoverServiceAddressFromConsulServerByName(
-                discoveryClient, environment, redis.getServiceName());
-
-        Config config = new Config();
-        String redisUrl = String.format("redis://%s:%d", serviceAddress.resolvedHost(), serviceAddress.resolvedPort());
-        config.useSingleServer()
-                .setAddress(redisUrl)
-                .setConnectionPoolSize(64)
-                .setConnectionMinimumIdleSize(24);
-        String redisPassword = redis.getPassword();
-        if(redisPassword!=null && !redisPassword.isBlank()) {
-            config.setPassword(redisPassword);
-        }
-        return Redisson.create(config);
     }
 
     @Bean
@@ -112,11 +94,31 @@ public class DatabaseCacheDynamicConfig {
         return cacheManager;
     }
 
+    @Bean(destroyMethod = "shutdown")
+    public RedissonClient dynamicRedissonClient(DiscoveryClient discoveryClient) {
+        val redis = infraProps.getData().getRedis();
+        ServiceAddressRecord serviceAddress = PlatformCommonUtils.discoverServiceAddressFromConsulServerByName(
+                discoveryClient, environment, redis.getServiceName());
+
+        Config config = new Config();
+        String redisUrl = String.format("redis://%s:%d", serviceAddress.resolvedHost(), serviceAddress.resolvedPort());
+        config.useSingleServer()
+                .setAddress(redisUrl)
+                .setConnectionPoolSize(64)
+                .setConnectionMinimumIdleSize(24);
+        String redisPassword = redis.getPassword();
+        if(redisPassword!=null && !redisPassword.isBlank()) {
+            config.setPassword(redisPassword);
+        }
+        return Redisson.create(config);
+    }
+
     private @NonNull CaffeineCache createClusterAwareL1Cache(String cacheName, @NonNull RedissonClient redissonClient,
                                                              String invalidationTopicPrefix, int l1CacheTtlMinutes, int l1CacheMaxSize) {
         Cache<Object, Object> nativeCaffeineCache = Caffeine.newBuilder()
                 .maximumSize(l1CacheMaxSize)
                 .expireAfterAccess(l1CacheTtlMinutes, TimeUnit.MINUTES)
+                .recordStats()
                 .build();
         RTopic topic = redissonClient.getTopic(invalidationTopicPrefix+cacheName);
         topic.addListener(Object.class, (channel, expiredKey) -> {

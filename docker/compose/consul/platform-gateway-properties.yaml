@@ -1,5 +1,5 @@
 port: "8000"
 log_level: "DEBUG"
-host: "10.10.5.253"
+host: "0.0.0.0"
 logstash_destination: "localhost:6001"
 routes: "/api/v1/telemetry/virtual:eco-monitoring-ingestion,/api/v1/telemetry/mono:eco-monitoring-ingestion,/api/v1/weather-map/spatial:eco-monitoring-analysis,/api/v1/tx-ingestion-history/weather-packet-tx-id:eco-monitoring-history"

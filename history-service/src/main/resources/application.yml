@@ -23,8 +23,6 @@ spring:
         service-name: ${SPRING_HISTORY_APPLICATION_NAME}
         health-check-path: /actuator/health
         health-check-interval: 10s
-        metadata:
-          gRPC_port: ${HISTORY_APPLICATION_GRPC_PORT}
       config:
         enabled: true
         format: yaml
@@ -68,10 +66,10 @@ spring:
       key-serializer: "org.apache.kafka.common.serialization.StringSerializer"
       value-serializer: "io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer"
   jpa:
-    database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: true
+    open-in-view: false
     properties:
       hibernate:
         order_inserts: true
@@ -89,14 +87,6 @@ spring:
                 singleServerConfig:
                   connectionPoolSize: 64
                   connectionMinimumIdleSize: 24
-                config: >
-                  {
-                    "weather_map_buckets": {"ttl": 1800000},
-                    "weather_map_buckets.gridCells": {"ttl": 1800000},
-                    "weather_grid_cell_metrics": {"ttl": 1800000},
-                    "default-query-results-region": {"ttl": 300000},
-                    "default-update-timestamps-region": {"ttl": 0}
-                  }
 
 server:
   port: ${HISTORY_APPLICATION_SERVER_PORT}

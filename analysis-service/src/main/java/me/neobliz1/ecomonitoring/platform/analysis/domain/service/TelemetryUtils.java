@@ -1,7 +1,10 @@
 package me.neobliz1.ecomonitoring.platform.analysis.domain.service;
 
+import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.GRID_BUCKET_KEY_FORMAT;
+
 import lombok.experimental.UtilityClass;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants;
+import org.jspecify.annotations.NonNull;
 
 import java.time.Duration;
 
@@ -21,7 +24,7 @@ public class TelemetryUtils {
         return packetTimestampInMillis/aggIntervalMillis*aggIntervalMillis;
     }
 
-    private static long getMillis(long intervalSeconds) {
+    public static long getMillis(long intervalSeconds) {
         return Duration.ofSeconds(intervalSeconds).toMillis();
     }
 
@@ -39,5 +42,9 @@ public class TelemetryUtils {
 
     private static double roundCoordinate(double c) {
         return Math.round(c*AnalysisConstants.SCALE_COFF)/AnalysisConstants.SCALE_COFF;
+    }
+
+    public static @NonNull String getSpatialIndexKey(long activeBucketFloor) {
+        return "spatial_index:"+String.format(GRID_BUCKET_KEY_FORMAT, activeBucketFloor);
     }
 }

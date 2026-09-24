@@ -75,7 +75,7 @@ class TelemetryQueryGrpcAdapterTest {
                     .build();
             mockHistoryService.setNextResponse(expectedResponse);
 
-            WeatherMap actualResponse = adapter.findFilteredGridDataBySpatialBoxInArchive(
+            WeatherMap actualResponse = adapter.findGridDataBySpatialBoxInHistoryService(
                     ACTIVE_BUCKET_FLOOR, MIN_LAT, MAX_LAT, MIN_LON, MAX_LON
             );
 
@@ -98,7 +98,7 @@ class TelemetryQueryGrpcAdapterTest {
                     Status.NOT_FOUND.withDescription("No archival bucket available").asRuntimeException()
             );
 
-            assertThatThrownBy(() -> adapter.findFilteredGridDataBySpatialBoxInArchive(
+            assertThatThrownBy(() -> adapter.findGridDataBySpatialBoxInHistoryService(
                     ACTIVE_BUCKET_FLOOR, MIN_LAT, MAX_LAT, MIN_LON, MAX_LON
             ))
                     .isInstanceOf(WeatherMapDataNotFoundException.class);

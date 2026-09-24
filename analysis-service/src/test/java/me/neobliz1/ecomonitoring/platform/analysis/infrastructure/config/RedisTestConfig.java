@@ -3,7 +3,9 @@ package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.config;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryPersistenceRepository;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryQueryArchive;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryQueryRepository;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.history.grpc.TelemetryQueryGrpcAdapter;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.persistence.redis.TelemetryPersistenceRepositoryAdapter;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.persistence.redis.TelemetryQueryRepositoryAdapter;
 import org.jspecify.annotations.NonNull;
@@ -13,6 +15,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
+import weather.history.HistoryServiceGrpc;
 
 import java.util.List;
 
@@ -41,7 +44,13 @@ public class RedisTestConfig {
 
     @Bean
     public TelemetryQueryRepository telemetryQueryRepository(RedisTemplate<String, byte[]> protobufRedisTemplate,
+                                                             TelemetryQueryArchive telemetryQueryArchive,
                                                              RedisScript<List<byte[]>> queryHistoricalGridScript) {
-        return new TelemetryQueryRepositoryAdapter(queryHistoricalGridScript, protobufRedisTemplate);
+        return new TelemetryQueryRepositoryAdapter(queryHistoricalGridScript, protobufRedisTemplate, telemetryQueryArchive, 30);
+    }
+
+    @Bean
+    public TelemetryQueryArchive telemetryQueryArchive(HistoryServiceGrpc.HistoryServiceBlockingStub historyServiceStub) {
+        return new TelemetryQueryGrpcAdapter(historyServiceStub, 10);
     }
 }

@@ -6,3 +6,4 @@ if (props.get("TIMESTAMPS") == null) {
     list.add(Instant.now().toEpochMilli())
     props.put("TIMESTAMPS", list)
 }
+if (SampleResult != null) SampleResult.setSuccessful(true)

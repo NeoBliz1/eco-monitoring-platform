@@ -36,7 +36,8 @@ echo -e "\n✅ PostgreSQL data layer fully provisioned!"
 echo "⚙️ Executing Liquibase schema migrations..."
 cd "$PROJECT_ROOT"
 
-VAULT_INTERNAL_TOKEN=$(docker run --rm -v docker_vault_tokens:/tmp/tokens redis:8.8.0-alpine cat /tmp/tokens/validator_token 2>/dev/null | tr -d ' \n\r' || echo "")
+REDIS_IMAGE="redis@sha256:9d317178eceac8454a2284a9e6df2466b93c745529947f0cd42a0fa9609d7005"
+VAULT_INTERNAL_TOKEN=$(docker run --rm -v docker_vault_tokens:/tmp/tokens "$REDIS_IMAGE" cat /tmp/tokens/validator_token 2>/dev/null | tr -d ' \n\r' || echo "")
 POSTGRES_SECRETS=$(curl -s --header "X-Vault-Token: $VAULT_INTERNAL_TOKEN" "http://localhost:8200/v1/secret/data/postgres" || echo "")
 if [ -z "$POSTGRES_SECRETS" ]; then
     echo "❌ FATAL: Vault response is empty."

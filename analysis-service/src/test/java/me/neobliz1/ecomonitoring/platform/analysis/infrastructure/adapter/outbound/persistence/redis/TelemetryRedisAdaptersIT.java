@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
@@ -17,6 +18,7 @@ import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.RedisSerializer;
 import redis.embedded.RedisServer;
+import weather.history.HistoryServiceGrpc;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -48,6 +50,8 @@ class TelemetryRedisAdaptersIT {
                         "spring.main.web-application-type=none",
                         "spring.redis.records.ttl=1"
                 )
+                .withBean(HistoryServiceGrpc.HistoryServiceBlockingStub.class, () ->
+                        Mockito.mock(HistoryServiceGrpc.HistoryServiceBlockingStub.class))
                 .withBean(LettuceConnectionFactory.class, () -> {
                     RedisStandaloneConfiguration config = new RedisStandaloneConfiguration("localhost", 6379);
                     config.setPassword("testpassword");
@@ -99,7 +103,7 @@ class TelemetryRedisAdaptersIT {
             TelemetryQueryRepositoryAdapter queryRepository = context.getBean(TelemetryQueryRepositoryAdapter.class);
 
             persistenceRepository.saveHistoricalGridCell(GEOHASH, EXPECTED_PAYLOAD);
-            Map<String, byte[]> resultsMatrix = queryRepository.findFilteredGridDataBySpatialBox(ACTIVE_BUCKET_FLOOR,
+            Map<String, byte[]> resultsMatrix = queryRepository.findFilteredGridDataBySpatialBoxInRedis(ACTIVE_BUCKET_FLOOR,
                     MIN_LAT, MAX_LAT, MIN_LON, MAX_LON);
 
             Assertions.assertNotNull(resultsMatrix);
@@ -138,7 +142,7 @@ class TelemetryRedisAdaptersIT {
             TelemetryQueryRepositoryAdapter queryRepository = context.getBean(TelemetryQueryRepositoryAdapter.class);
 
             Assertions.assertThrows(WeatherMapDataNotFoundException.class,
-                    () -> queryRepository.findFilteredGridDataBySpatialBox(0L, MIN_LAT, MAX_LAT, MIN_LON, MAX_LON));
+                    () -> queryRepository.findFilteredGridDataBySpatialBoxInRedis(0L, MIN_LAT, MAX_LAT, MIN_LON, MAX_LON));
         });
     }
 

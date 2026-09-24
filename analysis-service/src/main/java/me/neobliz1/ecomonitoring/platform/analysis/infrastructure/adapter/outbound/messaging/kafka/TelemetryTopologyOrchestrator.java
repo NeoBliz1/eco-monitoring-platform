@@ -1,8 +1,10 @@
 package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka;
 
+import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.DEDUPLICATE_ROCKS_DB;
+import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.ZERO_LOSS_ACCUMULATION_STORE;
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryUtils.clampLatitude;
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryUtils.clampLongitude;
-import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.HASHTAG_DELIMITER;
+import static me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.util.AggregationUtils.getGeohash;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.SCHEMA_REGISTRY_URL;
 
 import io.confluent.kafka.streams.serdes.protobuf.KafkaProtobufSerde;
@@ -11,7 +13,6 @@ import io.opentelemetry.api.trace.Tracer;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.inbound.TelemetryAnalysisService;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryPersistentService;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.TelemetryAggregationProcessor;
@@ -77,7 +78,7 @@ public class TelemetryTopologyOrchestrator implements TelemetryAnalysisService {
     private void registerDeduplicationStore(StreamsBuilder streamsBuilder) {
         StoreBuilder<WindowStore<String, String>> dedupStoreBuilder = Stores.windowStoreBuilder(
                 Stores.persistentWindowStore(
-                        AnalysisConstants.DEDUPLICATE_ROCKS_DB,
+                        DEDUPLICATE_ROCKS_DB,
                         Duration.ofMillis(deduplicationInterval),
                         Duration.ofMillis(deduplicationInterval),
                         false
@@ -89,7 +90,7 @@ public class TelemetryTopologyOrchestrator implements TelemetryAnalysisService {
 
     private void registerAggregationStore(StreamsBuilder streamsBuilder) {
         StoreBuilder<KeyValueStore<String, WeatherPacket>> accumStoreBuilder = Stores.keyValueStoreBuilder(
-                Stores.persistentKeyValueStore(AnalysisConstants.ZERO_LOSS_ACCUMULATION_STORE),
+                Stores.persistentKeyValueStore(ZERO_LOSS_ACCUMULATION_STORE),
                 Serdes.String(), weatherPacketSerde
         );
         streamsBuilder.addStateStore(accumStoreBuilder);
@@ -102,7 +103,7 @@ public class TelemetryTopologyOrchestrator implements TelemetryAnalysisService {
         );
         KStream<String, WeatherPacket> deduplicatedStream = rawInputStream.process(
                 () -> new TelemetryDeduplicationProcessor(deduplicationInterval, tracer),
-                AnalysisConstants.DEDUPLICATE_ROCKS_DB
+                DEDUPLICATE_ROCKS_DB
         );
         deduplicatedStream.to(
                 kafkaAnalysisRawTopic,
@@ -117,11 +118,11 @@ public class TelemetryTopologyOrchestrator implements TelemetryAnalysisService {
             Location location = packet.getLocation();
             double latGrid = clampLatitude(location.getLatitude());
             double lonGrid = clampLongitude(location.getLongitude());
-            return latGrid+HASHTAG_DELIMITER+lonGrid;
+            return getGeohash(latGrid, lonGrid);
         }).repartition(Repartitioned.with(Serdes.String(), weatherPacketSerde).withName("spatial-repartition-stream"));
         KStream<String, WeatherMap> historyStream = repartitionedByLocationStream.process(
                 () -> new TelemetryAggregationProcessor(persistentService, aggregationSecondsPerInterval, tracer),
-                AnalysisConstants.ZERO_LOSS_ACCUMULATION_STORE
+                ZERO_LOSS_ACCUMULATION_STORE
         );
         Serde<WeatherMap> weatherMapSerde = new KafkaProtobufSerde<>(WeatherMap.class);
         weatherMapSerde.configure(serdeConfig, false);

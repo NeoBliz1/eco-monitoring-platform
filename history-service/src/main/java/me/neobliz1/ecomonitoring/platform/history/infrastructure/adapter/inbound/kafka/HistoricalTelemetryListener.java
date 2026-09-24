@@ -1,11 +1,14 @@
 package me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.inbound.kafka;
 
-import static me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils.getWeatherMapTextMapGetter;
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.HISTORICAL_WEATHER_MAP_KAFKA_LISTENER_SPAN;
+import static me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils.addLinksToConsumerSpan;
+import static me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils.getHeadersTextMapGetter;
 import static me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalPersistenceRepositoryAdapter.getBucketId;
 
 import com.google.common.util.concurrent.Striped;
 import io.opentelemetry.api.GlobalOpenTelemetry;
 import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanBuilder;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
@@ -28,18 +31,6 @@ public class HistoricalTelemetryListener {
     private final Tracer tracer = GlobalOpenTelemetry.getTracer("weather-history-consumer");
     private final Striped<Lock> locker = Striped.lock(2048);
 
-    private static void addLinksToConsumerSpan(WeatherMap weatherMap, Span consumerSpan) {
-        if(weatherMap.getTelemetryTraceParentsCount()>0) {
-            weatherMap.getTelemetryTraceParentsList().forEach(traceParentStr -> {
-                if(traceParentStr!=null && !traceParentStr.isEmpty()) {
-                    Context extractedContext = GlobalOpenTelemetry.getPropagators().getTextMapPropagator()
-                            .extract(Context.current(), traceParentStr, getWeatherMapTextMapGetter());
-                    consumerSpan.addLink(Span.fromContext(extractedContext).getSpanContext());
-                }
-            });
-        }
-    }
-
     @SuppressWarnings("unused")
     @KafkaListener(
             topics = "${spring.kafka.topic.weather-history}",
@@ -52,8 +43,10 @@ public class HistoricalTelemetryListener {
                     record.partition(), record.offset());
             return;
         }
-        Span consumerSpan = getConsumerSpan(record, weatherMap);
-        addLinksToConsumerSpan(weatherMap, consumerSpan);
+
+        SpanBuilder consumerSpanBuilder = getConsumerSpan(weatherMap);
+        addLinksToConsumerSpan(weatherMap, consumerSpanBuilder);
+        Span consumerSpan = consumerSpanBuilder.startSpan();
         try(Scope ignored = consumerSpan.makeCurrent()) {
             if(log.isDebugEnabled()) {
                 log.debug("Received aggregated WeatherMap stream chunk from Kafka. Bucket: [{}], Cells size: [{}]",
@@ -81,12 +74,11 @@ public class HistoricalTelemetryListener {
         }
     }
 
-    private Span getConsumerSpan(ConsumerRecord<String, WeatherMap> record, WeatherMap weatherMap) {
-        return tracer.spanBuilder("KafkaConsumer_Persist_Historical_WeatherMap")
-                .setAttribute("kafka.topic", record.topic())
-                .setAttribute("kafka.partition", record.partition())
-                .setAttribute("kafka.offset", record.offset())
-                .setAttribute("weather.bucket.time", weatherMap.getTimestampBucket())
-                .startSpan();
+    private SpanBuilder getConsumerSpan(WeatherMap weatherMap) {
+        Context parentContext = GlobalOpenTelemetry.getPropagators().getTextMapPropagator()
+                .extract(Context.current(), weatherMap, getHeadersTextMapGetter());
+        return tracer.spanBuilder(HISTORICAL_WEATHER_MAP_KAFKA_LISTENER_SPAN)
+                .setParent(parentContext)
+                .setAttribute("weather.bucket.time", weatherMap.getTimestampBucket());
     }
 }

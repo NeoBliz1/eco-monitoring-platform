@@ -10,10 +10,10 @@ spring:
             interval: 600000 #miliseconds = 10 minutes
   redis:
     records:
-      ttl: 24 #hours
+      ttl: 1 #hours
   cache:
     type: caffeine
     cache-names:
       - weatherMaps
     caffeine:
-      spec: expireAfterWrite=10m,maximumSize=5000,recordStats
+      spec: expireAfterWrite=1m,maximumSize=5000,recordStats

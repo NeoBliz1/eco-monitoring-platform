@@ -37,7 +37,7 @@
           }
         ],
         "options": {
-          "dedupStrategy": "numbers",
+          "dedupStrategy": "none",
           "enableInfiniteScrolling": true,
           "enableLogDetails": true,
           "prettifyLogMessage": true,
@@ -76,7 +76,7 @@
           }
         ],
         "options": {
-          "dedupStrategy": "numbers",
+          "dedupStrategy": "none",
           "enableInfiniteScrolling": true,
           "enableLogDetails": true,
           "prettifyLogMessage": true,
@@ -115,7 +115,7 @@
           }
         ],
         "options": {
-          "dedupStrategy": "numbers",
+          "dedupStrategy": "none",
           "enableInfiniteScrolling": true,
           "enableLogDetails": true,
           "prettifyLogMessage": true,
@@ -154,7 +154,7 @@
           }
         ],
         "options": {
-          "dedupStrategy": "numbers",
+          "dedupStrategy": "none",
           "enableInfiniteScrolling": true,
           "enableLogDetails": true,
           "prettifyLogMessage": true,

@@ -3,13 +3,18 @@ package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbo
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.ZERO_LOSS_ACCUMULATION_STORE;
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryUtils.clampLatitude;
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryUtils.clampLongitude;
-import static me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.util.AggregationUtils.validateSpatialKey;
-import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.HASHTAG_DELIMITER;
+import static me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.record.ParsedStorageKey.parseAggKey;
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.GEOHASH_SEPARATOR;
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.KAFKA_STREAMS_AGGREGATE_SPAN;
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.KAFKA_STREAMS_FLUSH_AGGREGATION_WINDOW_SPAN;
 import static me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils.getWeatherPacketTextMapGetter;
 
 import io.opentelemetry.api.GlobalOpenTelemetry;
 import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanContext;
 import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.api.trace.TraceFlags;
+import io.opentelemetry.api.trace.TraceState;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
@@ -17,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryPersistentService;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryUtils;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.record.ParsedStorageKey;
 import me.neobliz1.ecomonitoring.platform.common.util.PlatformContractsUtils;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.Location;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
@@ -28,6 +34,7 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.jspecify.annotations.NonNull;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -35,6 +42,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -59,17 +67,23 @@ public class TelemetryAggregationProcessor implements Processor<String, WeatherP
         );
     }
 
+    private static @NonNull Stream<WeatherPacket> getWeatherPacketStream(Map<Long, Map<String, List<WeatherPacket>>> extractionMatrix) {
+        return extractionMatrix.values().stream()
+                .flatMap(m -> m.values().stream())
+                .flatMap(List::stream);
+    }
+
     @Override
     public void process(Record<String, WeatherPacket> record) {
         if(record==null || record.value()==null) {
             return;
         }
         WeatherPacket packet = record.value();
-        Span streamSpan = getStreamSpan(record, packet);
+        Span streamSpan = getStreamSpan(packet);
         try(Scope ignored = streamSpan.makeCurrent()) {
             String uniqueTxId = PlatformContractsUtils.getUniqueTxId(packet);
             String storageKey = String.format("%017d", TelemetryUtils.getAggregationBucketFloorInterval(packet.getTimestamp(), secondsPerInterval))
-                    +HASHTAG_DELIMITER+record.key()+HASHTAG_DELIMITER+uniqueTxId;
+                    +GEOHASH_SEPARATOR+record.key()+GEOHASH_SEPARATOR+uniqueTxId;
             if(log.isDebugEnabled()) {
                 log.debug("Storing storageKey {} for task {}", storageKey, context.taskId());
             }
@@ -87,16 +101,6 @@ public class TelemetryAggregationProcessor implements Processor<String, WeatherP
         }
     }
 
-    private static void getFlushSpan(WeatherPacket packet, Span flushSpan) {
-        Context pktCtx = getExtractedContext(packet);
-        flushSpan.addLink(Span.fromContext(pktCtx).getSpanContext());
-    }
-
-    private static Context getExtractedContext(WeatherPacket packet) {
-        return GlobalOpenTelemetry.getPropagators().getTextMapPropagator()
-                .extract(Context.current(), packet, getWeatherPacketTextMapGetter());
-    }
-
     private void flushAccumulatedWindows(long currentStreamTimeInMillis) {
         long currentStreamTimeMs = this.context.currentStreamTimeMs();
         if(currentStreamTimeMs<lastStreamTime) {
@@ -107,7 +111,7 @@ public class TelemetryAggregationProcessor implements Processor<String, WeatherP
         List<String> keysToRemove = new ArrayList<>();
         Map<Long, Map<String, List<WeatherPacket>>> extractionMatrix = new HashMap<>();
         String startRangeKey = String.format("%017d", 0L);
-        String endRangeKey = String.format("%017d", currentWindowFloor-1)+HASHTAG_DELIMITER+"\uFFFF";
+        String endRangeKey = String.format("%017d", currentWindowFloor-1)+GEOHASH_SEPARATOR+"\uFFFF";
         if(log.isDebugEnabled()) {
             log.debug("Range scan from [{}] to [{}]", startRangeKey, endRangeKey);
         }
@@ -115,12 +119,9 @@ public class TelemetryAggregationProcessor implements Processor<String, WeatherP
             while(iterator.hasNext()) {
                 KeyValue<String, WeatherPacket> entry = iterator.next();
                 String key = entry.key;
-
-                String[] parts = key.split(HASHTAG_DELIMITER);
-                validateSpatialKey(parts, key);
-                long bucketTime = Long.parseLong(parts[0]);
-
-                String spatialKey = parts[0]+HASHTAG_DELIMITER+parts[1]+HASHTAG_DELIMITER+parts[2];
+                ParsedStorageKey parsed = parseAggKey(key);
+                long bucketTime = Long.parseLong(parsed.bucketTime());
+                String spatialKey = parsed.spatialKey();
                 if(log.isDebugEnabled()) {
                     log.debug("Flushing spatialKey {}", spatialKey);
                 }
@@ -132,16 +133,36 @@ public class TelemetryAggregationProcessor implements Processor<String, WeatherP
         } catch(Exception e) {
             log.error("Failed to flush aggregation window {}", currentWindowFloor, e);
         }
-
         if(!extractionMatrix.isEmpty()) {
-            Span flushSpan = tracer.spanBuilder("KafkaStreams_Flush_Aggregation_Window")
-                    .setAttribute("window.floor.ms", currentWindowFloor)
-                    .startSpan();
+            WeatherPacket anchorPacket = getWeatherPacketStream(extractionMatrix)
+                    .findFirst()
+                    .orElse(null);
+            var flushSpanBuilder = tracer.spanBuilder(KAFKA_STREAMS_FLUSH_AGGREGATION_WINDOW_SPAN)
+                    .setAttribute("window.floor.ms", currentWindowFloor);
+            if(anchorPacket!=null && !anchorPacket.getTraceParent().isEmpty()) {
+                Context anchorContext = GlobalOpenTelemetry.getPropagators().getTextMapPropagator()
+                        .extract(Context.current(), anchorPacket, getWeatherPacketTextMapGetter());
+                flushSpanBuilder.setParent(anchorContext);
+            }
+            getWeatherPacketStream(extractionMatrix)
+                    .skip(1)
+                    .forEach(packet -> {
+                        String tp = packet.getTraceParent();
+                        if(!tp.isEmpty()) {
+                            try {
+                                String[] parts = tp.split("-");
+                                if(parts.length>=4) {
+                                    SpanContext pktSpanContext = SpanContext.create(parts[1], parts[2], TraceFlags.getSampled(), TraceState.getDefault());
+                                    if(pktSpanContext.isValid()) {
+                                        flushSpanBuilder.addLink(pktSpanContext);
+                                    }
+                                }
+                            } catch(Exception ignored) {
+                            }
+                        }
+                    });
+            Span flushSpan = flushSpanBuilder.startSpan();
             try(Scope ignored = flushSpan.makeCurrent()) {
-                extractionMatrix.values().stream()
-                        .flatMap(m -> m.values().stream())
-                        .flatMap(List::stream)
-                        .forEach(packet -> getFlushSpan(packet, flushSpan));
                 persistentService.processAndComputeAggregatedHistory(extractionMatrix)
                         .forEach(record -> context.forward(new Record<>(record.key(), record.payload(), currentWindowFloor)));
                 keysToRemove.forEach(accumStore::delete);
@@ -155,12 +176,12 @@ public class TelemetryAggregationProcessor implements Processor<String, WeatherP
         }
     }
 
-    private Span getStreamSpan(Record<String, WeatherPacket> record, WeatherPacket packet) {
-        Context extractedContext = getExtractedContext(packet);
-        return tracer.spanBuilder("KafkaStreams_Aggregate_Record")
+    private Span getStreamSpan(WeatherPacket packet) {
+        Context extractedContext = GlobalOpenTelemetry.getPropagators().getTextMapPropagator()
+                .extract(Context.current(), packet, getWeatherPacketTextMapGetter());
+        return tracer.spanBuilder(KAFKA_STREAMS_AGGREGATE_SPAN)
                 .setParent(extractedContext)
                 .setAttribute("station.id", packet.getStationId())
-                .setAttribute("kafka.record.key", record.key())
                 .setAttribute("aggregation.interval.secs", secondsPerInterval)
                 .startSpan();
     }

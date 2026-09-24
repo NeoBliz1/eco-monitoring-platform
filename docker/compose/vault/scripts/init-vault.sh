@@ -37,7 +37,8 @@ if echo "$RAW_STATUS" | grep -q '"initialized": false'; then
 		postgres_user="$POSTGRES_ECO_USER_NAME" \
 		postgres_password="$POSTGRES_ECO_USER_PASSWORD" \
 		kafka_client="$KAFKA_CLIENT_USER" \
-		kafka_client_password="$KAFKA_CLIENT_PASS"
+		kafka_client_password="$KAFKA_CLIENT_PASS" \
+		redis_password="$REDIS_PASSWORD"
 
 	echo "🔐 Injecting Analysis Service Credentials..."
 	vault kv put secret/analysis-service \

@@ -1,6 +1,15 @@
 package me.neobliz1.ecomonitoring.platform.history.infrastructure.mapper;
 
+import static me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils.getHeadersTextMapGetter;
+
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
 import lombok.RequiredArgsConstructor;
+import me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants;
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherGridCellMetric;
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherMapBucket;
 import me.neobliz1.ecomonitoring.platform.history.domain.port.inbound.HistoricalDataConvertService;
@@ -18,6 +27,7 @@ import java.util.stream.Collectors;
 public class WeatherMapConverter implements HistoricalDataConvertService {
 
     private final HistoricalWeatherGridCellJpaRepository gridCellJpaRepository;
+    private final Tracer tracer = GlobalOpenTelemetry.getTracer("weather-map-converter");
 
     private static @NonNull WeatherGridCellMetric getWeatherGridCellMetric(@NonNull WeatherMapBucket bucket,
                                                                            @NonNull String geohashKey,
@@ -54,78 +64,65 @@ public class WeatherMapConverter implements HistoricalDataConvertService {
         return newCellMetric;
     }
 
+    private static Double mergeWeightedAverage(Double oldVal, long oldCount, Double newVal, int newCount) {
+        if(oldVal==null) return newVal;
+        if(newVal==null) return oldVal;
+        if(oldCount<=0) return newVal;
+        if(newCount<=0) return oldVal;
+        return ((oldVal*oldCount)+(newVal*newCount))/(double) (oldCount+newCount);
+    }
+
     @Override
     public void mergeTelemetryInBatch(
             @NonNull WeatherMap weatherMap,
             @NonNull WeatherMapBucket bucket,
             @NonNull List<WeatherGridCellMetric> targetedCells) {
-
         if(weatherMap.getGridCellsMap().isEmpty()) {
             return;
         }
-
-        Map<String, WeatherGridCellMetric> existingCellsMap = targetedCells.stream()
-                .collect(Collectors.toMap(
-                        WeatherGridCellMetric::getGeohash,
-                        cell -> cell,
-                        (existing, replacement) -> existing
-                ));
-
-        List<WeatherGridCellMetric> cellsToSave = new ArrayList<>();
-
-        for(Map.Entry<String, GridCellLayers> entry : weatherMap.getGridCellsMap().entrySet()) {
-            String geohashKey = entry.getKey();
-            GridCellLayers layers = entry.getValue();
-            if(layers==null) continue;
-
-            WeatherGridCellMetric targetCell = existingCellsMap.get(geohashKey);
-
-            if(targetCell!=null) {
-                targetCell.setReadingCount(targetCell.getReadingCount()+layers.getReadingCount());
-
-                targetCell.setAvgTemperature(mergeAverage(targetCell.getAvgTemperature(), layers.getAvgTemperature()));
-                targetCell.setAvgHumidity(mergeAverage(targetCell.getAvgHumidity(), layers.getAvgHumidity()));
-                targetCell.setAvgPressure(mergeAverage(targetCell.getAvgPressure(), layers.getAvgPressure()));
-                targetCell.setAvgLeaf_wetnessPct(mergeAverage(targetCell.getAvgLeaf_wetnessPct(), layers.getAvgLeafWetnessPct()));
-
-                targetCell.setAvgWindSpeed(mergeAverage(targetCell.getAvgWindSpeed(), layers.getAvgWindSpeed()));
-                targetCell.setAvgWindDirection(mergeAverage(targetCell.getAvgWindDirection(), layers.getAvgWindDirection()));
-
-                targetCell.setAvgPm25(mergeAverage(targetCell.getAvgPm25(), layers.getAvgPm25()));
-                targetCell.setAvgPm10(mergeAverage(targetCell.getAvgPm10(), layers.getAvgPm10()));
-                targetCell.setAvgPm100(mergeAverage(targetCell.getAvgPm100(), layers.getAvgPm100()));
-
-                targetCell.setAvgVoc(mergeAverage(targetCell.getAvgVoc(), layers.getAvgVoc()));
-                targetCell.setAvgNoiseDb(mergeAverage(targetCell.getAvgNoiseDb(), layers.getAvgNoiseDb()));
-
-                targetCell.setAvgRainMm(mergeAverage(targetCell.getAvgRainMm(), layers.getAvgRainMm()));
-                targetCell.setAvgSnowCm(mergeAverage(targetCell.getAvgSnowCm(), layers.getAvgSnowCm()));
-                targetCell.setAvgEvapRate(mergeAverage(targetCell.getAvgEvapRate(), layers.getAvgEvapRate()));
-
-                targetCell.setAvgUvIndex(mergeAverage(targetCell.getAvgUvIndex(), layers.getAvgUvIndex()));
-                targetCell.setAvgSolarRadiationWm2(mergeAverage(targetCell.getAvgSolarRadiationWm2(), layers.getAvgSolarRadiationWm2()));
-                targetCell.setAvgLux(mergeAverage(targetCell.getAvgLux(), layers.getAvgLux()));
-                targetCell.setAvgVisibilityM(mergeAverage(targetCell.getAvgVisibilityM(), layers.getAvgVisibilityM()));
-            } else {
-                WeatherGridCellMetric newCellMetric = getWeatherGridCellMetric(bucket, geohashKey, layers);
-                cellsToSave.add(newCellMetric);
+        Span mergeSpan = getMergeSpan(weatherMap, bucket, targetedCells);
+        try(Scope ignored = mergeSpan.makeCurrent()) {
+            Map<String, WeatherGridCellMetric> existingCellsMap = targetedCells.stream()
+                    .collect(Collectors.toMap(
+                            WeatherGridCellMetric::getGeohash,
+                            cell -> cell,
+                            (existing, replacement) -> existing
+                    ));
+            List<WeatherGridCellMetric> cellsToSave = new ArrayList<>();
+            for(Map.Entry<String, GridCellLayers> entry : weatherMap.getGridCellsMap().entrySet()) {
+                String geohashKey = entry.getKey();
+                GridCellLayers layers = entry.getValue();
+                if(layers==null) continue;
+                WeatherGridCellMetric targetCell = existingCellsMap.get(geohashKey);
+                if(targetCell!=null) {
+                    mergeIntoExistingCell(targetCell, layers);
+                } else {
+                    WeatherGridCellMetric newCellMetric = getWeatherGridCellMetric(bucket, geohashKey, layers);
+                    cellsToSave.add(newCellMetric);
+                }
             }
-        }
 
-        if(!cellsToSave.isEmpty()) {
-            gridCellJpaRepository.saveAll(cellsToSave);
-        }
-    }
+            if(!cellsToSave.isEmpty()) {
+                gridCellJpaRepository.saveAll(cellsToSave);
+                mergeSpan.setAttribute("weather.cells.saved", cellsToSave.size());
+            }
 
-    private Double mergeAverage(Double oldVal, Double newVal) {
-        if(oldVal==null) return newVal;
-        if(newVal==null) return oldVal;
-        return (oldVal+newVal)/2.0;
+            mergeSpan.setStatus(StatusCode.OK);
+
+        } catch(Exception e) {
+            mergeSpan.recordException(e);
+            mergeSpan.setStatus(StatusCode.ERROR, e.getMessage());
+            throw e;
+        } finally {
+            mergeSpan.end();
+        }
     }
 
     @Override
     public @NonNull GridCellLayers convertWeatherGridCellsToWeatherMap(@NonNull WeatherGridCellMetric gridCellMetric) {
         return GridCellLayers.newBuilder()
+
+                .setGeohash(gridCellMetric.getGeohash())
                 .setReadingCount(gridCellMetric.getReadingCount())
 
                 .setAvgTemperature(gridCellMetric.getAvgTemperature())
@@ -152,5 +149,49 @@ public class WeatherMapConverter implements HistoricalDataConvertService {
                 .setAvgLux(gridCellMetric.getAvgLux())
                 .setAvgVisibilityM(gridCellMetric.getAvgVisibilityM())
                 .build();
+    }
+
+    private void mergeIntoExistingCell(WeatherGridCellMetric targetCell, GridCellLayers layers) {
+        int oldCount = targetCell.getReadingCount();
+        int newCount = layers.getReadingCount();
+        int combinedCount = oldCount+newCount;
+
+        targetCell.setReadingCount(combinedCount);
+
+        targetCell.setAvgTemperature(mergeWeightedAverage(targetCell.getAvgTemperature(), oldCount, layers.getAvgTemperature(), newCount));
+        targetCell.setAvgHumidity(mergeWeightedAverage(targetCell.getAvgHumidity(), oldCount, layers.getAvgHumidity(), newCount));
+        targetCell.setAvgPressure(mergeWeightedAverage(targetCell.getAvgPressure(), oldCount, layers.getAvgPressure(), newCount));
+        targetCell.setAvgLeaf_wetnessPct(mergeWeightedAverage(targetCell.getAvgLeaf_wetnessPct(), oldCount, layers.getAvgLeafWetnessPct(), newCount));
+
+        targetCell.setAvgWindSpeed(mergeWeightedAverage(targetCell.getAvgWindSpeed(), oldCount, layers.getAvgWindSpeed(), newCount));
+        targetCell.setAvgWindDirection(mergeWeightedAverage(targetCell.getAvgWindDirection(), oldCount, layers.getAvgWindDirection(), newCount));
+
+        targetCell.setAvgPm25(mergeWeightedAverage(targetCell.getAvgPm25(), oldCount, layers.getAvgPm25(), newCount));
+        targetCell.setAvgPm10(mergeWeightedAverage(targetCell.getAvgPm10(), oldCount, layers.getAvgPm10(), newCount));
+        targetCell.setAvgPm100(mergeWeightedAverage(targetCell.getAvgPm100(), oldCount, layers.getAvgPm100(), newCount));
+
+        targetCell.setAvgVoc(mergeWeightedAverage(targetCell.getAvgVoc(), oldCount, layers.getAvgVoc(), newCount));
+        targetCell.setAvgNoiseDb(mergeWeightedAverage(targetCell.getAvgNoiseDb(), oldCount, layers.getAvgNoiseDb(), newCount));
+
+        targetCell.setAvgRainMm(mergeWeightedAverage(targetCell.getAvgRainMm(), oldCount, layers.getAvgRainMm(), newCount));
+        targetCell.setAvgSnowCm(mergeWeightedAverage(targetCell.getAvgSnowCm(), oldCount, layers.getAvgSnowCm(), newCount));
+        targetCell.setAvgEvapRate(mergeWeightedAverage(targetCell.getAvgEvapRate(), oldCount, layers.getAvgEvapRate(), newCount));
+
+        targetCell.setAvgUvIndex(mergeWeightedAverage(targetCell.getAvgUvIndex(), oldCount, layers.getAvgUvIndex(), newCount));
+        targetCell.setAvgSolarRadiationWm2(mergeWeightedAverage(targetCell.getAvgSolarRadiationWm2(), oldCount, layers.getAvgSolarRadiationWm2(), newCount));
+        targetCell.setAvgLux(mergeWeightedAverage(targetCell.getAvgLux(), oldCount, layers.getAvgLux(), newCount));
+        targetCell.setAvgVisibilityM(mergeWeightedAverage(targetCell.getAvgVisibilityM(), oldCount, layers.getAvgVisibilityM(), newCount));
+    }
+
+    private Span getMergeSpan(@NonNull WeatherMap weatherMap, @NonNull WeatherMapBucket bucket, @NonNull List<WeatherGridCellMetric> targetedCells) {
+        Context parentContext = GlobalOpenTelemetry.getPropagators().getTextMapPropagator()
+                .extract(Context.current(), weatherMap, getHeadersTextMapGetter());
+        return tracer.spanBuilder(PlatformConstants.HISTORY_WEATHER_PACKET_TRACE_SPAN)
+                .setParent(parentContext)
+                .setAttribute("weather.bucket.id", bucket.getId().toString())
+                .setAttribute("weather.bucket.timestamp", bucket.getTimestampBucket())
+                .setAttribute("weather.grid.cells.count", weatherMap.getGridCellsMap().size())
+                .setAttribute("weather.targeted.cells.count", targetedCells.size())
+                .startSpan();
     }
 }

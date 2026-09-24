@@ -11,6 +11,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.PostLoad;
 import jakarta.persistence.PostPersist;
+import jakarta.persistence.PostUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
@@ -21,6 +22,7 @@ import lombok.Setter;
 import lombok.experimental.FieldNameConstants;
 import org.hibernate.annotations.Cache;
 import org.hibernate.annotations.CacheConcurrencyStrategy;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Persistable;
 
 import java.util.LinkedHashSet;
@@ -35,13 +37,17 @@ import java.util.UUID;
 @Entity(name = WeatherMapBucket.TABLE_NAME)
 @Cache(region = BUCKETS_REGION, usage = CacheConcurrencyStrategy.READ_WRITE)
 @Table(name = WeatherMapBucket.TABLE_NAME, uniqueConstraints = {
-        @UniqueConstraint(columnNames = { "timestamp_bucket", "interval_minutes" })
+        @UniqueConstraint(
+                name = "uq_bucket_time_window",
+                columnNames = { "timestamp_bucket", "interval_minutes" }
+        )
 })
 public class WeatherMapBucket implements Persistable<UUID> {
 
     public static final String TABLE_NAME = "weather_map_buckets";
 
     @Id
+    @NonNull
     private UUID id;
 
     @Column(name = "timestamp_bucket", nullable = false)
@@ -52,7 +58,7 @@ public class WeatherMapBucket implements Persistable<UUID> {
 
     @Version
     @Column(name = "version", nullable = false)
-    private int version;
+    private long version;
 
     @Cache(region = BUCKET_METRICS_REGION, usage = CacheConcurrencyStrategy.READ_WRITE)
     @OneToMany(mappedBy = "bucket", fetch = FetchType.LAZY, orphanRemoval = true)
@@ -61,7 +67,7 @@ public class WeatherMapBucket implements Persistable<UUID> {
     @Transient
     private boolean isNewRecord = true;
 
-    public WeatherMapBucket(UUID id, Long timestampBucket, Integer intervalMinutes) {
+    public WeatherMapBucket(@NonNull UUID id, long timestampBucket, int intervalMinutes) {
         this.id = id;
         this.timestampBucket = timestampBucket;
         this.intervalMinutes = intervalMinutes;
@@ -74,6 +80,7 @@ public class WeatherMapBucket implements Persistable<UUID> {
     }
 
     @PostLoad
+    @PostUpdate
     @PostPersist
     public void markNotNew() {
         this.isNewRecord = false;

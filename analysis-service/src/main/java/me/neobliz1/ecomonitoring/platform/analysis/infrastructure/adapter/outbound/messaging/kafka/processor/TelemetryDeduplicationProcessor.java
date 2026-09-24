@@ -1,6 +1,7 @@
 package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor;
 
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.DEDUPLICATE_ROCKS_DB;
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.KAFKA_STREAMS_DEDUPLICATE_SPAN;
 import static me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils.getWeatherPacketTextMapGetter;
 
 import io.opentelemetry.api.GlobalOpenTelemetry;
@@ -41,7 +42,7 @@ public class TelemetryDeduplicationProcessor implements Processor<String, Weathe
         }
         WeatherPacket packet = record.value();
         String uniqueTxId = PlatformContractsUtils.getUniqueTxId(packet);
-        Span streamSpan = getStreamSpan(record, packet);
+        Span streamSpan = getStreamSpan(packet);
         try(Scope ignored = streamSpan.makeCurrent()) {
 
             long recordTimestamp = record.timestamp();
@@ -65,13 +66,12 @@ public class TelemetryDeduplicationProcessor implements Processor<String, Weathe
         }
     }
 
-    private Span getStreamSpan(Record<String, WeatherPacket> record, WeatherPacket packet) {
+    private Span getStreamSpan(WeatherPacket packet) {
         Context extractedContext = GlobalOpenTelemetry.getPropagators().getTextMapPropagator()
                 .extract(Context.current(), packet, getWeatherPacketTextMapGetter());
-        return tracer.spanBuilder("KafkaStreams_Deduplicate_Record")
+        return tracer.spanBuilder(KAFKA_STREAMS_DEDUPLICATE_SPAN)
                 .setParent(extractedContext)
                 .setAttribute("station.id", packet.getStationId())
-                .setAttribute("kafka.record.key", record.key())
                 .setAttribute("deduplication.interval.ms", deduplication_interval)
                 .startSpan();
     }

@@ -35,10 +35,14 @@ import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outboun
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
+import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,6 +59,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.testcontainers.containers.ComposeContainer;
 import weather.history.HistoryServiceGrpc;
+import weather.history.SpatialBoxRequest;
 
 import java.io.File;
 import java.sql.Connection;
@@ -64,6 +69,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 @Slf4j
 @AutoConfigureWebTestClient
@@ -159,15 +165,19 @@ public abstract class IntegrationTestSupport {
     @Autowired
     private KafkaProperties kafkaProperties;
 
-    @BeforeEach
-    public void setupEcosystem() {
-        setupKafkaProducer();
-        queryJpaRepositoryAdapter.deleteAllInBatch();
-        txIdsRepository.deleteAllInBatch();
+    static @NonNull SpatialBoxRequest getSpatialBoxRequest(long currentBucket, double minLat, double maxLat, double minLon, double maxLon) {
+        return SpatialBoxRequest.newBuilder()
+                .setTimestampBucket(currentBucket)
+                .setTimeIntervalInMinutes(INTERVAL_MINUTES)
+                .setMinLat(minLat)
+                .setMaxLat(maxLat)
+                .setMinLon(minLon)
+                .setMaxLon(maxLon)
+                .build();
     }
 
     @AfterEach
-    public void teardownEcosystem() throws ExecutionException, InterruptedException {
+    public void teardownEcosystem() throws Exception {
         clearKafkaTopics();
         if(testProducer!=null) testProducer.close();
         metricsJpaRepository.deleteAllInBatch();
@@ -186,23 +196,30 @@ public abstract class IntegrationTestSupport {
         testProducer = new KafkaProducer<>(producerProps);
     }
 
-    void clearKafkaTopics() throws InterruptedException, ExecutionException {
+    void clearKafkaTopics() throws Exception {
         List<String> bootstrapServersList = kafkaProperties.getBootstrapServers();
         String bootstrapServersCsv = String.join(",", bootstrapServersList);
         Map<String, Object> adminConf = getTestKafkaAdminConf("admin", "admin-password", bootstrapServersCsv);
-
         try(AdminClient adminClient = AdminClient.create(adminConf)) {
-            List<String> topicsToClear = List.of(kafkaHistoryTopic);
-            adminClient.deleteTopics(topicsToClear).all().get();
-            Thread.sleep(300);
             NewTopic historyTopic = new NewTopic(kafkaHistoryTopic, 6, (short) 3)
                     .configs(Map.of(
                             TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2",
                             TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT,
                             TopicConfig.RETENTION_MS_CONFIG, "-1"
                     ));
-            adminClient.createTopics(List.of(historyTopic)).all().get();
-            Thread.sleep(200);
+            try {
+                adminClient.createTopics(List.of(historyTopic)).all().get();
+            } catch(ExecutionException ignored) {
+                log.info("Topic {} already exists, proceeding to clear records.", kafkaHistoryTopic);
+            }
+            var topicDescription = adminClient.describeTopics(List.of(kafkaHistoryTopic)).allTopicNames().get().get(kafkaHistoryTopic);
+            var offsetQuery = topicDescription.partitions().stream()
+                    .collect(Collectors.toMap(p -> new TopicPartition(kafkaHistoryTopic, p.partition()), p -> OffsetSpec.latest()));
+            var latestOffsets = adminClient.listOffsets(offsetQuery).all().get();
+            var recordsToDelete = latestOffsets.entrySet().stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey, e -> RecordsToDelete.beforeOffset(e.getValue().offset())));
+            adminClient.deleteRecords(recordsToDelete).all().get();
+            log.info("Successfully wiped all data across all partitions for topic: {}", kafkaHistoryTopic);
         }
     }
 
@@ -232,5 +249,13 @@ public abstract class IntegrationTestSupport {
         } finally {
             entityManager.clear();
         }
+    }
+
+    @BeforeEach
+    public void setupEcosystem() {
+        setupKafkaProducer();
+        metricsJpaRepository.deleteAllInBatch();
+        queryJpaRepositoryAdapter.deleteAllInBatch();
+        txIdsRepository.deleteAllInBatch();
     }
 }

@@ -51,7 +51,7 @@ kafka-topics --create --if-not-exists \
   --replication-factor 3 \
   --config min.insync.replicas=2 \
   --config cleanup.policy=delete \
-  --config retention.ms=604800000
+  --config retention.ms=604800000 # 7 days
 
 kafka-topics --create --if-not-exists \
   --bootstrap-server kafka-1:9092 \
@@ -61,7 +61,7 @@ kafka-topics --create --if-not-exists \
   --replication-factor 3 \
   --config min.insync.replicas=2 \
   --config cleanup.policy=delete \
-  --config retention.ms=86400000
+  --config retention.ms=86400000 # 24 hours
 
 kafka-topics --create --if-not-exists \
   --bootstrap-server kafka-1:9092 \
@@ -70,8 +70,8 @@ kafka-topics --create --if-not-exists \
   --partitions 6 \
   --replication-factor 3 \
   --config min.insync.replicas=2 \
-  --config cleanup.policy=compact \
-  --config retention.ms=-1
+  --config cleanup.policy=delete \
+  --config retention.ms=1209600000 # 14 days
 
 kafka-topics --create --if-not-exists \
   --bootstrap-server kafka-1:9092 \
@@ -81,7 +81,17 @@ kafka-topics --create --if-not-exists \
   --replication-factor 3 \
   --config min.insync.replicas=2 \
   --config cleanup.policy=delete \
-  --config retention.ms=1209600000
+  --config retention.ms=1209600000 # 14 days
+
+kafka-topics --create --if-not-exists \
+  --bootstrap-server kafka-1:9092 \
+  --command-config /tmp/admin.properties \
+  --topic "eco-analysis-streams-pipeline-spatial-repartition-stream-repartition" \
+  --partitions 6 \
+  --replication-factor 3 \
+  --config min.insync.replicas=2 \
+  --config cleanup.policy=delete \
+  --config retention.ms=604800000 # 7 days
 
 echo "🔍 VERIFICATION: Fetching live cluster structure for confirmation..."
 kafka-topics --bootstrap-server kafka-1:9092 \
@@ -209,3 +219,4 @@ curl --request PUT \
   }'
 
 echo "✅ Infrastructure discovery sync sequence complete."
+exit 0

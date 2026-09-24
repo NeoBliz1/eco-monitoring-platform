@@ -1,14 +1,14 @@
 package me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound;
 
-import java.util.Map;
+import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 
 public interface TelemetryQueryRepository {
 
-    Map<String, byte[]> findFilteredGridDataBySpatialBox(
-            long activeBucketFloor,
-            double minLat,
-            double maxLat,
-            double minLon,
-            double maxLon
+    WeatherMap getWeatherMapByTimestampAndSpatialBox(
+            long targetTimestamp,
+            Double minLat,
+            Double maxLat,
+            Double minLon,
+            Double maxLon
     );
 }

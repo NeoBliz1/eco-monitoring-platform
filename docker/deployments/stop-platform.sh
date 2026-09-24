@@ -43,4 +43,6 @@ if [ -d "$PROJECT_ROOT/docker" ]; then
     docker compose down -v
 fi
 
+rm -rf "$PROJECT_ROOT/bin/kafka-state"
+
 echo "✨ Platform ecosystem teardown complete!"

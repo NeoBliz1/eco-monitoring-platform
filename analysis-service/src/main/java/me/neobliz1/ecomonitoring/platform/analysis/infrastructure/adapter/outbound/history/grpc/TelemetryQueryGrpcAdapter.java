@@ -16,17 +16,17 @@ import java.time.Duration;
 public class TelemetryQueryGrpcAdapter implements TelemetryQueryArchive {
 
     private final HistoryServiceGrpc.HistoryServiceBlockingStub historyServiceStub;
-    private final Integer interval;
+    private final Integer aggregationSecondsPerInterval;
 
     @Override
-    public @NonNull WeatherMap findFilteredGridDataBySpatialBoxInArchive(long activeBucketFloor, double minLat, double maxLat, double minLon, double maxLon) {
+    public @NonNull WeatherMap findGridDataBySpatialBoxInHistoryService(long activeBucketFloor, double minLat, double maxLat, double minLon, double maxLon) {
         if(log.isDebugEnabled()) {
             log.debug("Querying history-service for spatial box [{}#{}#{}#{}]", minLat, maxLat, minLon, maxLon);
         }
 
         SpatialBoxRequest request = SpatialBoxRequest.newBuilder()
                 .setTimestampBucket(activeBucketFloor)
-                .setTimeIntervalInMinutes((int) Duration.ofMillis(interval).toMinutes())
+                .setTimeIntervalInMinutes((int) Duration.ofSeconds(aggregationSecondsPerInterval).toMinutes())
                 .setMinLat(minLat)
                 .setMaxLat(maxLat)
                 .setMinLon(minLon)

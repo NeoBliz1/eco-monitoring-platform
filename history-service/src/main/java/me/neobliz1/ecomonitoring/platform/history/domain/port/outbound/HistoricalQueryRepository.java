@@ -10,6 +10,7 @@ import java.util.UUID;
 public interface HistoricalQueryRepository {
 
     Optional<WeatherMapBucket> findByTimestampBucketAndIntervalMinutes(Long timestampBucket, Integer intervalMinutes);
-
     List<WeatherGridCellMetric> findByBucketIdAndSpatialBox(UUID bucketId, double minLat, double maxLat, double minLon, double maxLon);
+
+    Optional<WeatherMapBucket> findClosestPastBucket(Long timestampBucket, Integer intervalMinutes);
 }

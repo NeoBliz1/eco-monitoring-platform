@@ -1,0 +1,40 @@
+
+# curl -X POST http://localhost:8000/api/v1/telemetry/mono 
+#  -H "Content-Type: application/x-protobuf" 
+#  --data-binary '@'weather_packet.bin
+POST http://localhost:8000/api/v1/telemetry/mono
+Content-Type: application/x-protobuf
+
+< weather_packet.bin
+
+###
+
+# curl -X POST http://localhost:8000/api/v1/telemetry/mono
+#  -H "Content-Type: application/x-protobuf"
+#  --data-binary '@'future_weather_packet.bin
+POST http://localhost:8000/api/v1/telemetry/mono
+Content-Type: application/x-protobuf
+
+< future_weather_packet.bin
+
+###
+
+
+# curl -X POST http://localhost:8000/api/v1/telemetry/virtual
+#  -H "Content-Type: application/x-protobuf"
+#  --data-binary '@'weather_packet.bin
+POST http://localhost:8000/api/v1/telemetry/virtual
+Content-Type: application/x-protobuf
+
+< weather_packet.bin
+
+###
+
+
+
+# curl -v -X GET "http://localhost:8000/api/v1/weather-map/spatial?targetTimestamp=1716300000000&min-lat=45.4&max-lat=45.5&min-lon=9.1&max-lon=9.2" -H "Accept: application/json"
+GET http://localhost:8000/api/v1/weather-map/spatial?targetTimestamp=1716300000000&min-lat=45.4&max-lat=45.5&
+    min-lon=9.1&max-lon=9.2
+Accept: application/json
+
+###

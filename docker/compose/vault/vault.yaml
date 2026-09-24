@@ -25,12 +25,10 @@ services:
     entrypoint: [ "vault", "server", "-config=/vault/config/vault.hcl" ]
 
   vault-init:
-    build:
-      context: .
-      dockerfile: vault-dockerfile.init
+    image: hashicorp/vault@sha256:e40c741ed95bb271425e3e6ca6c222d620cf8682f6f7a1b1e7c9d49d0aba484b
     env_file:
       - .env
-    user: "100:1000"
+    user: "0:0"
     depends_on:
       vault-server:
         condition: service_healthy
@@ -42,4 +40,9 @@ services:
     environment:
       VAULT_ADDR: http://vault-server:8200
     entrypoint: [ "sh", "-c" ]
-    command: [ "/tmp/init-vault.sh" ]
+    command:
+      - |
+        mkdir -p /tmp/vault_output
+        chown -R 100:1000 /tmp/vault_output
+        chmod 775 /tmp/vault_output
+        exec su-exec vault /tmp/init-vault.sh

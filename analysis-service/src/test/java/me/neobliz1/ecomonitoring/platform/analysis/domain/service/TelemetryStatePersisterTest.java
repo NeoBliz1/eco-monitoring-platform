@@ -2,7 +2,7 @@ package me.neobliz1.ecomonitoring.platform.analysis.domain.service;
 
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.GRID_BUCKET_KEY_FORMAT;
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.HOT_WINDOW_PREFIX;
-import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.HASHTAG_DELIMITER;
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.GEOHASH_SEPARATOR;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.withinPercentage;
@@ -39,13 +39,14 @@ class TelemetryStatePersisterTest {
     private static final String STATION_ID = "42";
     private static final double LAT_GRID = 55.123;
     private static final double LON_GRID = 37.456;
-    private static final String EXPECTED_GEOHASH_KEY = LAT_GRID+HASHTAG_DELIMITER+LON_GRID;
+    private static final String EXPECTED_GEOHASH_KEY = LAT_GRID+GEOHASH_SEPARATOR+LON_GRID;
     private static final String EXPECTED_STATION_FIELD = HOT_WINDOW_PREFIX+STATION_ID;
     private static final String EXPECTED_TIMESTAMP = String.format(GRID_BUCKET_KEY_FORMAT, PACKET_TIMESTAMP);
 
-    private static final String SAMPLE_GEOSHAH = "55.123#37.456";
     private static final long SINGLE_BUCKET_TIMESTAMP = 1800000000L;
     private static final long MATRIX_BUCKET_TIMESTAMP = 1000000000L;
+    private static final String SAMPLE_GEOHASH = "55.123#37.456";
+    private static final String SAMPLE_SPATIAL_KEY = SINGLE_BUCKET_TIMESTAMP+"#"+SAMPLE_GEOHASH;
 
     @Mock
     private TelemetryPersistenceRepository telemetryRepository;
@@ -70,7 +71,7 @@ class TelemetryStatePersisterTest {
     @Test
     void shouldSaveToRealTimeSlidingWindow_whenLatGridIsNegative() {
         double negativeLatGrid = -34.567;
-        String geohashKey = negativeLatGrid+HASHTAG_DELIMITER+LON_GRID;
+        String geohashKey = negativeLatGrid+GEOHASH_SEPARATOR+LON_GRID;
         WeatherPacket packet = buildWeatherPacket();
 
         persister.updateRealTimeSlidingWindow(packet, negativeLatGrid, LON_GRID);
@@ -81,7 +82,7 @@ class TelemetryStatePersisterTest {
     @Test
     void shouldSaveToRealTimeSlidingWindow_whenLonGridIsNegative() {
         double negativeLonGrid = -120.789;
-        String geohashKey = LAT_GRID+HASHTAG_DELIMITER+negativeLonGrid;
+        String geohashKey = LAT_GRID+GEOHASH_SEPARATOR+negativeLonGrid;
         WeatherPacket packet = buildWeatherPacket();
 
         persister.updateRealTimeSlidingWindow(packet, LAT_GRID, negativeLonGrid);
@@ -106,8 +107,8 @@ class TelemetryStatePersisterTest {
         List<WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(matrix);
 
         assertThat(result).hasSize(1);
-        assertThat(result.getFirst().key()).isEqualTo(SAMPLE_GEOSHAH);
-        verify(telemetryRepository).saveHistoricalGridCell(eq(SAMPLE_GEOSHAH), any(byte[].class));
+        assertThat(result.getFirst().key()).isEqualTo(SAMPLE_SPATIAL_KEY);
+        verify(telemetryRepository).saveHistoricalGridCell(eq(SAMPLE_SPATIAL_KEY), any(byte[].class));
     }
 
     @Test
@@ -115,7 +116,7 @@ class TelemetryStatePersisterTest {
         Map<Long, Map<String, List<WeatherPacket>>> matrix = new HashMap<>();
         long bucket2 = 2000000000L;
         Map<String, List<WeatherPacket>> spatial = new HashMap<>();
-        spatial.put(SAMPLE_GEOSHAH, List.of(buildWeatherPacket()));
+        spatial.put(SAMPLE_SPATIAL_KEY, List.of(buildWeatherPacket()));
         matrix.put(MATRIX_BUCKET_TIMESTAMP, spatial);
         matrix.put(bucket2, spatial);
 
@@ -129,14 +130,15 @@ class TelemetryStatePersisterTest {
         Map<Long, Map<String, List<WeatherPacket>>> matrix = new HashMap<>();
         Map<String, List<WeatherPacket>> spatial = new HashMap<>();
         String secondGeohash = "55.999#37.999";
-        spatial.put(SAMPLE_GEOSHAH, List.of(buildWeatherPacket()));
-        spatial.put(secondGeohash, List.of(buildWeatherPacket()));
+        spatial.put(SAMPLE_SPATIAL_KEY, List.of(buildWeatherPacket()));
+        String secondSpatialKey = SINGLE_BUCKET_TIMESTAMP+"#"+secondGeohash;
+        spatial.put(secondSpatialKey, List.of(buildWeatherPacket()));
         matrix.put(SINGLE_BUCKET_TIMESTAMP, spatial);
 
         persister.processAndComputeAggregatedHistory(matrix);
 
-        verify(telemetryRepository).saveHistoricalGridCell(eq(SAMPLE_GEOSHAH), any(byte[].class));
-        verify(telemetryRepository).saveHistoricalGridCell(eq(secondGeohash), any(byte[].class));
+        verify(telemetryRepository).saveHistoricalGridCell(eq(SAMPLE_SPATIAL_KEY), any(byte[].class));
+        verify(telemetryRepository).saveHistoricalGridCell(eq(secondSpatialKey), any(byte[].class));
     }
 
     @Test
@@ -144,12 +146,12 @@ class TelemetryStatePersisterTest {
         Map<Long, Map<String, List<WeatherPacket>>> matrix = new HashMap<>();
         long unalignedTimestamp = 1800000030000L;
         Map<String, List<WeatherPacket>> spatial = new HashMap<>();
-        spatial.put(SAMPLE_GEOSHAH, List.of(buildWeatherPacket()));
+        spatial.put(SAMPLE_SPATIAL_KEY, List.of(buildWeatherPacket()));
         matrix.put(unalignedTimestamp, spatial);
 
         persister.processAndComputeAggregatedHistory(matrix);
 
-        verify(telemetryRepository).saveHistoricalGridCell(eq(SAMPLE_GEOSHAH), any(byte[].class));
+        verify(telemetryRepository).saveHistoricalGridCell(eq(SAMPLE_SPATIAL_KEY), any(byte[].class));
     }
 
     @Test
@@ -166,7 +168,7 @@ class TelemetryStatePersisterTest {
         long expectedBucket = 999999999L;
         Map<Long, Map<String, List<WeatherPacket>>> matrix = new HashMap<>();
         Map<String, List<WeatherPacket>> spatial = new HashMap<>();
-        spatial.put(SAMPLE_GEOSHAH, List.of(buildWeatherPacket()));
+        spatial.put(SAMPLE_SPATIAL_KEY, List.of(buildWeatherPacket()));
         matrix.put(expectedBucket, spatial);
 
         List<WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(matrix);
@@ -183,12 +185,12 @@ class TelemetryStatePersisterTest {
                 buildWeatherPacket()
         );
         Map<String, List<WeatherPacket>> spatial = new HashMap<>();
-        spatial.put(SAMPLE_GEOSHAH, threePackets);
+        spatial.put(SAMPLE_SPATIAL_KEY, threePackets);
         matrix.put(MATRIX_BUCKET_TIMESTAMP, spatial);
 
         List<WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(matrix);
 
-        GridCellLayers cellLayers = result.getFirst().payload().getGridCellsMap().get(SAMPLE_GEOSHAH);
+        GridCellLayers cellLayers = result.getFirst().payload().getGridCellsMap().get(SAMPLE_GEOHASH);
         assertThat(cellLayers.getReadingCount()).isEqualTo(3);
     }
 
@@ -215,12 +217,12 @@ class TelemetryStatePersisterTest {
                 .build();
 
         Map<String, List<WeatherPacket>> spatial = new HashMap<>();
-        spatial.put(SAMPLE_GEOSHAH, List.of(packet));
+        spatial.put(SAMPLE_SPATIAL_KEY, List.of(packet));
         matrix.put(MATRIX_BUCKET_TIMESTAMP, spatial);
 
         List<WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(matrix);
 
-        GridCellLayers cellLayers = result.getFirst().payload().getGridCellsMap().get(SAMPLE_GEOSHAH);
+        GridCellLayers cellLayers = result.getFirst().payload().getGridCellsMap().get(SAMPLE_GEOHASH);
         assertThat(cellLayers.getAvgTemperature()).isCloseTo(expectedTemp, withinPercentage(1));
         assertThat(cellLayers.getAvgHumidity()).isCloseTo(expectedHumidity, withinPercentage(1));
         assertThat(cellLayers.getAvgPressure()).isCloseTo(expectedPressure, withinPercentage(1));
@@ -233,7 +235,7 @@ class TelemetryStatePersisterTest {
 
         List<WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(matrix);
 
-        assertThat(result.getFirst().payload().getGridCellsMap()).containsKey(SAMPLE_GEOSHAH);
+        assertThat(result.getFirst().payload().getGridCellsMap()).containsKey(SAMPLE_GEOHASH);
     }
 
     @Test
@@ -242,14 +244,14 @@ class TelemetryStatePersisterTest {
 
         List<WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(matrix);
 
-        assertThat(result.getFirst().key()).isEqualTo(SAMPLE_GEOSHAH);
+        assertThat(result.getFirst().key()).isEqualTo(SAMPLE_SPATIAL_KEY);
     }
 
     @Test
     void shouldHandleSinglePacketInAggregation_whenSpatialMatrixContainsOnePacket() {
         Map<Long, Map<String, List<WeatherPacket>>> matrix = new HashMap<>();
         Map<String, List<WeatherPacket>> spatial = new HashMap<>();
-        spatial.put(SAMPLE_GEOSHAH, List.of(buildWeatherPacket()));
+        spatial.put(SAMPLE_SPATIAL_KEY, List.of(buildWeatherPacket()));
         matrix.put(MATRIX_BUCKET_TIMESTAMP, spatial);
 
         List<WeatherMapRecord> result = persister.processAndComputeAggregatedHistory(matrix);
@@ -295,7 +297,7 @@ class TelemetryStatePersisterTest {
     private Map<Long, Map<String, List<WeatherPacket>>> buildMatrixWithSingleBucket() {
         Map<Long, Map<String, List<WeatherPacket>>> matrix = new HashMap<>();
         Map<String, List<WeatherPacket>> spatial = new HashMap<>();
-        spatial.put(SAMPLE_GEOSHAH, List.of(buildWeatherPacket()));
+        spatial.put(SAMPLE_SPATIAL_KEY, List.of(buildWeatherPacket()));
         matrix.put(SINGLE_BUCKET_TIMESTAMP, spatial);
         return matrix;
     }

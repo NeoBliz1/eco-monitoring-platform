@@ -3,7 +3,8 @@ spring:
     client:
       channel:
         history-service:
-          target: "dns:///${SPRING_HISTORY_APPLICATION_NAME}.service.consul"
+          service-name: ${SPRING_HISTORY_APPLICATION_NAME}
+          service-port: ${HISTORY_APPLICATION_GRPC_PORT}
           ssl:
             enabled: false
   profiles:

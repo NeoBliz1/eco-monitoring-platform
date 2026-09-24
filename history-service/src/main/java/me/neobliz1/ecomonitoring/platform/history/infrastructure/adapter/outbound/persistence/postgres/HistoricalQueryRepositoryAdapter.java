@@ -26,4 +26,10 @@ public class HistoricalQueryRepositoryAdapter implements HistoricalQueryReposito
     public List<WeatherGridCellMetric> findByBucketIdAndSpatialBox(UUID bucketId, double minLat, double maxLat, double minLon, double maxLon) {
         return weatherGridCellJpaRepository.findByBucketIdAndSpatialBox(bucketId, minLat, maxLat, minLon, maxLon);
     }
+
+    @Override
+    public Optional<WeatherMapBucket> findClosestPastBucket(Long timestampBucket, Integer intervalMinutes) {
+        return weatherMapJpaRepository.findFirstByTimestampBucketLessThanAndIntervalMinutesOrderByTimestampBucketDesc(
+                timestampBucket, intervalMinutes);
+    }
 }

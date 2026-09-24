@@ -3,7 +3,7 @@ package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbo
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.GRID_BUCKET_KEY_FORMAT;
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.HOT_WINDOW_PREFIX;
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.WEATHER_HOTWINDOW;
-import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.HASHTAG_DELIMITER;
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.GEOHASH_SEPARATOR;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.waitForConsulServicesToBeHealthy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hibernate.validator.internal.util.Contracts.assertNotEmpty;
@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import lombok.extern.slf4j.Slf4j;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.record.WeatherMapRecord;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.support.IntegrationTestSupport;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.GridCellLayers;
@@ -302,6 +303,41 @@ public class OutboundInfrastructureIntegrationIT extends IntegrationTestSupport 
         assertEquals(2, bucketTimestamps.size(), "Total timestamps across buckets should be 2");
     }
 
+    private static long getReadingsNum(List<WeatherMap> weatherMaps, String gridCellKey, long bucketFloor) {
+        return weatherMaps.stream()
+                .filter(m -> bucketFloor==m.getTimestampBucket() && m.getGridCellsMap().keySet().stream()
+                        .anyMatch(k -> k.equals(gridCellKey)))
+                .map(m -> m.getGridCellsMap().get(gridCellKey))
+                .mapToLong(GridCellLayers::getReadingCount)
+                .sum();
+    }
+
+    @Test
+    public void shouldDropDuplicatePackets_whenSamePacketSentTwiceWithinDedupWindow() throws Exception {
+        long currentBucketFloor = getCurrentBucketFloor();
+        String stationId = "1";
+        double lat = 55.123;
+        double lon = -61.345;
+        long timestamp = currentBucketFloor+1000;
+        String gridCellKey = calculateGridCellKey(lat, lon);
+        WeatherPacket packet = createBasicPacket(stationId, timestamp, lat, lon);
+
+        sendPacket(packet);
+        sendPacket(packet);
+        sendFlushPackage(stationId, currentBucketFloor, lat, lon);
+        Optional<WeatherMap> targetMap = collectHistoryRecords(1).stream()
+                .filter(m -> m.getTimestampBucket()==currentBucketFloor)
+                .findFirst();
+        List<WeatherPacket> weatherPackets = collectRawRecords();
+
+        assertTrue(targetMap.isPresent(), "Should have history record for current bucket");
+        assertGridCellExists(targetMap.get(), gridCellKey);
+        assertGridCellReadingCount(targetMap.get(), gridCellKey, 1);
+        assertNotNull(weatherPackets);
+        assertEquals(1, weatherPackets.size());
+        assertEquals(stationId, weatherPackets.getFirst().getStationId());
+    }
+
     @Test
     public void shouldHandleEdgeCaseGeoCoordinates_whenLatitudeOrLongitudeAreAtBoundaries() throws Exception {
         long currentBucketFloor = getCurrentBucketFloor();
@@ -336,35 +372,9 @@ public class OutboundInfrastructureIntegrationIT extends IntegrationTestSupport 
             map.getGridCellsMap().keySet().forEach(key -> {
                 assertNotNull(key, "Grid cell key should not be null");
                 assertFalse(key.isEmpty(), "Grid cell key should not be empty");
-                assertTrue(key.matches(".*#.*#.*"), "Grid cell key should contain delimiter: "+HASHTAG_DELIMITER);
+                assertTrue(key.matches(".*#.*"), "Grid cell key should contain delimiter: "+GEOHASH_SEPARATOR);
             });
         }
-    }
-
-    @Test
-    public void shouldDropDuplicatePackets_whenSamePacketSentTwiceWithinDedupWindow() throws Exception {
-        long currentBucketFloor = getCurrentBucketFloor();
-        String stationId = "1";
-        double lat = 55.123;
-        double lon = -61.345;
-        long timestamp = currentBucketFloor+1000;
-        String gridCellKey = calculateGridCellKey(lat, lon);
-        WeatherPacket packet = createBasicPacket(stationId, timestamp, lat, lon);
-
-        sendPacket(packet);
-        sendPacket(packet);
-        sendFlushPackage(stationId, currentBucketFloor, lat, lon);
-        Optional<WeatherMap> targetMap = collectHistoryRecords(1).stream()
-                .filter(m -> m.getTimestampBucket()==currentBucketFloor)
-                .findFirst();
-        List<WeatherPacket> weatherPackets = collectRawRecords();
-
-        assertTrue(targetMap.isPresent(), "Should have history record for current bucket");
-        assertGridCellExists(targetMap.get(), gridCellKey);
-        assertGridCellReadingCount(targetMap.get(), gridCellKey, 1);
-        assertNotNull(weatherPackets);
-        assertEquals(1, weatherPackets.size());
-        assertEquals(stationId, weatherPackets.getFirst().getStationId());
     }
 
     @Test
@@ -395,10 +405,10 @@ public class OutboundInfrastructureIntegrationIT extends IntegrationTestSupport 
         }
         sendFlushPackage(stationId, currentWindowTimeFloor, lat, lon);
         WeatherMap actualWeatherMapFromHistoryTopic = findWeatherMapByGridCellAnBucketFloor(expectedGridCellFieldKey, currentWindowTimeFloor);
-        WeatherMap actualWeatherMapFromRedis = telemetryQueryService.getLatestTimeIntervalWeatherMapByCoordinates(currentWindowTimeFloor,
+        WeatherMapRecord actualWeatherMapRecordFromRedis = telemetryQueryService.getLatestTimeIntervalWeatherMapByCoordinates(currentWindowTimeFloor,
                 lat-5, lat+5, lon-5, lon+5);
         Map<Object, Object> liveRedisHotWindowMatrix = redisTemplate.opsForHash().entries(expectedHotWindowRedisKey);
-
+        WeatherMap actualWeatherMapFromRedis = actualWeatherMapRecordFromRedis.payload();
         assertNotNull(rawRecord);
         assertEquals(stationId, rawRecord.value().getStationId());
         assertNotNull(actualWeatherMapFromHistoryTopic);
@@ -413,40 +423,6 @@ public class OutboundInfrastructureIntegrationIT extends IntegrationTestSupport 
                 .anyMatch(k -> k.contains(expectedGridCellFieldKey)));
         assertThat(liveRedisHotWindowMatrix).isNotEmpty();
         assertTrue(liveRedisHotWindowMatrix.containsKey(HOT_WINDOW_PREFIX+stationId));
-    }
-
-    @Test
-    void shouldExpireRedisKeysAfter24Hours_whenWeatherDataIsPersisted() throws Exception {
-        String stationId = "10";
-        double latitude = 55.0;
-        double longitude = -61.0;
-        long minimumExpectedTtlMinutes = 1435L;
-        long maximumExpectedTtlMinutes = 1440L;
-        long currentWindowTimeFloor = getCurrentBucketFloor();
-        String expectedGridCellFieldKey = calculateGridCellKey(latitude, longitude);
-        String formattedBucketFloor = String.format(GRID_BUCKET_KEY_FORMAT, currentWindowTimeFloor);
-        String historyKey = formattedBucketFloor+HASHTAG_DELIMITER+expectedGridCellFieldKey;
-        String hotWindowKey = WEATHER_HOTWINDOW+expectedGridCellFieldKey;
-        String expectedSpatialIndexKey = "spatial_index:"+formattedBucketFloor;
-        List<WeatherPacket> packets = generateMockPackets(3, stationId, currentWindowTimeFloor, latitude, longitude);
-
-        sendPackets(packets, 100);
-        sendFlushPackage(stationId, currentWindowTimeFloor, latitude, longitude);
-        WeatherMap weatherMap = findWeatherMapByGridCellAnBucketFloor(expectedGridCellFieldKey, currentWindowTimeFloor);
-        Long historyTTL = protobufRedisTemplate.getExpire(historyKey, TimeUnit.MINUTES);
-        Long hotWindowTTL = protobufRedisTemplate.getExpire(hotWindowKey, TimeUnit.MINUTES);
-        Long spatialIndexTTL = protobufRedisTemplate.getExpire(expectedSpatialIndexKey, TimeUnit.MINUTES);
-
-        assertEquals(currentWindowTimeFloor, weatherMap.getTimestampBucket());
-        assertNotNull(historyTTL, "historyTTL should exist");
-        assertTrue(historyTTL>minimumExpectedTtlMinutes, "historyTTL should have positive TTL");
-        assertTrue(historyTTL<=maximumExpectedTtlMinutes, "historyTTL should not exceed 24 hours");
-        assertNotNull(hotWindowTTL, "hotWindowTTL key should exist");
-        assertTrue(hotWindowTTL>minimumExpectedTtlMinutes, "hotWindowTTL should have positive TTL");
-        assertTrue(hotWindowTTL<=maximumExpectedTtlMinutes, "hotWindowTTL should not exceed 24 hours");
-        assertNotNull(spatialIndexTTL, "spatialIndexTTL key should exist");
-        assertTrue(spatialIndexTTL>minimumExpectedTtlMinutes, "spatialIndexTTL should have positive TTL");
-        assertTrue(spatialIndexTTL<=maximumExpectedTtlMinutes, "spatialIndexTTL should not exceed 24 hours");
     }
 
     @Test
@@ -548,14 +524,37 @@ public class OutboundInfrastructureIntegrationIT extends IntegrationTestSupport 
         }
     }
 
-    private static long getReadingsNum(List<WeatherMap> weatherMaps, String gridCellKey, long bucketFloor) {
-        String gridKey = "0000"+bucketFloor+"#"+gridCellKey;
-        return weatherMaps.stream()
-                .filter(m -> m.getGridCellsMap().keySet().stream()
-                        .anyMatch(k -> k.contains(gridCellKey)
-                                && k.contains(String.valueOf(bucketFloor))))
-                .map(m -> m.getGridCellsMap().get(gridKey))
-                .mapToLong(GridCellLayers::getReadingCount)
-                .sum();
+    @Test
+    void shouldExpireRedisKeysAfter24Hours_whenWeatherDataIsPersisted() throws Exception {
+        String stationId = "10";
+        double latitude = 55.0;
+        double longitude = -61.0;
+        long minimumExpectedTtlMinutes = 1435L;
+        long maximumExpectedTtlMinutes = 1440L;
+        long currentWindowTimeFloor = getCurrentBucketFloor();
+        String expectedGridCellFieldKey = calculateGridCellKey(latitude, longitude);
+        String formattedBucketFloor = String.format(GRID_BUCKET_KEY_FORMAT, currentWindowTimeFloor);
+        String historyKey = formattedBucketFloor+GEOHASH_SEPARATOR+expectedGridCellFieldKey;
+        String hotWindowKey = WEATHER_HOTWINDOW+expectedGridCellFieldKey;
+        String expectedSpatialIndexKey = "spatial_index:"+formattedBucketFloor;
+        List<WeatherPacket> packets = generateMockPackets(3, stationId, currentWindowTimeFloor, latitude, longitude);
+
+        sendPackets(packets, 100);
+        sendFlushPackage(stationId, currentWindowTimeFloor, latitude, longitude);
+        WeatherMap weatherMap = findWeatherMapByGridCellAnBucketFloor(expectedGridCellFieldKey, currentWindowTimeFloor);
+        Long historyTTL = protobufRedisTemplate.getExpire(historyKey, TimeUnit.MINUTES);
+        Long hotWindowTTL = protobufRedisTemplate.getExpire(hotWindowKey, TimeUnit.MINUTES);
+        Long spatialIndexTTL = protobufRedisTemplate.getExpire(expectedSpatialIndexKey, TimeUnit.MINUTES);
+
+        assertEquals(currentWindowTimeFloor, weatherMap.getTimestampBucket());
+        assertNotNull(historyTTL, "historyTTL should exist");
+        assertTrue(historyTTL>minimumExpectedTtlMinutes, "historyTTL should have positive TTL");
+        assertTrue(historyTTL<=maximumExpectedTtlMinutes, "historyTTL should not exceed 24 hours");
+        assertNotNull(hotWindowTTL, "hotWindowTTL key should exist");
+        assertTrue(hotWindowTTL>minimumExpectedTtlMinutes, "hotWindowTTL should have positive TTL");
+        assertTrue(hotWindowTTL<=maximumExpectedTtlMinutes, "hotWindowTTL should not exceed 24 hours");
+        assertNotNull(spatialIndexTTL, "spatialIndexTTL key should exist");
+        assertTrue(spatialIndexTTL>minimumExpectedTtlMinutes, "spatialIndexTTL should have positive TTL");
+        assertTrue(spatialIndexTTL<=maximumExpectedTtlMinutes, "spatialIndexTTL should not exceed 24 hours");
     }
 }

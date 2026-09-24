@@ -1,10 +1,10 @@
 package me.neobliz1.ecomonitoring.platform.analysis.domain.service;
 
-import static me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.util.AggregationUtils.addTelemetryTraceParents;
+import static me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.util.AggregationUtils.addTelemetryTraceParentId;
 import static me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.util.AggregationUtils.addTelemetryTransactionIds;
+import static me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.util.AggregationUtils.getGeohash;
 import static me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.util.AggregationUtils.getGridCellsByteArray;
 import static me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.util.AggregationUtils.getWeatherMapBuilder;
-import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.HASHTAG_DELIMITER;
 
 import lombok.RequiredArgsConstructor;
 import lombok.val;
@@ -27,7 +27,7 @@ public class TelemetryStatePersister implements TelemetryPersistentService {
 
     @Override
     public void updateRealTimeSlidingWindow(WeatherPacket packet, double latGrid, double lonGrid) {
-        String geohashKey = latGrid+HASHTAG_DELIMITER+lonGrid;
+        String geohashKey = getGeohash(latGrid, lonGrid);
         String stationField = AnalysisConstants.HOT_WINDOW_PREFIX+packet.getStationId();
         String timestampFormatted = String.format(AnalysisConstants.GRID_BUCKET_KEY_FORMAT, packet.getTimestamp());
         telemetryRepository.saveRealTimeSlidingWindow(geohashKey, stationField, timestampFormatted);
@@ -42,7 +42,7 @@ public class TelemetryStatePersister implements TelemetryPersistentService {
 
                     val weatherMapBuilder = getWeatherMapBuilder(bucketTime, aggregationSecondsPerInterval);
                     addTelemetryTransactionIds(packetsList, weatherMapBuilder);
-                    addTelemetryTraceParents(packetsList, weatherMapBuilder);
+                    addTelemetryTraceParentId(weatherMapBuilder);
                     byte[] gridCellsByteArray = getGridCellsByteArray(spatialKey, packetsList, weatherMapBuilder);
 
                     try {

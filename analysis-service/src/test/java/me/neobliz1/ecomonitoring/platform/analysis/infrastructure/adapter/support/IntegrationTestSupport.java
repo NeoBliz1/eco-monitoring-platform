@@ -3,7 +3,7 @@ package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.suppo
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.SCALE_COFF;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.COMMON_PROFILE;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.DEV_PROFILE;
-import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.HASHTAG_DELIMITER;
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.GEOHASH_SEPARATOR;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.LOCAL_PROFILE;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.SCHEMA_REGISTRY_URL;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.getConsumerConf;
@@ -85,12 +85,9 @@ public abstract class IntegrationTestSupport extends AssertionTestSupport {
     public static final float FLUSH_PACKET_PRESSURE = 1013.25f;
     public static final double FLUSH_LAT = 0.0;
     static final long BUCKET_SIZE_MS = 660_000L; // 11 minutes
-
-    @DynamicPropertySource
-    static void dynamicPropertySet(DynamicPropertyRegistry registry) {
-        registry.add("spring.kafka.streams.application-id",
-                () -> "eco-analysis-topology-test-"+java.util.UUID.randomUUID());
-    }
+    public static final String DOCKER_ANALYSIS_TEST_DOCKER_COMPOSE_YAML = "../docker/analysis-test-docker-compose.yaml";
+    @Value("${spring.kafka.streams.pipeline.name.aggregation-processor.interval}")
+    public Integer aggregationSecondsPerInterval;
 
     @Autowired
     private KafkaProperties kafkaProperties;
@@ -112,8 +109,14 @@ public abstract class IntegrationTestSupport extends AssertionTestSupport {
     String kafkaAnalysisHistoryTopic;
     @Value("${spring.kafka.streams.properties.schema.registry.url}")
     private String schemaRegistryUrl;
-    @Value("${spring.kafka.streams.pipeline.name.aggregation-processor.interval}")
-    private Integer aggregationSecondsPerInterval;
+
+    @DynamicPropertySource
+    static void dynamicPropertySet(DynamicPropertyRegistry registry) {
+        registry.add("spring.kafka.streams.application-id",
+                () -> "eco-analysis-topology-test-"+java.util.UUID.randomUUID());
+        registry.add("spring.grpc.client.channel.history-service.service-name",
+                () -> "redis-cache");
+    }
 
     protected Producer<String, WeatherPacket> testProducer;
     protected Consumer<String, WeatherPacket> rawTopicConsumer;
@@ -237,7 +240,7 @@ public abstract class IntegrationTestSupport extends AssertionTestSupport {
 
     @SuppressWarnings("resource")
     protected static ComposeContainer getComposeContainer() {
-        return new ComposeContainer(new File("../docker/analysis-test-docker-compose.yaml"))
+        return new ComposeContainer(new File(DOCKER_ANALYSIS_TEST_DOCKER_COMPOSE_YAML))
                 .withEnv(loadEnvironmentMap())
                 .withRemoveVolumes(true)
                 .withTailChildContainers(true);
@@ -254,7 +257,7 @@ public abstract class IntegrationTestSupport extends AssertionTestSupport {
     protected String calculateGridCellKey(double latitude, double longitude) {
         double lat = Math.round(latitude*SCALE_COFF)/SCALE_COFF;
         double lon = Math.round(longitude*SCALE_COFF)/SCALE_COFF;
-        return lat+HASHTAG_DELIMITER+lon;
+        return lat+GEOHASH_SEPARATOR+lon;
     }
 
     protected double[][] getEdgeCaseCoordinates() {
@@ -584,9 +587,9 @@ public abstract class IntegrationTestSupport extends AssertionTestSupport {
                 .until(() -> {
                     List<WeatherMap> currentPackets = new ArrayList<>(kafkaHistoryListener.getReceivedPackets());
                     return currentPackets.stream()
-                            .filter(map -> map.getGridCellsMap().keySet().stream()
-                                    .anyMatch(k -> k.contains(gridCellKey)
-                                            && k.contains(String.valueOf(currentBucketFloor))))
+                            .filter(map -> currentBucketFloor==map.getTimestampBucket()
+                                    && map.getGridCellsMap().keySet().stream().anyMatch(k -> k.contains(gridCellKey))
+                            )
                             .findFirst()
                             .map(map -> {
                                 matchedMap.set(map);
