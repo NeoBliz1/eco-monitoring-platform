@@ -1,7 +1,7 @@
 package me.neobliz1.ecomonitoring.platform.history.domain.model.entity;
 
-import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.BUCKETS_REGION;
-import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.BUCKET_METRICS_REGION;
+import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.BUCKETS_GLOBAL_REGION;
+import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.BUCKET_GRID_CELL_LAYERS_L2_REGION;
 
 import jakarta.persistence.Cacheable;
 import jakarta.persistence.Column;
@@ -35,7 +35,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @FieldNameConstants
 @Entity(name = WeatherMapBucket.TABLE_NAME)
-@Cache(region = BUCKETS_REGION, usage = CacheConcurrencyStrategy.READ_WRITE)
+@Cache(region = BUCKETS_GLOBAL_REGION, usage = CacheConcurrencyStrategy.READ_WRITE)
 @Table(name = WeatherMapBucket.TABLE_NAME, uniqueConstraints = {
         @UniqueConstraint(
                 name = "uq_bucket_time_window",
@@ -58,11 +58,11 @@ public class WeatherMapBucket implements Persistable<UUID> {
 
     @Version
     @Column(name = "version", nullable = false)
-    private long version;
+    private Long version;
 
-    @Cache(region = BUCKET_METRICS_REGION, usage = CacheConcurrencyStrategy.READ_WRITE)
+    @Cache(region = BUCKET_GRID_CELL_LAYERS_L2_REGION, usage = CacheConcurrencyStrategy.READ_WRITE)
     @OneToMany(mappedBy = "bucket", fetch = FetchType.LAZY, orphanRemoval = true)
-    private Set<WeatherGridCellMetric> gridCells = new LinkedHashSet<>();
+    private Set<WeatherGridCellLayer> gridCells = new LinkedHashSet<>();
 
     @Transient
     private boolean isNewRecord = true;
@@ -71,7 +71,7 @@ public class WeatherMapBucket implements Persistable<UUID> {
         this.id = id;
         this.timestampBucket = timestampBucket;
         this.intervalMinutes = intervalMinutes;
-        this.version = 0;
+        this.version = null;
     }
 
     @Override

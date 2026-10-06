@@ -181,14 +181,46 @@
         }
       },
       {
+        "id": 8,
+        "type": "timeseries",
+        "title": "⏳ JVM Garbage Collection Pause Cumulative Time",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 7
+        },
+        "targets": [
+          {
+            "datasource": {
+              "type": "prometheus",
+              "uid": "Prometheus-Metrics"
+            },
+            "editorMode": "code",
+            "expr": "sum(increase(jvm_gc_pause_seconds_sum{instance=\"host.docker.internal:8081\"}[5m]))",
+            "legendFormat": "GC Total Pause (sec)",
+            "range": true
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "bar",
+              "fillOpacity": 40
+            },
+            "unit": "s"
+          }
+        }
+      },
+      {
         "id": 5,
         "type": "timeseries",
         "title": "⚙️ Kafka Stream Pipeline RocksDB Block Cache Hit Rates",
         "gridPos": {
           "h": 8,
           "w": 12,
-          "x": 12,
-          "y": 7
+          "x": 0,
+          "y": 15
         },
         "targets": [
           {
@@ -221,7 +253,7 @@
           "h": 7,
           "w": 12,
           "x": 0,
-          "y": 15
+          "y": 23
         },
         "targets": [
           {
@@ -252,7 +284,7 @@
           "h": 7,
           "w": 12,
           "x": 12,
-          "y": 15
+          "y": 23
         },
         "targets": [
           {

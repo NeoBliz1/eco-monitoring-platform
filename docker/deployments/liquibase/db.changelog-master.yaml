@@ -3,3 +3,5 @@ databaseChangeLog:
       file: changes/001-initial-schema.yaml
   - include:
       file: changes/002-add-telemetry-transactions.yaml
+  - include:
+      file: changes/003-add-spatial-coordinates-metrics.yaml

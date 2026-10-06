@@ -1,9 +1,9 @@
 package me.neobliz1.ecomonitoring.platform.history.infrastructure.config;
 
-import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.BUCKETS_REGION;
-import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.BUCKET_METRICS_REGION;
-import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.METRICS_REGION;
-import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.QUERIES_REGION;
+import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.BUCKETS_GLOBAL_REGION;
+import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.BUCKET_GRID_CELL_LAYERS_L2_REGION;
+import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.GRID_CELL_LAYERS_L2_REGION;
+import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.QUERIES_GLOBAL_REGION;
 import static me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.cache.ClusterEvictingCaffeineCache.CLEAR_ALL;
 
 import com.github.benmanes.caffeine.cache.Cache;
@@ -68,11 +68,11 @@ public class DatabaseCacheDynamicConfig {
                     new SpringBootRedissonRegionFactory(redissonClient)
             );
             String regionWmbTtlAfterAccessInMillis = String.valueOf(Duration.ofMinutes(regionWmbL2CacheTtlAfterAccessMinutes).toMillis());
-            putRegion(hibernateProperties, BUCKETS_REGION, regionWmbL2CacheMaxSize, regionWmbTtlAfterAccessInMillis, null);
-            putRegion(hibernateProperties, BUCKET_METRICS_REGION, regionWmbL2CacheMaxSize, regionWmbTtlAfterAccessInMillis, null);
-            putRegion(hibernateProperties, METRICS_REGION, String.valueOf(regionWgc.getL2CacheMaxSize()),
+            putRegion(hibernateProperties, BUCKETS_GLOBAL_REGION, regionWmbL2CacheMaxSize, regionWmbTtlAfterAccessInMillis, null);
+            putRegion(hibernateProperties, BUCKET_GRID_CELL_LAYERS_L2_REGION, regionWmbL2CacheMaxSize, regionWmbTtlAfterAccessInMillis, null);
+            putRegion(hibernateProperties, GRID_CELL_LAYERS_L2_REGION, String.valueOf(regionWgc.getL2CacheMaxSize()),
                     String.valueOf(Duration.ofMinutes(regionWgc.getL2CacheTtlAfterAccessMinutes()).toMillis()), null);
-            putRegion(hibernateProperties, QUERIES_REGION, String.valueOf(regionSqr.getL2CacheMaxSize()), null,
+            putRegion(hibernateProperties, QUERIES_GLOBAL_REGION, String.valueOf(regionSqr.getL2CacheMaxSize()), null,
                     String.valueOf(Duration.ofMinutes(regionSqr.getL2CacheTtlAfterWriteMinutes()).toMillis()));
             hibernateProperties.put(
                     "hibernate.cache.redisson.default-update-timestamps-region.expiration.time_to_live", "0");
@@ -86,9 +86,9 @@ public class DatabaseCacheDynamicConfig {
         int l1CacheMaxSize = level1.getL1CacheMaxSize();
         String invalidationTopic = level1.getInvalidationTopicName();
         int l1CacheTtlMinutes = level1.getL1CacheTtlMinutes();
-        CaffeineCache bucketCache = createClusterAwareL1Cache(BUCKETS_REGION, redissonClient, invalidationTopic, l1CacheTtlMinutes,
+        CaffeineCache bucketCache = createClusterAwareL1Cache(BUCKETS_GLOBAL_REGION, redissonClient, invalidationTopic, l1CacheTtlMinutes,
                 l1CacheMaxSize);
-        CaffeineCache queryCache = createClusterAwareL1Cache(QUERIES_REGION, redissonClient, invalidationTopic, l1CacheTtlMinutes,
+        CaffeineCache queryCache = createClusterAwareL1Cache(QUERIES_GLOBAL_REGION, redissonClient, invalidationTopic, l1CacheTtlMinutes,
                 l1CacheMaxSize);
         cacheManager.setCaches(List.of(bucketCache, queryCache));
         return cacheManager;

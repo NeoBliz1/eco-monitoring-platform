@@ -15,7 +15,7 @@ import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import lombok.extern.slf4j.Slf4j;
 import me.neobliz1.ecomonitoring.platform.analysis.AnalysisBootEngine;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.inbound.TelemetryQueryService;
-import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryUtils;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.service.AnalysisUtils;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.AirQualityReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.AmbientReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.Location;
@@ -41,6 +41,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.awaitility.Awaitility;
+import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -246,12 +247,125 @@ public abstract class IntegrationTestSupport extends AssertionTestSupport {
                 .withTailChildContainers(true);
     }
 
-    protected long getCurrentBucketFloor() {
-        return TelemetryUtils.getAggregationBucketFloorInterval(Instant.now().toEpochMilli(), aggregationSecondsPerInterval);
+    protected static @NonNull List<double[]> getFinalCoordinates() {
+        List<double[]> coordinates100 = getCoordinates100();
+        List<double[]> coordinatesInBox = List.of(
+                new double[]{ 39.477, -97.074 },
+                new double[]{ 39.396, -96.446 },
+                new double[]{ 39.818, -97.074 },
+                new double[]{ 39.543, -96.107 },
+                new double[]{ 39.691, -96.304 },
+                new double[]{ 39.570, -96.496 },
+                new double[]{ 39.559, -96.346 },
+                new double[]{ 39.483, -96.532 }
+        );
+        List<double[]> finalCoordinates = new ArrayList<>(coordinatesInBox);
+        finalCoordinates.addAll(coordinates100);
+        return finalCoordinates;
     }
 
-    protected long getNextBucketFloor(long timestamp) {
-        return TelemetryUtils.getAggregationBucketFloorInterval(timestamp+BUCKET_SIZE_MS, aggregationSecondsPerInterval);
+    private static @NonNull List<double[]> getCoordinates100() {
+        return List.of(
+                new double[]{ 41.846, -98.514 },
+                new double[]{ 37.908, -94.778 },
+                new double[]{ 37.793, -102.388 },
+                new double[]{ 44.554, -94.858 },
+                new double[]{ 42.527, -95.759 },
+                new double[]{ 44.443, -103.175 },
+                new double[]{ 44.551, -97.647 },
+                new double[]{ 35.507, -94.276 },
+                new double[]{ 42.583, -97.365 },
+                new double[]{ 44.551, -99.091 },
+                new double[]{ 44.052, -96.455 },
+                new double[]{ 38.743, -95.261 },
+                new double[]{ 39.308, -101.970 },
+                new double[]{ 38.278, -99.389 },
+                new double[]{ 38.283, -99.342 },
+                new double[]{ 38.120, -94.054 },
+                new double[]{ 38.692, -102.742 },
+                new double[]{ 38.369, -97.616 },
+                new double[]{ 40.006, -93.138 },
+                new double[]{ 42.470, -94.199 },
+                new double[]{ 42.833, -100.792 },
+                new double[]{ 44.138, -93.184 },
+                new double[]{ 39.473, -102.994 },
+                new double[]{ 39.926, -100.306 },
+                new double[]{ 36.116, -91.693 },
+                new double[]{ 40.425, -97.540 },
+                new double[]{ 39.289, -99.395 },
+                new double[]{ 36.668, -96.479 },
+                new double[]{ 41.393, -103.980 },
+                new double[]{ 40.052, -100.548 },
+                new double[]{ 44.152, -103.546 },
+                new double[]{ 44.181, -103.923 },
+                new double[]{ 38.286, -102.494 },
+                new double[]{ 44.036, -101.104 },
+                new double[]{ 40.674, -100.426 },
+                new double[]{ 37.930, -102.858 },
+                new double[]{ 37.113, -97.189 },
+                new double[]{ 39.508, -101.631 },
+                new double[]{ 36.019, -95.094 },
+                new double[]{ 44.035, -97.361 },
+                new double[]{ 40.785, -98.000 },
+                new double[]{ 37.437, -91.768 },
+                new double[]{ 40.654, -93.829 },
+                new double[]{ 35.148, -93.167 },
+                new double[]{ 35.801, -103.457 },
+                new double[]{ 44.450, -99.719 },
+                new double[]{ 43.723, -95.184 },
+                new double[]{ 43.612, -92.266 },
+                new double[]{ 38.479, -93.903 },
+                new double[]{ 36.305, -95.675 },
+                new double[]{ 41.986, -98.596 },
+                new double[]{ 36.243, -102.241 },
+                new double[]{ 43.347, -100.113 },
+                new double[]{ 44.977, -102.099 },
+                new double[]{ 40.689, -96.423 },
+                new double[]{ 43.220, -96.120 },
+                new double[]{ 38.637, -96.084 },
+                new double[]{ 35.017, -103.953 },
+                new double[]{ 44.776, -102.393 },
+                new double[]{ 44.885, -102.800 },
+                new double[]{ 37.820, -92.404 },
+                new double[]{ 41.103, -98.676 },
+                new double[]{ 44.545, -95.013 },
+                new double[]{ 38.412, -93.948 },
+                new double[]{ 40.198, -101.852 },
+                new double[]{ 42.551, -97.981 },
+                new double[]{ 36.294, -93.261 },
+                new double[]{ 35.098, -94.715 },
+                new double[]{ 40.148, -102.464 },
+                new double[]{ 37.515, -101.716 },
+                new double[]{ 41.209, -98.539 },
+                new double[]{ 41.311, -101.250 },
+                new double[]{ 37.500, -101.875 },
+                new double[]{ 35.506, -93.583 },
+                new double[]{ 42.513, -99.266 },
+                new double[]{ 35.470, -101.299 },
+                new double[]{ 42.835, -94.488 },
+                new double[]{ 39.682, -100.576 },
+                new double[]{ 35.136, -103.966 },
+                new double[]{ 38.456, -99.436 },
+                new double[]{ 35.074, -97.507 },
+                new double[]{ 35.311, -93.102 },
+                new double[]{ 37.251, -99.699 },
+                new double[]{ 36.057, -103.952 },
+                new double[]{ 35.560, -94.083 },
+                new double[]{ 43.343, -99.390 },
+                new double[]{ 38.835, -98.293 },
+                new double[]{ 38.480, -102.470 },
+                new double[]{ 41.621, -96.480 },
+                new double[]{ 44.184, -91.669 },
+                new double[]{ 44.303, -101.658 },
+                new double[]{ 39.620, -92.528 },
+                new double[]{ 35.467, -99.533 },
+                new double[]{ 35.278, -96.665 },
+                new double[]{ 43.389, -93.875 },
+                new double[]{ 41.384, -102.841 },
+                new double[]{ 43.972, -103.486 },
+                new double[]{ 39.121, -94.442 },
+                new double[]{ 35.005, -101.536 }
+        );
     }
 
     protected String calculateGridCellKey(double latitude, double longitude) {
@@ -599,5 +713,13 @@ public abstract class IntegrationTestSupport extends AssertionTestSupport {
                 });
 
         return matchedMap.get();
+    }
+
+    protected long getCurrentBucketFloor() {
+        return AnalysisUtils.getAggregationBucketFloorMillisInterval(Instant.now().toEpochMilli(), aggregationSecondsPerInterval);
+    }
+
+    protected long getNextBucketFloor(long timestamp) {
+        return AnalysisUtils.getAggregationBucketFloorMillisInterval(timestamp+BUCKET_SIZE_MS, aggregationSecondsPerInterval);
     }
 }

@@ -11,6 +11,7 @@ DEBUG_ANALYSIS=false
 DEBUG_HISTORY=false
 SKIP_INFRA_TEARDOWN=false
 CLEAR_LOGS=false
+DISABLE_TRACE=false
 REDIS_IMAGE="redis@sha256:9d317178eceac8454a2284a9e6df2466b93c745529947f0cd42a0fa9609d7005"
 
 for arg in "$@"; do
@@ -32,6 +33,7 @@ for arg in "$@"; do
 		echo "  -xis   Enable Debugging profile on Ingestion Service"
 		echo "  -xas   Enable Debugging profile on Analysis Service"
 		echo "  -xhs   Enable Debugging profile on History Service"
+		echo "  -noTrace  Disable Spring load-time weaving agents and profiles"
 		echo "  -help  Display this architectural routing guide"
 		echo ""
 		echo "Note: If no explicit service flag (-d...) is specified,"
@@ -49,6 +51,7 @@ for arg in "$@"; do
 	-xis) DEBUG_INGESTION=true ;;
 	-xas) DEBUG_ANALYSIS=true ;;
 	-xhs) DEBUG_HISTORY=true ;;
+	-noTrace) DISABLE_TRACE=true ;;
 	*) echo "Unknown option: $arg (Use -help for valid targets)" && exit 1 ;;
 	esac
 done
@@ -234,14 +237,31 @@ wait_for_consul_service() {
     return 1
 }
 
-AGENT_PATH="$HOME/.m2/repository/io/opentelemetry/javaagent/opentelemetry-javaagent/2.31.1/opentelemetry-javaagent-2.31.1.jar"
-if [ ! -f "$AGENT_PATH" ]; then
-	echo "❌ FATAL: Compiled opentelemetry-javaagent directory path $AGENT_PATH does not exist."
-	exit 1
+INGESTION_PROFILES="prod,local,trace"
+ANALYSIS_PROFILES="prod,local,weather-packet-chain-confirmation,trace"
+HISTORY_PROFILES="prod,local,weather-packet-chain-confirmation,trace"
+
+if [ "$DISABLE_TRACE" = true ]; then
+	echo "📉 Tracing disabled (-noTrace active). Skipping javaagent mapping..."
+	INGESTION_OTEL_OPTS=""
+	ANALYSIS_OTEL_OPTS=""
+	HISTORY_OTEL_OPTS=""
+	INGESTION_PROFILES="prod,local"
+	ANALYSIS_PROFILES="prod,local,weather-packet-chain-confirmation"
+	HISTORY_PROFILES="prod,local,weather-packet-chain-confirmation"
+else
+	OTEL_AGENT_PATH="$HOME/.m2/repository/io/opentelemetry/javaagent/opentelemetry-javaagent/2.31.1/opentelemetry-javaagent-2.31.1.jar"
+
+	if [ ! -f "$OTEL_AGENT_PATH" ]; then
+		echo "❌ FATAL: Compiled opentelemetry-javaagent jar path $OTEL_AGENT_PATH does not exist."
+		exit 1
+	fi
+
+	# Chain both agents together side-by-side using sequential flags
+	INGESTION_OTEL_OPTS="-javaagent:$OTEL_AGENT_PATH"
+	ANALYSIS_OTEL_OPTS="-javaagent:$OTEL_AGENT_PATH"
+	HISTORY_OTEL_OPTS="-javaagent:$OTEL_AGENT_PATH"
 fi
-INGESTION_OTEL_OPTS="-javaagent:$AGENT_PATH"
-ANALYSIS_OTEL_OPTS="-javaagent:$AGENT_PATH"
-HISTORY_OTEL_OPTS="-javaagent:$AGENT_PATH"
 
 INGESTION_DEBUG_OPTS=""
 ANALYSIS_DEBUG_OPTS=""
@@ -256,10 +276,10 @@ pkill -15 -f "history-service.jar" 2>/dev/null || true
 pkill -15 -f "go-service" 2>/dev/null || true
 echo "📡 Spawning background processes..."
 # shellcheck disable=SC2086
-env "${ENV_PAYLOAD[@]}" OTEL_SERVICE_NAME="$OTEL_INGESTION_NAME" java $INGESTION_OTEL_OPTS $INGESTION_DEBUG_OPTS ${JVM_MEM_OPTS:-} -Dspring.profiles.active="prod,local" -jar ingestion-service.jar >ingestion.log 2>&1 &
+env "${ENV_PAYLOAD[@]}" OTEL_SERVICE_NAME="$OTEL_INGESTION_NAME" java $INGESTION_OTEL_OPTS $INGESTION_DEBUG_OPTS ${JVM_MEM_OPTS:-} -Dspring.profiles.active="$INGESTION_PROFILES" -jar ingestion-service.jar >ingestion.log 2>&1 &
 PID_INGESTION=$!
 # shellcheck disable=SC2086
-env "${ENV_PAYLOAD[@]}" OTEL_SERVICE_NAME="$OTEL_HISTORY_NAME" java $HISTORY_OTEL_OPTS $HISTORY_DEBUG_OPTS ${JVM_MEM_OPTS:-} -Dspring.profiles.active="prod,local,weather-packet-chain-confirmation" -jar history-service.jar >history.log 2>&1 &
+env "${ENV_PAYLOAD[@]}" OTEL_SERVICE_NAME="$OTEL_HISTORY_NAME" java $HISTORY_OTEL_OPTS $HISTORY_DEBUG_OPTS ${JVM_MEM_OPTS:-} -Dspring.profiles.active="$HISTORY_PROFILES" -jar history-service.jar >history.log 2>&1 &
 PID_HISTORY=$!
 sleep 1.5
 if ! kill -0 "$PID_HISTORY" 2>/dev/null; then
@@ -277,7 +297,7 @@ fi
 
 echo "📡 Spawning analysis engine components..."
 # shellcheck disable=SC2086
-env "${ENV_PAYLOAD[@]}" OTEL_SERVICE_NAME="$OTEL_ANALYSIS_NAME" java $ANALYSIS_OTEL_OPTS $ANALYSIS_DEBUG_OPTS ${JVM_MEM_OPTS:-} -Dspring.profiles.active="prod,local" -jar analysis-service.jar >analysis.log 2>&1 &
+env "${ENV_PAYLOAD[@]}" OTEL_SERVICE_NAME="$OTEL_ANALYSIS_NAME" java $ANALYSIS_OTEL_OPTS $ANALYSIS_DEBUG_OPTS ${JVM_MEM_OPTS:-} -Dspring.profiles.active="$ANALYSIS_PROFILES" -jar analysis-service.jar >analysis.log 2>&1 &
 PID_ANALYSIS=$!
 
 if [ -d "${PROJECT_ROOT:-.}/bin/gateway" ]; then

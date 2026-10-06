@@ -16,4 +16,4 @@ spring:
     cache-names:
       - weatherMaps
     caffeine:
-      spec: expireAfterWrite=1m,maximumSize=5000,recordStats
+      spec: expireAfterWrite=10m,maximumSize=5000,recordStats

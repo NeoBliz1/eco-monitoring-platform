@@ -94,7 +94,7 @@
             },
             "editorMode": "code",
             "expr": "http_server_requests_seconds_max{instance=\"host.docker.internal:8080\"} * 1000",
-            "legendFormat": "Max Latency Spike (ms)",
+            "legendFormat": "Max Spike: {{uri}} [{{status}}]",
             "range": true
           }
         ],

@@ -255,8 +255,26 @@ public class WeatherTestUtils {
                 .build();
     }
 
+    public static @NonNull WeatherMap getWeatherMapWithNLayers(int n) {
+        GridCellLayers cellLayers = getGridCellLayers(null);
+        long timestampBucket = Instant.now().toEpochMilli();
+        WeatherMap.Builder mapBuilder = WeatherMap.newBuilder()
+                .setTimestampBucket(timestampBucket)
+                .setIntervalMinutes(INTERVAL_MINUTES)
+                .addTelemetryTransactionsId(TX_DEFAULT_ID);
+        double baseLatitude = 55.123;
+        double baseLongitude = 37.456;
+        for(int i = 0; i<n; i++) {
+            double currentLongitude = baseLongitude+(i*0.001);
+            String geohashKey = String.format(java.util.Locale.US, "%.3f#%.3f", baseLatitude, currentLongitude);
+            mapBuilder.putGridCells(geohashKey, cellLayers);
+        }
+        return mapBuilder.build();
+    }
+
     public static @NonNull GridCellLayers getGridCellLayers(@Nullable Float temp) {
         return GridCellLayers.newBuilder()
+                .setGeohash(GEOHASH_ALPHA)
                 .setReadingCount(VAL_COUNT)
                 .setAvgTemperature(isNull(temp)?VAL_TEMP:temp)
                 .setAvgHumidity(VAL_HUMIDITY)

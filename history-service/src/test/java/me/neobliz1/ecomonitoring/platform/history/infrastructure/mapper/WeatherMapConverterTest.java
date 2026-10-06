@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 
-import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherGridCellMetric;
+import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherGridCellLayer;
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherMapBucket;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherGridCellJpaRepository;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
@@ -16,8 +16,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,21 +25,21 @@ class WeatherMapConverterTest {
     @Mock
     private HistoricalWeatherGridCellJpaRepository gridCellJpaRepository;
 
+    @SuppressWarnings("unchecked")
     @Test
     void shouldExtractAllTelemetryMetricsAndSaveThemViaRepository_whenWeatherMapContainsGridCells() {
         WeatherMapConverter converter = new WeatherMapConverter(gridCellJpaRepository);
         WeatherMapBucket bucket = new WeatherMapBucket();
         bucket.setId(UUID.randomUUID());
         WeatherMap weatherMap = WeatherTestUtils.getWeatherMap();
-        //noinspection unchecked
-        ArgumentCaptor<List<WeatherGridCellMetric>> cellsCaptor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<WeatherGridCellLayer>> cellsCaptor = ArgumentCaptor.forClass(List.class);
 
-        converter.mergeTelemetryInBatch(weatherMap, bucket, new ArrayList<>());
+        converter.mergeTelemetryInBatch(weatherMap, bucket);
 
-        verify(gridCellJpaRepository).saveAll(cellsCaptor.capture());
-        List<WeatherGridCellMetric> savedCells = cellsCaptor.getValue();
+        verify(gridCellJpaRepository).saveAllAndFlush(cellsCaptor.capture());
+        List<WeatherGridCellLayer> savedCells = cellsCaptor.getValue();
         assertEquals(1, savedCells.size());
-        WeatherGridCellMetric metric = savedCells.getFirst();
+        WeatherGridCellLayer metric = savedCells.getFirst();
         assertNotNull(metric.getBucketId());
         assertEquals(WeatherTestUtils.GEOHASH_ALPHA, metric.getGeohash());
         assertEquals(WeatherTestUtils.VAL_COUNT, metric.getReadingCount());
@@ -71,7 +69,7 @@ class WeatherMapConverterTest {
         WeatherMapBucket bucket = new WeatherMapBucket();
         WeatherMap weatherMap = WeatherMap.newBuilder().build();
 
-        converter.mergeTelemetryInBatch(weatherMap, bucket, Collections.emptyList());
+        converter.mergeTelemetryInBatch(weatherMap, bucket);
 
         assertTrue(bucket.getGridCells().isEmpty());
     }

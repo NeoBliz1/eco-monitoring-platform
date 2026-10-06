@@ -1,0 +1,38 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-add-spatial-coordinates-to-grid-metrics
+      author: neobliz1
+      comment: Injects explicit double precision fields for fast geometric lookup.
+      changes:
+        - sql:
+            dbms: postgresql
+            splitStatements: true
+            endDelimiter: ;
+            sql: |
+              ALTER TABLE weather_grid_cell_metrics ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
+              ALTER TABLE weather_grid_cell_metrics ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
+              UPDATE weather_grid_cell_metrics 
+              SET 
+                latitude = cast(split_part(geohash, '#', 1) as double precision),
+                longitude = cast(split_part(geohash, '#', 2) as double precision)
+              WHERE geohash IS NOT NULL 
+                AND geohash LIKE '%#%' 
+                AND (latitude IS NULL OR longitude IS NULL);
+              UPDATE weather_grid_cell_metrics SET latitude = 0.0 WHERE latitude IS NULL;
+              UPDATE weather_grid_cell_metrics SET longitude = 0.0 WHERE longitude IS NULL;
+              ALTER TABLE weather_grid_cell_metrics ALTER COLUMN latitude SET NOT NULL;
+              ALTER TABLE weather_grid_cell_metrics ALTER COLUMN longitude SET NOT NULL;
+              DROP INDEX IF EXISTS idx_metrics_geohash_standalone;
+              DROP INDEX IF EXISTS idx_weather_grid_cell_spatial_perf;
+              CREATE INDEX idx_weather_grid_cell_spatial_perf ON weather_grid_cell_metrics (bucket_id, latitude, longitude);
+
+      rollback:
+        - sql:
+            dbms: postgresql
+            splitStatements: true
+            endDelimiter: ;
+            sql: |
+              DROP INDEX IF EXISTS idx_weather_grid_cell_spatial_perf;
+              ALTER TABLE weather_grid_cell_metrics DROP COLUMN IF EXISTS latitude;
+              ALTER TABLE weather_grid_cell_metrics DROP COLUMN IF EXISTS longitude;
+              CREATE INDEX IF NOT EXISTS idx_metrics_geohash_standalone ON weather_grid_cell_metrics (geohash);

@@ -12,6 +12,7 @@ import me.neobliz1.ecomonitoring.platform.model.exception.EcoPlatformErrorCode;
 import org.springframework.context.MessageSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -19,6 +20,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -80,6 +82,19 @@ public class GlobalPlatformControllerAdviceEngine {
                 .formatted(paramName, requiredType, providedValue);
 
         log.error("Type mismatch error: {}", exDescription);
+        return new ResponseEntity<>(
+                new ErrorEnvelopeDto(HttpStatus.BAD_REQUEST.toString(), exDescription, Instant.now().toEpochMilli()),
+                HttpStatus.BAD_REQUEST
+        );
+    }
+
+    @SuppressWarnings("unused")
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorEnvelopeDto> handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
+        String exDescription = "Invalid request parameters: "+ex.getBindingResult().getFieldErrors().stream()
+                .map(error -> error.getDefaultMessage()+", provided: "+error.getRejectedValue())
+                .collect(Collectors.joining(", "));
+        log.error("Validation error: {}", exDescription);
         return new ResponseEntity<>(
                 new ErrorEnvelopeDto(HttpStatus.BAD_REQUEST.toString(), exDescription, Instant.now().toEpochMilli()),
                 HttpStatus.BAD_REQUEST

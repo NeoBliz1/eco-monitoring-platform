@@ -9,6 +9,8 @@ import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import lombok.Getter;
 import lombok.Setter;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.model.dto.WeatherMapAnalysisRequestQuery;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.config.AnalysisInfrastructureProperties;
 import me.neobliz1.ecomonitoring.platform.model.exception.WeatherMapDataNotFoundException;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.GridCellLayers;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
@@ -17,6 +19,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.grpc.client.autoconfigure.GrpcClientAutoConfiguration;
 import org.springframework.boot.grpc.server.autoconfigure.GrpcServerAutoConfiguration;
 import org.springframework.boot.ssl.SslBundles;
@@ -75,9 +78,7 @@ class TelemetryQueryGrpcAdapterTest {
                     .build();
             mockHistoryService.setNextResponse(expectedResponse);
 
-            WeatherMap actualResponse = adapter.findGridDataBySpatialBoxInHistoryService(
-                    ACTIVE_BUCKET_FLOOR, MIN_LAT, MAX_LAT, MIN_LON, MAX_LON
-            );
+            WeatherMap actualResponse = adapter.findGridDataBySpatialBoxInHistoryService(request());
 
             assertThat(actualResponse).isNotNull();
             assertThat(actualResponse.getTimestampBucket()).isEqualTo(ACTIVE_BUCKET_FLOOR);
@@ -98,43 +99,22 @@ class TelemetryQueryGrpcAdapterTest {
                     Status.NOT_FOUND.withDescription("No archival bucket available").asRuntimeException()
             );
 
-            assertThatThrownBy(() -> adapter.findGridDataBySpatialBoxInHistoryService(
-                    ACTIVE_BUCKET_FLOOR, MIN_LAT, MAX_LAT, MIN_LON, MAX_LON
-            ))
+            assertThatThrownBy(() -> adapter.findGridDataBySpatialBoxInHistoryService(request()))
                     .isInstanceOf(WeatherMapDataNotFoundException.class);
         });
     }
 
-    static class MockHistoryServerConfig {
-
-        @Bean
-        public MockHistoryService mockHistoryService() {
-            return new MockHistoryService();
-        }
-
-        @Bean(destroyMethod = "shutdownNow")
-        public ManagedChannel historyTestNetworkChannel() {
-            return ManagedChannelBuilder
-                    .forAddress("localhost", 9099)
-                    .directExecutor()
-                    .usePlaintext()
-                    .build();
-        }
-
-        @Bean
-        public HistoryServiceGrpc.HistoryServiceBlockingStub historyServiceBlockingStub(ManagedChannel historyTestNetworkChannel) {
-            return HistoryServiceGrpc.newBlockingStub(historyTestNetworkChannel);
-        }
+    private WeatherMapAnalysisRequestQuery request() {
+        return new WeatherMapAnalysisRequestQuery(
+                ACTIVE_BUCKET_FLOOR, MIN_LAT, MAX_LAT, MIN_LON, MAX_LON);
     }
 
     public static class MockHistoryService extends HistoryServiceGrpc.HistoryServiceImplBase {
 
         @Getter
         private SpatialBoxRequest lastCapturedRequest;
-
         @Setter
         private WeatherMap nextResponse;
-
         @Setter
         private Exception nextException;
 
@@ -155,6 +135,29 @@ class TelemetryQueryGrpcAdapterTest {
             } else {
                 responseObserver.onError(Status.INTERNAL.withDescription("No mock criteria configured").asRuntimeException());
             }
+        }
+    }
+
+    @EnableConfigurationProperties(AnalysisInfrastructureProperties.class)
+    static class MockHistoryServerConfig {
+
+        @Bean
+        public MockHistoryService mockHistoryService() {
+            return new MockHistoryService();
+        }
+
+        @Bean(destroyMethod = "shutdownNow")
+        public ManagedChannel historyTestNetworkChannel() {
+            return ManagedChannelBuilder
+                    .forAddress("localhost", 9099)
+                    .directExecutor()
+                    .usePlaintext()
+                    .build();
+        }
+
+        @Bean
+        public HistoryServiceGrpc.HistoryServiceBlockingStub historyServiceBlockingStub(ManagedChannel historyTestNetworkChannel) {
+            return HistoryServiceGrpc.newBlockingStub(historyTestNetworkChannel);
         }
     }
 }

@@ -1,21 +1,35 @@
 syntax = "proto3";
 
 package weather.map;
+
+import "buf/validate/validate.proto";
+
 option java_multiple_files = true;
 option java_package = "me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map";
 
 message WeatherMap {
-  int64 timestamp_bucket = 1;
-  int32 interval_minutes = 2;
-  map<string, GridCellLayers> grid_cells = 3;
+  // Enforces that the numerical value cannot be the default unassigned 0
+  int64 timestamp_bucket = 1 [(buf.validate.field).int64.gt = 0];
+
+  // Enforces that the interval minutes cannot be 0
+  int32 interval_minutes = 2 [(buf.validate.field).int32.gt = 0];
+
+  // Enforces that the map contains at least 1 entry metric layer
+  map<string, GridCellLayers> grid_cells = 3 [
+    (buf.validate.field).map.min_pairs = 1
+  ];
+
   repeated string telemetry_transactions_id = 4;
   string trace_parent = 5;
   repeated string telemetry_trace_parents = 6;
 }
 
 message GridCellLayers {
-  string geohash = 1;
-  int32 reading_count = 2;
+  // Enforces string content is populated and not an empty string
+  string geohash = 1 [(buf.validate.field).string.min_len = 1];
+
+  // Enforces that reading_count must be at least 1 or greater
+  int32 reading_count = 2 [(buf.validate.field).int32.gt = 0];
 
   double avg_temperature = 3;
   double avg_humidity = 4;
@@ -40,4 +54,17 @@ message GridCellLayers {
   double avg_solar_radiation_wm2 = 18;
   double avg_lux = 19;
   double avg_visibility_m = 20;
+
+  // This rule evaluates all metric columns. It guarantees that the message
+  // cannot contain only a geohash and reading_count by ensuring at least one
+  // other telemetry field contains a non-zero value.
+  option (buf.validate.message).cel = {
+    id: "grid_cell.has_at_least_one_metric",
+    message: "Invalid layer: GridCellLayers must contain at least one telemetry metric measurement.",
+    expression: "this.avg_temperature != 0.0 || this.avg_humidity != 0.0 || this.avg_pressure != 0.0 || this.avg_leaf_wetness_pct != 0.0 || "
+        "this.avg_wind_speed != 0.0 || this.avg_wind_direction != 0.0 || this.avg_pm25 != 0.0 || this.avg_pm10 != 0.0 || "
+        "this.avg_pm100 != 0.0 || this.avg_voc != 0.0 || this.avg_noise_db != 0.0 || this.avg_rain_mm != 0.0 || "
+        "this.avg_snow_cm != 0.0 || this.avg_evap_rate != 0.0 || this.avg_uv_index != 0.0 || "
+        "this.avg_solar_radiation_wm2 != 0.0 || this.avg_lux != 0.0 || this.avg_visibility_m != 0.0"
+  };
 }

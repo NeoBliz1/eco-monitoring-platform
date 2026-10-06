@@ -1,6 +1,7 @@
 package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.record;
 
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.GEOHASH_SEPARATOR;
+import static me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils.getGeohashSepPos;
 
 import org.jspecify.annotations.NonNull;
 
@@ -10,8 +11,7 @@ public record ParsedStorageKey(
         String txId,
         String spatialKey,
         String lat,
-        String lon
-) {
+        String lon) {
 
     public ParsedStorageKey(@NonNull String bucketTime, @NonNull String geohash, String txId) {
         this(bucketTime, geohash, txId, null, null, null);
@@ -20,10 +20,7 @@ public record ParsedStorageKey(
     public ParsedStorageKey(@NonNull String bucketTime, @NonNull String geohash, String txId,
                             String spatialKey, String lat, String lon) {
         String computedSpatialKey = bucketTime+GEOHASH_SEPARATOR+geohash;
-        int sep = geohash.indexOf(GEOHASH_SEPARATOR);
-        if(sep==-1) {
-            throw new IndexOutOfBoundsException("Geohash coordinates format is invalid: "+geohash);
-        }
+        int sep = getGeohashSepPos(geohash);
         String computedLat = geohash.substring(0, sep);
         String computedLon = geohash.substring(sep+1);
         validateComputedValues(spatialKey, lat, lon, computedSpatialKey, computedLat, computedLon);

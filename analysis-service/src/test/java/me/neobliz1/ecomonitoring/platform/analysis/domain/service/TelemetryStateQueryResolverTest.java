@@ -3,11 +3,11 @@ package me.neobliz1.ecomonitoring.platform.analysis.domain.service;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyDouble;
-import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.google.protobuf.InvalidProtocolBufferException;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.model.dto.WeatherMapAnalysisRequestQuery;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryQueryRepository;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.record.WeatherMapRecord;
 import me.neobliz1.ecomonitoring.platform.model.exception.ProtocolBufferTranslationException;
@@ -41,7 +41,12 @@ class TelemetryStateQueryResolverTest {
 
     @BeforeEach
     void setUp() {
-        resolver = new TelemetryStateQueryResolver(telemetryQueryRepositoryAdapter, 60);
+        resolver = new TelemetryStateQueryResolver(telemetryQueryRepositoryAdapter);
+    }
+
+    private WeatherMapAnalysisRequestQuery validQuery() {
+        return new WeatherMapAnalysisRequestQuery(
+                TARGET_TIMESTAMP, MIN_LAT, MAX_LAT, MIN_LON, MAX_LON);
     }
 
     @Test
@@ -49,12 +54,10 @@ class TelemetryStateQueryResolverTest {
         Map<String, GridCellLayers> rawData = new HashMap<>();
         GridCellLayers layers = GridCellLayers.newBuilder().setAvgTemperature(25.5).build();
         rawData.put(VALID_CELL_KEY, layers);
-        when(telemetryQueryRepositoryAdapter.getWeatherMapByTimestampAndSpatialBox(
-                anyLong(), anyDouble(), anyDouble(), anyDouble(), anyDouble()))
+        when(telemetryQueryRepositoryAdapter.getWeatherMapByTimestampAndSpatialBox(any(WeatherMapAnalysisRequestQuery.class)))
                 .thenReturn(WeatherMap.newBuilder().putAllGridCells(rawData).build());
 
-        WeatherMapRecord mapByCoordinates = resolver.getLatestTimeIntervalWeatherMapByCoordinates(
-                TARGET_TIMESTAMP, MIN_LAT, MAX_LAT, MIN_LON, MAX_LON);
+        WeatherMapRecord mapByCoordinates = resolver.getLatestTimeIntervalWeatherMapByCoordinates(validQuery());
 
         assertTrue(mapByCoordinates.payload().containsGridCells(VALID_CELL_KEY));
     }
@@ -64,12 +67,10 @@ class TelemetryStateQueryResolverTest {
         Map<String, GridCellLayers> rawData = new HashMap<>();
         GridCellLayers validLayers = GridCellLayers.newBuilder().setAvgTemperature(25.5).build();
         rawData.put(VALID_CELL_KEY, validLayers);
-        when(telemetryQueryRepositoryAdapter.getWeatherMapByTimestampAndSpatialBox(
-                anyLong(), anyDouble(), anyDouble(), anyDouble(), anyDouble()))
+        when(telemetryQueryRepositoryAdapter.getWeatherMapByTimestampAndSpatialBox(any(WeatherMapAnalysisRequestQuery.class)))
                 .thenReturn(WeatherMap.newBuilder().putAllGridCells(rawData).build());
 
-        WeatherMapRecord mapByCoordinates = resolver.getLatestTimeIntervalWeatherMapByCoordinates(
-                TARGET_TIMESTAMP, MIN_LAT, MAX_LAT, MIN_LON, MAX_LON);
+        WeatherMapRecord mapByCoordinates = resolver.getLatestTimeIntervalWeatherMapByCoordinates(validQuery());
         WeatherMap payload = mapByCoordinates.payload();
 
         assertTrue(payload.containsGridCells(VALID_CELL_KEY));
@@ -77,33 +78,14 @@ class TelemetryStateQueryResolverTest {
     }
 
     @Test
-    void shouldThrowWeatherMapDataNotFoundException_whenMinLatExceedsMaxLat() {
-        ThrowingCallable executable = () -> resolver.getLatestTimeIntervalWeatherMapByCoordinates(
-                TARGET_TIMESTAMP, MAX_LAT, MIN_LAT, MIN_LON, MAX_LON);
-
-        assertThatThrownBy(executable)
-                .isInstanceOf(WeatherMapDataNotFoundException.class);
-    }
-
-    @Test
-    void shouldThrowWeatherMapDataNotFoundException_whenMinLonExceedsMaxLon() {
-        ThrowingCallable executable = () -> resolver.getLatestTimeIntervalWeatherMapByCoordinates(
-                TARGET_TIMESTAMP, MIN_LAT, MAX_LAT, MAX_LON, MIN_LON);
-
-        assertThatThrownBy(executable)
-                .isInstanceOf(WeatherMapDataNotFoundException.class);
-    }
-
-    @Test
     void shouldThrowProtocolBufferTranslationException_whenGridValueBytesAreCorrupted() {
-        when(telemetryQueryRepositoryAdapter.getWeatherMapByTimestampAndSpatialBox(
-                anyLong(), anyDouble(), anyDouble(), anyDouble(), anyDouble()))
+        when(telemetryQueryRepositoryAdapter.getWeatherMapByTimestampAndSpatialBox(any(WeatherMapAnalysisRequestQuery.class)))
                 .thenThrow(new ProtocolBufferTranslationException(
                         "Corrupted Protobuf payload for grid cell: "+VALID_CELL_KEY,
                         new InvalidProtocolBufferException("Contents do not match protocol")));
 
-        ThrowingCallable executable = () -> resolver.getLatestTimeIntervalWeatherMapByCoordinates(
-                TARGET_TIMESTAMP, MIN_LAT, MAX_LAT, MIN_LON, MAX_LON);
+        ThrowingCallable executable = () ->
+                resolver.getLatestTimeIntervalWeatherMapByCoordinates(validQuery());
 
         assertThatThrownBy(executable)
                 .isInstanceOf(ProtocolBufferTranslationException.class)
@@ -113,12 +95,11 @@ class TelemetryStateQueryResolverTest {
 
     @Test
     void shouldThrowWeatherMapDataNotFoundException_whenRepositoryReturnsEmptyMatrixMap() {
-        when(telemetryQueryRepositoryAdapter.getWeatherMapByTimestampAndSpatialBox(
-                anyLong(), anyDouble(), anyDouble(), anyDouble(), anyDouble()))
+        when(telemetryQueryRepositoryAdapter.getWeatherMapByTimestampAndSpatialBox(any(WeatherMapAnalysisRequestQuery.class)))
                 .thenThrow(new WeatherMapDataNotFoundException());
 
-        ThrowingCallable executable = () -> resolver.getLatestTimeIntervalWeatherMapByCoordinates(
-                TARGET_TIMESTAMP, MIN_LAT, MAX_LAT, MIN_LON, MAX_LON);
+        ThrowingCallable executable = () ->
+                resolver.getLatestTimeIntervalWeatherMapByCoordinates(validQuery());
 
         assertThatThrownBy(executable)
                 .isInstanceOf(WeatherMapDataNotFoundException.class);

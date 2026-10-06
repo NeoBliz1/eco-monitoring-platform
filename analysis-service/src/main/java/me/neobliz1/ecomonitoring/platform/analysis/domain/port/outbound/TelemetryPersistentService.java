@@ -9,6 +9,5 @@ import java.util.Map;
 public interface TelemetryPersistentService {
 
     void updateRealTimeSlidingWindow(WeatherPacket packet, double latGrid, double lonGrid);
-
     List<WeatherMapRecord> processAndComputeAggregatedHistory(Map<Long, Map<String, List<WeatherPacket>>> extractionMatrix);
 }

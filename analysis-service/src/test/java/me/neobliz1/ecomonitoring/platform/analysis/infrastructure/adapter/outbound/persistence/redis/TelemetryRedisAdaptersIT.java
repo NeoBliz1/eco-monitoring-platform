@@ -1,12 +1,20 @@
 package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.persistence.redis;
 
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.WEATHER_HOTWINDOW;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import me.neobliz1.ecomonitoring.platform.analysis.domain.model.dto.WeatherMapAnalysisRequestQuery;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.service.AnalysisUtils;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.config.RedisTestConfig;
 import me.neobliz1.ecomonitoring.platform.model.exception.WeatherMapDataNotFoundException;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,7 +56,14 @@ class TelemetryRedisAdaptersIT {
         contextRunner = new ApplicationContextRunner()
                 .withPropertyValues(
                         "spring.main.web-application-type=none",
-                        "spring.redis.records.ttl=1"
+                        "spring.redis.records.ttl=1",
+                        "spring.kafka.service-name=analysis-test",
+                        "spring.kafka.topic.weather-live=test.weather.live",
+                        "spring.kafka.topic.weather-raw=test.weather.raw",
+                        "spring.kafka.topic.weather-history=test.weather.history",
+                        "spring.kafka.streams.pipeline.name.aggregation-processor.interval=60",
+                        "spring.kafka.streams.pipeline.name.deduplication-processor.interval=300000",
+                        "spring.kafka.streams.properties.schema.registry.url=http://localhost:8081"
                 )
                 .withBean(HistoryServiceGrpc.HistoryServiceBlockingStub.class, () ->
                         Mockito.mock(HistoryServiceGrpc.HistoryServiceBlockingStub.class))
@@ -96,6 +111,10 @@ class TelemetryRedisAdaptersIT {
         });
     }
 
+    private static WeatherMapAnalysisRequestQuery getQuery(long timestamp) {
+        return new WeatherMapAnalysisRequestQuery(timestamp, MIN_LAT, MAX_LAT, MIN_LON, MAX_LON);
+    }
+
     @Test
     void shouldSuccessfullyWriteAndScanBinaryData_whenValidInputsAreProvided() {
         contextRunner.run(context -> {
@@ -103,13 +122,13 @@ class TelemetryRedisAdaptersIT {
             TelemetryQueryRepositoryAdapter queryRepository = context.getBean(TelemetryQueryRepositoryAdapter.class);
 
             persistenceRepository.saveHistoricalGridCell(GEOHASH, EXPECTED_PAYLOAD);
-            Map<String, byte[]> resultsMatrix = queryRepository.findFilteredGridDataBySpatialBoxInRedis(ACTIVE_BUCKET_FLOOR,
-                    MIN_LAT, MAX_LAT, MIN_LON, MAX_LON);
+            Map<String, byte[]> resultsMatrix = queryRepository.findFilteredGridDataBySpatialBoxInRedis(
+                    getQuery(ACTIVE_BUCKET_FLOOR));
 
-            Assertions.assertNotNull(resultsMatrix);
-            Assertions.assertFalse(resultsMatrix.isEmpty());
-            Assertions.assertTrue(resultsMatrix.containsKey(GEOHASH));
-            Assertions.assertArrayEquals(EXPECTED_PAYLOAD, resultsMatrix.get(GEOHASH));
+            assertNotNull(resultsMatrix);
+            assertFalse(resultsMatrix.isEmpty());
+            assertTrue(resultsMatrix.containsKey(GEOHASH));
+            assertArrayEquals(EXPECTED_PAYLOAD, resultsMatrix.get(GEOHASH));
         });
     }
 
@@ -131,7 +150,7 @@ class TelemetryRedisAdaptersIT {
                     .pollInterval(Duration.ofMillis(50))
                     .untilAsserted(() -> {
                         Object actualTimestamp = stringTemplate.opsForHash().get(WEATHER_HOTWINDOW+GEOHASH, STATION);
-                        Assertions.assertEquals(TIMESTAMP, actualTimestamp);
+                        assertEquals(TIMESTAMP, actualTimestamp);
                     });
         });
     }
@@ -141,8 +160,9 @@ class TelemetryRedisAdaptersIT {
         contextRunner.run(context -> {
             TelemetryQueryRepositoryAdapter queryRepository = context.getBean(TelemetryQueryRepositoryAdapter.class);
 
-            Assertions.assertThrows(WeatherMapDataNotFoundException.class,
-                    () -> queryRepository.findFilteredGridDataBySpatialBoxInRedis(0L, MIN_LAT, MAX_LAT, MIN_LON, MAX_LON));
+            assertThrows(WeatherMapDataNotFoundException.class,
+                    () -> queryRepository.getWeatherMapByTimestampAndSpatialBox(
+                            getQuery(3600001L)));
         });
     }
 
@@ -163,7 +183,51 @@ class TelemetryRedisAdaptersIT {
                 })
                 .run(context -> {
                     TelemetryPersistenceRepositoryAdapter persistenceRepository = context.getBean(TelemetryPersistenceRepositoryAdapter.class);
-                    Assertions.assertDoesNotThrow(() -> persistenceRepository.saveRealTimeSlidingWindow(GEOHASH, STATION, TIMESTAMP));
+                    assertDoesNotThrow(() -> persistenceRepository.saveRealTimeSlidingWindow(GEOHASH, STATION, TIMESTAMP));
+                });
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldExtendExpirationTimeToSlidingWindow_whenDataIsAccessedViaSpatialBoxQuery() {
+        contextRunner.run(context -> {
+            TelemetryPersistenceRepositoryAdapter persistenceRepository = context.getBean(TelemetryPersistenceRepositoryAdapter.class);
+            TelemetryQueryRepositoryAdapter queryRepository = context.getBean(TelemetryQueryRepositoryAdapter.class);
+            RedisTemplate<String, byte[]> template = context.getBean("protobufRedisTemplate", RedisTemplate.class);
+            persistenceRepository.saveHistoricalGridCell(GEOHASH, EXPECTED_PAYLOAD);
+            String spatialIndexKey = AnalysisUtils.addSpatialIndexPrefixToTargetFormattedTimestamp(ACTIVE_BUCKET_FLOOR);
+            Long initialCellTtl = template.getExpire(GEOHASH);
+            Long initialIndexTtl = template.getExpire(spatialIndexKey);
+            assertNotNull(initialCellTtl);
+            assertTrue(initialCellTtl>0);
+            Thread.sleep(1500);
+
+            Map<String, byte[]> resultsMatrix = queryRepository.findFilteredGridDataBySpatialBoxInRedis(
+                    getQuery(ACTIVE_BUCKET_FLOOR));
+
+            assertFalse(resultsMatrix.isEmpty());
+            Long postAccessCellTtl = template.getExpire(GEOHASH);
+            Long postAccessIndexTtl = template.getExpire(spatialIndexKey);
+            assertTrue(postAccessCellTtl>=initialCellTtl);
+            assertTrue(postAccessIndexTtl>=initialIndexTtl);
+        });
+    }
+
+    @Test
+    void shouldPassivelyEvictRecordsFromCache_whenNoDataAccessOccursWithinTtlWindow() {
+        contextRunner
+                .withPropertyValues("spring.redis.records.ttl=0")
+                .run(context -> {
+                    TelemetryPersistenceRepositoryAdapter persistenceRepository = context.getBean(TelemetryPersistenceRepositoryAdapter.class);
+                    TelemetryQueryRepositoryAdapter queryRepository = context.getBean(TelemetryQueryRepositoryAdapter.class);
+                    persistenceRepository.saveHistoricalGridCell(GEOHASH, EXPECTED_PAYLOAD);
+
+                    Awaitility.await()
+                            .atMost(Duration.ofSeconds(3))
+                            .pollInterval(Duration.ofMillis(200))
+                            .untilAsserted(() -> assertThrows(WeatherMapDataNotFoundException.class,
+                                    () -> queryRepository.getWeatherMapByTimestampAndSpatialBox(getQuery(ACTIVE_BUCKET_FLOOR)))
+                            );
                 });
     }
 }

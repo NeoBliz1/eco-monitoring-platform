@@ -17,6 +17,7 @@ import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.inbound
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalPersistenceRepositoryAdapter;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalQueryRepositoryAdapter;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalTxIdRepositoryAdapter;
+import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.WeatherMapBucketCreationService;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherGridCellJpaRepository;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherMapJpaRepository;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherTelemetryDltJpaRepository;
@@ -67,14 +68,19 @@ public class HistoryServiceConfig {
     }
 
     @Bean
-    public HistoricalPersistenceRepository historicalPersistenceRepository(HistoricalWeatherTelemetryDltJpaRepository dltJpaRepository,
-                                                                           HistoricalWeatherGridCellJpaRepository gridCellJpaRepository,
+    public WeatherMapBucketCreationService weatherMapBucketCreationService(HistoricalWeatherMapJpaRepository weatherMapJpaRepository) {
+        return new WeatherMapBucketCreationService(weatherMapJpaRepository);
+    }
+
+    @Bean
+    public HistoricalPersistenceRepository historicalPersistenceRepository(CacheManager springL1CacheManager,
                                                                            HistoricalDataConvertService weatherMapConverter,
                                                                            HistoricalWeatherMapJpaRepository weatherMapJpaRepository,
-                                                                           @Autowired(required = false) HistoricalTxIdRepositoryAdapter txIdAdapter,
-                                                                           CacheManager springL1CacheManager) {
-        return new HistoricalPersistenceRepositoryAdapter(dltJpaRepository, gridCellJpaRepository, weatherMapConverter,
-                weatherMapJpaRepository, txIdAdapter, springL1CacheManager);
+                                                                           HistoricalWeatherTelemetryDltJpaRepository dltJpaRepository,
+                                                                           WeatherMapBucketCreationService weatherMapBucketCreationService,
+                                                                           @Autowired(required = false) HistoricalTxIdRepositoryAdapter txIdAdapter) {
+        return new HistoricalPersistenceRepositoryAdapter(weatherMapBucketCreationService, dltJpaRepository, weatherMapConverter, weatherMapJpaRepository,
+                txIdAdapter, springL1CacheManager);
     }
 
     @Bean
@@ -96,8 +102,12 @@ public class HistoryServiceConfig {
         String dataSourceServiceName = datasource.getServiceName();
         ServiceAddressRecord serviceAddress = PlatformCommonUtils.discoverServiceAddressFromConsulServerByName(discoveryClient,
                 environment, dataSourceServiceName);
-        String jdbcUrl = String.format("jdbc:postgresql://%s:%d/%s?currentSchema=%s", serviceAddress.resolvedHost(), serviceAddress.resolvedPort(),
-                datasource.getDatabase(), datasource.getSchemaName());
+        String jdbcUrl = String.format("jdbc:postgresql://%s:%d/%s?currentSchema=%s&reWriteBatchedInserts=%s",
+                serviceAddress.resolvedHost(),
+                serviceAddress.resolvedPort(),
+                datasource.getDatabase(),
+                datasource.getSchemaName(),
+                "true");
         if(log.isDebugEnabled()) {
             log.debug("Resolved JDBC URL from Consul: {}", jdbcUrl);
         }

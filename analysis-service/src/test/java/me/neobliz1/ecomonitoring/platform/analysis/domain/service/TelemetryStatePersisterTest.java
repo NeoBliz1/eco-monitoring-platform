@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryPersistenceRepository;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.record.WeatherMapRecord;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.config.AnalysisInfrastructureProperties;
 import me.neobliz1.ecomonitoring.platform.model.exception.ProtocolBufferTranslationException;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.AirQualityReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.AmbientReading;
@@ -22,10 +23,8 @@ import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.GridCellLay
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.HashMap;
 import java.util.List;
@@ -36,27 +35,39 @@ class TelemetryStatePersisterTest {
 
     private static final int AGGREGATION_INTERVAL_SECONDS = 60;
     private static final long PACKET_TIMESTAMP = 1700000000000L;
-    private static final String STATION_ID = "42";
-    private static final double LAT_GRID = 55.123;
-    private static final double LON_GRID = 37.456;
-    private static final String EXPECTED_GEOHASH_KEY = LAT_GRID+GEOHASH_SEPARATOR+LON_GRID;
-    private static final String EXPECTED_STATION_FIELD = HOT_WINDOW_PREFIX+STATION_ID;
-    private static final String EXPECTED_TIMESTAMP = String.format(GRID_BUCKET_KEY_FORMAT, PACKET_TIMESTAMP);
-
     private static final long SINGLE_BUCKET_TIMESTAMP = 1800000000L;
     private static final long MATRIX_BUCKET_TIMESTAMP = 1000000000L;
+    private static final double LAT_GRID = 55.123;
+    private static final double LON_GRID = 37.456;
+    private static final String STATION_ID = "42";
     private static final String SAMPLE_GEOHASH = "55.123#37.456";
+    private static final String EXPECTED_STATION_FIELD = HOT_WINDOW_PREFIX+STATION_ID;
+    private static final String EXPECTED_GEOHASH_KEY = LAT_GRID+GEOHASH_SEPARATOR+LON_GRID;
     private static final String SAMPLE_SPATIAL_KEY = SINGLE_BUCKET_TIMESTAMP+"#"+SAMPLE_GEOHASH;
+    private static final String EXPECTED_TIMESTAMP = String.format(GRID_BUCKET_KEY_FORMAT, PACKET_TIMESTAMP);
 
     @Mock
     private TelemetryPersistenceRepository telemetryRepository;
-
-    @InjectMocks
+    @Mock
+    private AnalysisInfrastructureProperties props;
+    @Mock
+    private AnalysisInfrastructureProperties.Kafka kafka;
+    @Mock
+    private AnalysisInfrastructureProperties.Kafka.Streams streams;
+    @Mock
+    private AnalysisInfrastructureProperties.Kafka.Streams.Pipeline pipeline;
+    @Mock
+    private AnalysisInfrastructureProperties.Kafka.Streams.Pipeline.Name pipelineName;
+    @Mock
+    private AnalysisInfrastructureProperties.Kafka.Streams.Pipeline.Name.AggregationProcessor aggregationProcessor;
     private TelemetryStatePersister persister;
 
     @BeforeEach
     void setUp() {
-        ReflectionTestUtils.setField(persister, "aggregationSecondsPerInterval", AGGREGATION_INTERVAL_SECONDS);
+        AnalysisInfrastructureProperties props = new AnalysisInfrastructureProperties();
+        props.getKafka().getStreams().getPipeline().getName()
+                .getAggregationProcessor().setInterval(AGGREGATION_INTERVAL_SECONDS);
+        persister = new TelemetryStatePersister(telemetryRepository, props);
     }
 
     @Test

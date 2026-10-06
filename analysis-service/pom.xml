@@ -88,6 +88,10 @@
             <artifactId>spring-boot-starter-grpc-client</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aspectj</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.hubspot.jackson</groupId>
             <artifactId>jackson3-datatype-protobuf</artifactId>
         </dependency>
@@ -103,6 +107,11 @@
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-instrument</artifactId>
             <scope>provided</scope>
         </dependency>
         <dependency>

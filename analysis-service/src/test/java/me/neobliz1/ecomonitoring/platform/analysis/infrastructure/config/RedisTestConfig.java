@@ -8,8 +8,7 @@ import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.Telemetr
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.history.grpc.TelemetryQueryGrpcAdapter;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.persistence.redis.TelemetryPersistenceRepositoryAdapter;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.persistence.redis.TelemetryQueryRepositoryAdapter;
-import org.jspecify.annotations.NonNull;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
@@ -21,7 +20,10 @@ import java.util.List;
 
 @Slf4j
 @RequiredArgsConstructor
+@EnableConfigurationProperties(AnalysisInfrastructureProperties.class)
 public class RedisTestConfig {
+
+    private final AnalysisInfrastructureProperties props;
 
     @Bean
     public RedisScript<String> saveHistoricalGridScript() {
@@ -37,20 +39,21 @@ public class RedisTestConfig {
     @Bean
     public TelemetryPersistenceRepository telemetryPersistenceRepository(ReactiveStringRedisTemplate reactiveStringRedisTemplate,
                                                                          RedisTemplate<String, byte[]> protobufRedisTemplate,
-                                                                         RedisScript<String> saveHistoricalGridScript,
-                                                                         @NonNull @Value("${spring.redis.records.ttl}") Long redisCacheTtlInterval) {
-        return new TelemetryPersistenceRepositoryAdapter(reactiveStringRedisTemplate, protobufRedisTemplate, saveHistoricalGridScript, redisCacheTtlInterval);
+                                                                         RedisScript<String> saveHistoricalGridScript) {
+        return new TelemetryPersistenceRepositoryAdapter(reactiveStringRedisTemplate, protobufRedisTemplate, saveHistoricalGridScript, props);
     }
 
     @Bean
     public TelemetryQueryRepository telemetryQueryRepository(RedisTemplate<String, byte[]> protobufRedisTemplate,
                                                              TelemetryQueryArchive telemetryQueryArchive,
-                                                             RedisScript<List<byte[]>> queryHistoricalGridScript) {
-        return new TelemetryQueryRepositoryAdapter(queryHistoricalGridScript, protobufRedisTemplate, telemetryQueryArchive, 30);
+                                                             RedisScript<List<byte[]>> queryHistoricalGridScript,
+                                                             TelemetryPersistenceRepository telemetryPersistenceRepository) {
+        return new TelemetryQueryRepositoryAdapter(telemetryPersistenceRepository, protobufRedisTemplate, queryHistoricalGridScript,
+                telemetryQueryArchive, props);
     }
 
     @Bean
     public TelemetryQueryArchive telemetryQueryArchive(HistoryServiceGrpc.HistoryServiceBlockingStub historyServiceStub) {
-        return new TelemetryQueryGrpcAdapter(historyServiceStub, 10);
+        return new TelemetryQueryGrpcAdapter(historyServiceStub, props);
     }
 }

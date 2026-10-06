@@ -26,7 +26,7 @@ if [ ! -d "${PGDATA}/base" ]; then
 fi
 
 echo "⚡ Boot the engine safely under unprivileged execution rules..."
-gosu postgres postgres -h '*' -c shared_buffers=512MB -c synchronous_commit=off -c max_connections=200 &
+gosu postgres postgres -h '*' -c shared_buffers=512MB -c synchronous_commit=off -c max_connections=200 -c shared_preload_libraries=pg_stat_statements &
 
 echo "⏳ Waiting for PostgreSQL database core to become healthy..."
 export PGPASSWORD=$POSTGRES_PASSWORD
@@ -43,6 +43,9 @@ fi
 
 echo "⚡ Provisioning dedicated schema architecture within ${POSTGRES_DB}..."
 psql -h 127.0.0.1 -U postgres -d "${POSTGRES_DB}" -c "CREATE SCHEMA IF NOT EXISTS ${POSTGRES_DB_SCHEMA} AUTHORIZATION postgres;"
+
+echo "⚡ Registering global tracking extensions..."
+psql -h 127.0.0.1 -U postgres -d "${POSTGRES_DB}" -c "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;"
 
 echo "⚡ Create User Role and assign dynamic database privileges..."
 psql -h 127.0.0.1 -U postgres -d "${POSTGRES_DB}" <<-EOF

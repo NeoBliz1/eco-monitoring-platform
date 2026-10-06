@@ -1,6 +1,7 @@
 package me.neobliz1.ecomonitoring.platform.history.domain.model.entity;
 
-import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.METRICS_REGION;
+import static me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils.getGeohashSepPos;
+import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.GRID_CELL_LAYERS_L2_REGION;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
@@ -31,9 +32,9 @@ import java.util.UUID;
 @Entity
 @Cacheable
 @NoArgsConstructor
-@Table(name = WeatherGridCellMetric.TABLE_NAME)
-@Cache(region = METRICS_REGION, usage = CacheConcurrencyStrategy.READ_WRITE)
-public class WeatherGridCellMetric implements Persistable<WeatherGridCellMetricId> {
+@Table(name = WeatherGridCellLayer.TABLE_NAME)
+@Cache(region = GRID_CELL_LAYERS_L2_REGION, usage = CacheConcurrencyStrategy.READ_WRITE)
+public class WeatherGridCellLayer implements Persistable<WeatherGridCellMetricId> {
 
     public static final String TABLE_NAME = "weather_grid_cell_metrics";
 
@@ -53,7 +54,6 @@ public class WeatherGridCellMetric implements Persistable<WeatherGridCellMetricI
     @Column(name = "reading_count", nullable = false)
     private int readingCount;
 
-    // Sparse Environmental Attributes (Using Boxed Double to safely store NULL values)
     @Column(name = "avg_temperature")
     private Double avgTemperature;
     @Column(name = "avg_humidity")
@@ -96,7 +96,12 @@ public class WeatherGridCellMetric implements Persistable<WeatherGridCellMetricI
     @Column(name = "avg_visibility_m")
     private Double avgVisibilityM;
 
-    public WeatherGridCellMetric(@NonNull WeatherMapBucket bucket, @NonNull String geohash) {
+    @Column(name = "latitude", nullable = false)
+    private double latitude;
+    @Column(name = "longitude", nullable = false)
+    private double longitude;
+
+    public WeatherGridCellLayer(@NonNull WeatherMapBucket bucket, @NonNull String geohash) {
         this.bucket = bucket;
         this.id = new WeatherGridCellMetricId(bucket.getId(), geohash);
         setGeohash(geohash);
@@ -108,10 +113,17 @@ public class WeatherGridCellMetric implements Persistable<WeatherGridCellMetricI
 
     public void setGeohash(@NonNull String geohash) {
         id.setGeohash(geohash);
+        int sep = getGeohashSepPos(geohash);
+        String computedLat = geohash.substring(0, sep);
+        String computedLon = geohash.substring(sep+1);
+        this.latitude = Double.parseDouble(computedLat);
+        this.longitude = Double.parseDouble(computedLon);
     }
+
     public UUID getBucketId() {
         return id.getBucketId();
     }
+
     public void setBucketId(UUID uuid) {
         id.setBucketId(uuid);
     }

@@ -5,8 +5,8 @@ import lombok.experimental.UtilityClass;
 @UtilityClass
 public class HistoricalCacheConstants {
 
-    public static final String BUCKETS_REGION = "weather_map_buckets_region";
-    public static final String BUCKET_METRICS_REGION = "weather_bucket_cells_region";
-    public static final String METRICS_REGION = "weather_grid_cell_metrics_region";
-    public static final String QUERIES_REGION = "grpc_spatial_box_queries_region";
+    public static final String BUCKETS_GLOBAL_REGION = "weather_map_buckets_region";
+    public static final String QUERIES_GLOBAL_REGION = "grpc_spatial_box_queries_region";
+    public static final String BUCKET_GRID_CELL_LAYERS_L2_REGION = "weather_bucket_cells_region";
+    public static final String GRID_CELL_LAYERS_L2_REGION = "weather_grid_cell_metrics_region";
 }

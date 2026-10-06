@@ -1,5 +1,7 @@
 package me.neobliz1.ecomonitoring.platform.common.config;
 
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.DEV_PROFILE;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors;
@@ -17,7 +19,7 @@ import org.springframework.context.annotation.Profile;
 import java.util.Map;
 
 @Configuration
-@Profile("dev")
+@Profile(DEV_PROFILE)
 public class SwaggerProtobufConfig {
 
     @Bean

@@ -6,8 +6,6 @@ import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WindReading
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.PrecipitationReading
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.OpticalReading
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.TimeUnit
 import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.ThreadLocalRandom
@@ -120,58 +118,54 @@ def packetBuilder = WeatherPacket.newBuilder()
 readingsList.each { reading -> packetBuilder.addReadings(reading) }
 byte[] protoBytes = packetBuilder.build().toByteArray()
 
-def postRequest(String url, byte[] body, String contentType) {
+def postRequest(String url, byte[] body, String contentType, def safeLog) {
     HttpURLConnection conn = null
+    InputStream is = null
+    InputStream es = null
     try {
         def uri = new URI(url).toURL()
         conn = (HttpURLConnection) uri.openConnection()
         conn.setRequestMethod("POST")
         conn.setRequestProperty("Content-Type", contentType)
-        conn.setConnectTimeout(5000)
-        conn.setReadTimeout(5000)
+        conn.setConnectTimeout(2000) // Lower time window limits
+        conn.setReadTimeout(3000)
         conn.setDoOutput(true)
 
-        conn.getOutputStream().write(body)
+        conn.getOutputStream().withCloseable { os ->
+            os.write(body)
+        }
+
         int responseCode = conn.getResponseCode()
         if (responseCode >= 400) {
-            conn.getErrorStream()?.readAllBytes()
+            es = conn.getErrorStream()
+            es?.readAllBytes()
         } else {
-            conn.getInputStream()?.readAllBytes()
+            is = conn.getInputStream()
+            is?.readAllBytes()
         }
         return responseCode
     } catch (Exception e) {
-        safeLog.error("Request failed: " + e.getMessage())
+        safeLog.error("Request failed on URL [ " + url + " ]: " + e.getMessage())
         return 500
     } finally {
+        is?.close()
+        es?.close()
         conn?.disconnect()
     }
 }
 
-def ingestionTask = CompletableFuture.supplyAsync {
-    postRequest(BASE_INGESTION_URL, protoBytes, "application/x-protobuf")
-}
-
-def txId = "sample-tx-id"
-def confirmationTask = CompletableFuture.supplyAsync {
-    postRequest(TX_ID_CONFIRMATION_URL, protoBytes, "application/x-protobuf")
-}
-
 try {
-    CompletableFuture.allOf(ingestionTask, confirmationTask).get(10, TimeUnit.SECONDS)
+    int codeIngestion = postRequest(BASE_INGESTION_URL, protoBytes, "application/x-protobuf", safeLog)
+    int codeConfirmation = postRequest(TX_ID_CONFIRMATION_URL, protoBytes, "application/x-protobuf", safeLog)
 
-    int codeIngestion = ingestionTask.get()
-    int codeConfirmation = confirmationTask.get()
-    if (codeConfirmation == 404) {
-        log.warn("404 Debug info - Target URL used: " + TX_ID_CONFIRMATION_URL)
-    }
     boolean isSuccess = (codeIngestion >= 200 && codeIngestion < 300) && (codeConfirmation >= 200 && codeConfirmation < 300)
 
     SampleResult.setResponseCode(String.valueOf(codeIngestion))
-    SampleResult.setResponseMessage("Ingestion Status: " + codeIngestion + " | Confirmation Status: " + codeConfirmation)
+    SampleResult.setResponseMessage("Ingestion: " + codeIngestion + " | Confirmation: " + codeConfirmation)
     SampleResult.setSuccessful(isSuccess)
-    SampleResult.setSentBytes(protoBytes.length + txId.getBytes("UTF-8").length)
+    SampleResult.setSentBytes(protoBytes.length)
 
 } catch (Exception e) {
     SampleResult.setSuccessful(false)
-    SampleResult.setResponseMessage("Parallel Request Synchronization Failure: " + e.getMessage())
+    SampleResult.setResponseMessage("Execution Failure: " + e.getMessage())
 }

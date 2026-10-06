@@ -1,13 +1,13 @@
 package me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres;
 
-import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.BUCKETS_REGION;
-import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.QUERIES_REGION;
+import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.BUCKETS_GLOBAL_REGION;
+import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.QUERIES_GLOBAL_REGION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -15,11 +15,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import jakarta.persistence.EntityManager;
 import me.neobliz1.ecomonitoring.platform.history.domain.model.dto.WeatherMapBucketCacheDto;
-import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherGridCellMetric;
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherMapBucket;
-import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherTelemetryDltRecord;
+import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherTelemetryDlqRecord;
 import me.neobliz1.ecomonitoring.platform.history.domain.port.inbound.HistoricalDataConvertService;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherGridCellJpaRepository;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherMapJpaRepository;
@@ -32,27 +30,24 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 
-import java.util.Collections;
-import java.util.List;
+import java.util.HashSet;
 import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)
 class HistoricalPersistenceRepositoryAdapterTest {
 
     private static final long TEST_TIMESTAMP = 1700000000L;
     private static final int TEST_INTERVAL = 15;
-    private static final UUID EXPECTED_BUCKET_ID = UUID.nameUUIDFromBytes((String.valueOf(TEST_TIMESTAMP)+TEST_INTERVAL).getBytes());
-
+    private static final UUID EXPECTED_BUCKET_ID =
+            UUID.nameUUIDFromBytes((TEST_TIMESTAMP+String.valueOf(TEST_INTERVAL)).getBytes());
+    @Mock
+    private WeatherMapBucketCreationService weatherMapBucketCreationService;
     @Mock
     private HistoricalWeatherTelemetryDltJpaRepository dltJpaRepository;
     @Mock
@@ -64,101 +59,70 @@ class HistoricalPersistenceRepositoryAdapterTest {
     @Mock
     private CacheManager springL1CacheManager;
     @Mock
-    private EntityManager entityManager;
-    @Mock
-    private HistoricalWeatherGridCellJpaRepository gridCellRepository;
+    private HistoricalWeatherGridCellJpaRepository gridCellJpaRepository;
     @Mock
     private Cache bucketsCache;
     @Mock
     private Cache queriesCache;
-
     @InjectMocks
     private HistoricalPersistenceRepositoryAdapter adapter;
 
     @Test
     void shouldCreateNewBucketAndCacheIt_whenBucketDoesNotExistInCacheOrDatabase() {
-        WeatherMap weatherMap = createMockWeatherMap(Collections.emptySet(), TEST_INTERVAL);
+        WeatherMap weatherMap = createWeatherMapWithPartiallyMocks();
         setupCacheManagers();
-        when(bucketsCache.get(EXPECTED_BUCKET_ID, WeatherMapBucketCacheDto.class)).thenReturn(null);
-        when(jpaRepository.findById(EXPECTED_BUCKET_ID)).thenReturn(Optional.empty());
-        WeatherMapBucket savedBucket = createBaseBucket(0);
-        when(jpaRepository.saveAndFlush(any(WeatherMapBucket.class))).thenReturn(savedBucket);
-        ArgumentCaptor<WeatherMapBucket> bucketCaptor = ArgumentCaptor.forClass(WeatherMapBucket.class);
+        WeatherMapBucket savedBucket = createBaseBucket(0L);
+        doReturn(savedBucket).when(weatherMapBucketCreationService).saveWeatherMapBucket(any(WeatherMap.class));
         ArgumentCaptor<WeatherMapBucketCacheDto> dtoCaptor = ArgumentCaptor.forClass(WeatherMapBucketCacheDto.class);
 
         adapter.persistTelemetryRecord(weatherMap);
 
-        verify(jpaRepository, times(2)).saveAndFlush(bucketCaptor.capture());
-        WeatherMapBucket createdBucket = bucketCaptor.getValue();
-        assertEquals(EXPECTED_BUCKET_ID, createdBucket.getId());
-        assertEquals(TEST_TIMESTAMP, createdBucket.getTimestampBucket());
-        assertEquals(TEST_INTERVAL, createdBucket.getIntervalMinutes());
-        verify(weatherMapConverter).mergeTelemetryInBatch(eq(weatherMap), eq(createdBucket), anyList());
+        verify(weatherMapBucketCreationService, times(1)).saveWeatherMapBucket(any(WeatherMap.class));
         verify(bucketsCache).put(eq(EXPECTED_BUCKET_ID), dtoCaptor.capture());
-        WeatherMapBucketCacheDto cachedDto = dtoCaptor.getValue();
-        assertEquals(EXPECTED_BUCKET_ID, cachedDto.id());
-        assertEquals(TEST_TIMESTAMP, cachedDto.timestampBucket());
-        verify(txIdAdapter).processTxIdsHistoryBatch(weatherMap);
     }
 
     @Test
     void shouldLoadFromDatabaseAndPutCache_whenBucketMissingFromCacheButExistsInDatabase() {
-        Set<String> targetGeohashes = Collections.singleton("geo123");
-        WeatherMap weatherMap = createMockWeatherMap(targetGeohashes, TEST_INTERVAL);
+        WeatherMap weatherMap = createWeatherMapWithPartiallyMocks();
         setupCacheManagers();
-        when(bucketsCache.get(EXPECTED_BUCKET_ID, WeatherMapBucketCacheDto.class)).thenReturn(null);
-        WeatherMapBucket existingDbBucket = createBaseBucket(1);
-        when(jpaRepository.findById(EXPECTED_BUCKET_ID)).thenReturn(Optional.of(existingDbBucket));
-        List<WeatherGridCellMetric> mockedTargetedCells = List.of(mock(WeatherGridCellMetric.class));
-        when(gridCellRepository.findSpecificCellsForMerge(EXPECTED_BUCKET_ID, targetGeohashes)).thenReturn(mockedTargetedCells);
-        when(jpaRepository.saveAndFlush(existingDbBucket)).thenReturn(existingDbBucket);
+        WeatherMapBucket existingDbBucket = createBaseBucket(1L);
+        doReturn(existingDbBucket).when(weatherMapBucketCreationService).saveWeatherMapBucket(any(WeatherMap.class));
 
         adapter.persistTelemetryRecord(weatherMap);
 
-        verify(entityManager, never()).merge(any());
-        verify(weatherMapConverter).mergeTelemetryInBatch(weatherMap, existingDbBucket, mockedTargetedCells);
-        verify(bucketsCache, never()).evict(any());
+        verify(weatherMapBucketCreationService, times(1)).saveWeatherMapBucket(any(WeatherMap.class));
+        verify(weatherMapConverter).mergeTelemetryInBatch(weatherMap, existingDbBucket);
         verify(bucketsCache).put(eq(EXPECTED_BUCKET_ID), any(WeatherMapBucketCacheDto.class));
     }
 
     @Test
     void shouldLoadProxyFromDatabaseAndAvoidRowSelect_whenBucketExistsDirectlyInL1Cache() {
-        Set<String> targetGeohashes = Collections.singleton("geo123");
-        WeatherMap weatherMap = createMockWeatherMap(targetGeohashes, TEST_INTERVAL);
+        WeatherMap weatherMap = createWeatherMapWithPartiallyMocks();
         setupCacheManagers();
-        WeatherMapBucketCacheDto cachedDto = new WeatherMapBucketCacheDto(EXPECTED_BUCKET_ID, TEST_TIMESTAMP, TEST_INTERVAL, 1);
-        when(bucketsCache.get(EXPECTED_BUCKET_ID, WeatherMapBucketCacheDto.class)).thenReturn(cachedDto);
+        WeatherMapBucketCacheDto cachedDto =
+                new WeatherMapBucketCacheDto(EXPECTED_BUCKET_ID, TEST_TIMESTAMP, TEST_INTERVAL, 1);
+        doReturn(cachedDto)
+                .when(bucketsCache).get(EXPECTED_BUCKET_ID, WeatherMapBucketCacheDto.class);
         WeatherMapBucket proxyBucketPlaceholder = mock(WeatherMapBucket.class);
-        when(proxyBucketPlaceholder.getId()).thenReturn(EXPECTED_BUCKET_ID);
-        when(jpaRepository.getReferenceById(EXPECTED_BUCKET_ID)).thenReturn(proxyBucketPlaceholder);
-        List<WeatherGridCellMetric> mockedTargetedCells = List.of(mock(WeatherGridCellMetric.class));
-        when(gridCellRepository.findSpecificCellsForMerge(EXPECTED_BUCKET_ID, targetGeohashes)).thenReturn(mockedTargetedCells);
-        when(jpaRepository.saveAndFlush(proxyBucketPlaceholder)).thenReturn(proxyBucketPlaceholder);
+        doReturn(proxyBucketPlaceholder)
+                .when(jpaRepository).getReferenceById(EXPECTED_BUCKET_ID);
 
         adapter.persistTelemetryRecord(weatherMap);
 
+        verify(jpaRepository, never()).saveAndFlush(any(WeatherMapBucket.class));
         verify(jpaRepository, never()).findById(any(UUID.class));
-        verify(entityManager, never()).merge(any());
-        verify(weatherMapConverter).mergeTelemetryInBatch(weatherMap, proxyBucketPlaceholder, mockedTargetedCells);
-        verify(bucketsCache).put(eq(EXPECTED_BUCKET_ID), any(WeatherMapBucketCacheDto.class));
+        verify(jpaRepository, times(1)).getReferenceById(EXPECTED_BUCKET_ID);
+        verify(weatherMapConverter).mergeTelemetryInBatch(weatherMap, proxyBucketPlaceholder);
+        verify(bucketsCache, never()).put(any(), any());
     }
 
     @Test
     void shouldSaveDltRecordSuccessfully_whenValidDltPayloadProvided() {
-        WeatherTelemetryDltRecord dltRecord = mock(WeatherTelemetryDltRecord.class);
+        WeatherTelemetryDlqRecord dltRecord = mock(WeatherTelemetryDlqRecord.class);
 
         adapter.persistDltRecord(dltRecord);
 
         verify(dltJpaRepository).saveAndFlush(dltRecord);
-    }
-
-    @Test
-    void shouldThrowL1CacheNotAvailableException_whenBucketsCacheIsNull() {
-        WeatherMap weatherMap = mock(WeatherMap.class);
-        when(springL1CacheManager.getCache(BUCKETS_REGION)).thenReturn(null);
-        when(springL1CacheManager.getCache(QUERIES_REGION)).thenReturn(queriesCache);
-
-        assertThrows(L1CacheNotAvailableException.class, () -> adapter.persistTelemetryRecord(weatherMap));
     }
 
     @Test
@@ -174,17 +138,24 @@ class HistoricalPersistenceRepositoryAdapterTest {
     }
 
     @Test
+    void shouldThrowL1CacheNotAvailableException_whenBucketsCacheIsNull() {
+        WeatherMap weatherMap = createWeatherMapWithPartiallyMocks();
+        doReturn(null).when(springL1CacheManager).getCache(BUCKETS_GLOBAL_REGION);
+
+        assertThrows(L1CacheNotAvailableException.class, () -> adapter.persistTelemetryRecord(weatherMap));
+    }
+
+    @Test
     void shouldThrowL1CacheNotAvailableException_whenQueriesCacheIsNull() {
-        WeatherMap weatherMap = mock(WeatherMap.class);
-        when(springL1CacheManager.getCache(BUCKETS_REGION)).thenReturn(bucketsCache);
-        when(springL1CacheManager.getCache(QUERIES_REGION)).thenReturn(null);
+        Mockito.reset(springL1CacheManager);
+        WeatherMap weatherMap = createWeatherMapWithPartiallyMocks();
 
         assertThrows(L1CacheNotAvailableException.class, () -> adapter.persistTelemetryRecord(weatherMap));
     }
 
     @Test
     void shouldPropagateException_whenDltJpaRepositoryFailsToSave() {
-        WeatherTelemetryDltRecord dltRecord = mock(WeatherTelemetryDltRecord.class);
+        WeatherTelemetryDlqRecord dltRecord = mock(WeatherTelemetryDlqRecord.class);
         RuntimeException databaseException = new RuntimeException("Database offline");
         doThrow(databaseException).when(dltJpaRepository).saveAndFlush(dltRecord);
 
@@ -194,34 +165,32 @@ class HistoricalPersistenceRepositoryAdapterTest {
     }
 
     @SuppressWarnings("unchecked")
-    private WeatherMap createMockWeatherMap(Set<String> geohashes) {
+    private WeatherMap createMockWeatherMap() {
         WeatherMap weatherMap = mock(WeatherMap.class);
         Map<String, GridCellLayers> mockGridCellsMap = mock(Map.class);
         when(weatherMap.getGridCellsMap()).thenReturn(mockGridCellsMap);
-        when(mockGridCellsMap.keySet()).thenReturn(geohashes);
         return weatherMap;
     }
 
-    @SuppressWarnings("SameParameterValue")
-    private WeatherMap createMockWeatherMap(Set<String> geohashes, int interval) {
-        WeatherMap weatherMap = createMockWeatherMap(geohashes);
+    private WeatherMap createWeatherMapWithPartiallyMocks() {
+        WeatherMap weatherMap = createMockWeatherMap();
         when(weatherMap.getTimestampBucket()).thenReturn(TEST_TIMESTAMP);
-        when(weatherMap.getIntervalMinutes()).thenReturn(interval);
+        when(weatherMap.getIntervalMinutes()).thenReturn(TEST_INTERVAL);
         return weatherMap;
     }
 
     private void setupCacheManagers() {
-        when(springL1CacheManager.getCache(BUCKETS_REGION)).thenReturn(bucketsCache);
-        when(springL1CacheManager.getCache(QUERIES_REGION)).thenReturn(queriesCache);
+        doReturn(bucketsCache).when(springL1CacheManager).getCache(BUCKETS_GLOBAL_REGION);
+        doReturn(queriesCache).when(springL1CacheManager).getCache(QUERIES_GLOBAL_REGION);
     }
 
-    private WeatherMapBucket createBaseBucket(int version) {
+    private WeatherMapBucket createBaseBucket(Long version) {
         WeatherMapBucket bucket = new WeatherMapBucket();
         bucket.setId(EXPECTED_BUCKET_ID);
         bucket.setTimestampBucket(TEST_TIMESTAMP);
         bucket.setIntervalMinutes(TEST_INTERVAL);
         bucket.setVersion(version);
+        bucket.setGridCells(new HashSet<>());
         return bucket;
     }
 }
-

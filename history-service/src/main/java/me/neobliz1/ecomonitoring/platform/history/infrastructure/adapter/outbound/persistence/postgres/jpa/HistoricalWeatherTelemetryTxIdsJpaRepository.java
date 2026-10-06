@@ -34,6 +34,7 @@ public interface HistoricalWeatherTelemetryTxIdsJpaRepository extends JpaReposit
                 SELECT 1 FROM #{#entityName} t
                 WHERE t.tx_id_history = i.tx_id_history
             )
+            ON CONFLICT (tx_id_history) DO NOTHING
             """, nativeQuery = true)
     void batchInsertOrRemoveByHistoryTxIds(@Param("ids") UUID[] ids,
                                            @Param("txIdsHistory") String[] txIdsHistory);

@@ -9,22 +9,34 @@ import org.jspecify.annotations.NonNull;
 import java.time.Duration;
 
 @UtilityClass
-public class TelemetryUtils {
+public class AnalysisUtils {
 
     private static final double MAX_LATITUDE = 85.051;
     private static final double MIN_LATITUDE = -85.051;
     private static final double MAX_LONGITUDE = 180.0;
     private static final double MIN_LONGITUDE = -180.0;
 
-    public static long getAggregationBucketFloorInterval(long packetTimestampInMillis, int aggregationSecondsPerInterval) {
-        if(packetTimestampInMillis<0 || aggregationSecondsPerInterval<0) {
-            return 0L;
-        }
-        long aggIntervalMillis = TelemetryUtils.getMillis(aggregationSecondsPerInterval);
+    public static long getAggregationBucketFloorMillisInterval(long packetTimestampInMillis, int aggregationSecondsPerInterval) {
+        validateTimestamp(packetTimestampInMillis);
+        validateAggregationInterval(aggregationSecondsPerInterval);
+        long aggIntervalMillis = convertSecondsToMillis(aggregationSecondsPerInterval);
+        if(packetTimestampInMillis<aggIntervalMillis) return packetTimestampInMillis;
         return packetTimestampInMillis/aggIntervalMillis*aggIntervalMillis;
     }
 
-    public static long getMillis(long intervalSeconds) {
+    private static void validateAggregationInterval(int aggregationSecondsPerInterval) {
+        if(aggregationSecondsPerInterval<=0) {
+            throw new IllegalArgumentException("Aggregation interval must be greater than zero. Provided: "+aggregationSecondsPerInterval);
+        }
+    }
+
+    private static void validateTimestamp(long packetTimestampInMillis) {
+        if(packetTimestampInMillis<0) {
+            throw new IllegalArgumentException("Packet timestamp cannot be negative. Provided: "+packetTimestampInMillis);
+        }
+    }
+
+    public static long convertSecondsToMillis(long intervalSeconds) {
         return Duration.ofSeconds(intervalSeconds).toMillis();
     }
 
@@ -44,7 +56,7 @@ public class TelemetryUtils {
         return Math.round(c*AnalysisConstants.SCALE_COFF)/AnalysisConstants.SCALE_COFF;
     }
 
-    public static @NonNull String getSpatialIndexKey(long activeBucketFloor) {
-        return "spatial_index:"+String.format(GRID_BUCKET_KEY_FORMAT, activeBucketFloor);
+    public static @NonNull String addSpatialIndexPrefixToTargetFormattedTimestamp(long targetTimestamp) {
+        return "spatial_index:"+String.format(GRID_BUCKET_KEY_FORMAT, targetTimestamp);
     }
 }

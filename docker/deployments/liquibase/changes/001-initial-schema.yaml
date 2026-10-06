@@ -4,9 +4,6 @@ databaseChangeLog:
       author: neobliz1
       comment: Defensive schema initialization handling existing structures and missing columns
       changes:
-        # =========================================================================
-        # 1. MASTER TABLE INITIALIZATION (weather_map_buckets)
-        # =========================================================================
         - sql:
             dbms: postgresql
             splitStatements: true
@@ -34,9 +31,6 @@ databaseChangeLog:
               DROP INDEX IF EXISTS idx_bucket_time_desc;
               CREATE INDEX idx_bucket_time_desc ON weather_map_buckets (timestamp_bucket DESC);
               CREATE UNIQUE INDEX IF NOT EXISTS uk_timestamp_interval ON weather_map_buckets (timestamp_bucket, interval_minutes);
-        # =========================================================================
-        # 2. CHILD TABLE CORE STRUCTURAL INITIALIZATION (weather_grid_cell_metrics)
-        # =========================================================================
         - sql:
             dbms: postgresql
             splitStatements: true
@@ -51,10 +45,6 @@ databaseChangeLog:
               ALTER TABLE weather_grid_cell_metrics DROP CONSTRAINT IF EXISTS fk_metrics_to_bucket;
               ALTER TABLE weather_grid_cell_metrics ADD CONSTRAINT fk_metrics_to_bucket 
                 FOREIGN KEY (bucket_id) REFERENCES weather_map_buckets(id) ON DELETE CASCADE;
-
-        # =========================================================================
-        # 3. METRICS COLUMNS INJECTION
-        # =========================================================================
         - sql:
             dbms: postgresql
             splitStatements: true
@@ -81,10 +71,6 @@ databaseChangeLog:
               ALTER TABLE weather_grid_cell_metrics ADD COLUMN IF NOT EXISTS avg_solar_radiation_wm2 DOUBLE PRECISION;
               ALTER TABLE weather_grid_cell_metrics ADD COLUMN IF NOT EXISTS avg_lux DOUBLE PRECISION;
               ALTER TABLE weather_grid_cell_metrics ADD COLUMN IF NOT EXISTS avg_visibility_m DOUBLE PRECISION;
-
-        # =========================================================================
-        # 4. DATA BOUNDS AND COMPLEX CHECK CONSTRAINTS
-        # =========================================================================
         - sql:
             dbms: postgresql
             splitStatements: true

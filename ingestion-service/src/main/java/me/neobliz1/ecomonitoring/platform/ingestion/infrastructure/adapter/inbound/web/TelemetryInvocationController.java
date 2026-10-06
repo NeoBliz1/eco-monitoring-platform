@@ -3,12 +3,9 @@ package me.neobliz1.ecomonitoring.platform.ingestion.infrastructure.adapter.inbo
 import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstants.BLOCKING_TELEMETRY_ENDPOINT_URI;
 import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstants.REACTIVE_TELEMETRY_ENDPOINT_URI;
 import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstants.TELEMETRY_URI;
-import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.TRACE_PARENT_FORMAT;
 
 import io.github.neobliz1.validproto.annotation.ValidProto;
 import io.github.neobliz1.validproto.annotation.ValidatedProto;
-import io.opentelemetry.api.trace.Span;
-import io.opentelemetry.api.trace.SpanContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -20,7 +17,6 @@ import me.neobliz1.ecomonitoring.platform.common.docs.ValidationErrorResponse;
 import me.neobliz1.ecomonitoring.platform.ingestion.domain.port.inbound.TelemetryIngestionService;
 import me.neobliz1.ecomonitoring.platform.model.exception.PipelineTimeoutException;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
-import org.jetbrains.annotations.NotNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -51,9 +47,7 @@ public class TelemetryInvocationController {
     })
     @PostMapping(value = REACTIVE_TELEMETRY_ENDPOINT_URI, consumes = MediaType.APPLICATION_PROTOBUF_VALUE)
     public Mono<ResponseEntity<Void>> receivedReactiveSensorStationData(@ValidProto @RequestBody WeatherPacket packet) {
-        WeatherPacket tracedPacket = injectTraceStringToWeatherPacket(packet);
-
-        return telemetryIngestionService.processTelemetryPacket(tracedPacket)
+        return telemetryIngestionService.processTelemetryPacket(packet)
                 .timeout(Duration.ofMillis(200))
                 .publishOn(Schedulers.parallel())
                 .map(TelemetryInvocationController::getResponseEntity)
@@ -73,21 +67,7 @@ public class TelemetryInvocationController {
     })
     @PostMapping(value = BLOCKING_TELEMETRY_ENDPOINT_URI, consumes = MediaType.APPLICATION_PROTOBUF_VALUE)
     public ResponseEntity<Void> receivedSensorStationDataVirtual(@ValidProto @RequestBody WeatherPacket packet) {
-        WeatherPacket tracedPacket = injectTraceStringToWeatherPacket(packet);
-
-        return getResponseEntity(telemetryIngestionService.processTelemetryPacketVirtual(tracedPacket));
-    }
-
-
-    private static @NotNull WeatherPacket injectTraceStringToWeatherPacket(WeatherPacket packet) {
-        SpanContext activeContext = Span.current().getSpanContext();
-        String traceParentString = String.format(TRACE_PARENT_FORMAT,
-                activeContext.getTraceId(),
-                activeContext.getSpanId(),
-                activeContext.getTraceFlags().asHex());
-        return WeatherPacket.newBuilder(packet)
-                .setTraceParent(traceParentString)
-                .build();
+        return getResponseEntity(telemetryIngestionService.processTelemetryPacketVirtual(packet));
     }
 
     public static ResponseEntity<Void> getResponseEntity(Boolean isAccepted) {

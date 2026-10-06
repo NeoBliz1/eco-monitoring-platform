@@ -1,5 +1,6 @@
 package me.neobliz1.ecomonitoring.platform.common.util;
 
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.GEOHASH_SEPARATOR;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.SCHEMA_REGISTRY;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.SPRING_SCHEMA_REGISTRY_URL_PROP_NAME;
 
@@ -22,6 +23,7 @@ import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.env.Profiles;
+import weather.history.SpatialBoxRequest;
 
 import java.util.Collections;
 import java.util.List;
@@ -151,5 +153,33 @@ public class PlatformCommonUtils {
                 consumerSpan.addLink(parsedContext);
             }
         }
+    }
+
+    public static int getGeohashSepPos(@NonNull String geohash) {
+        int sep = geohash.indexOf(GEOHASH_SEPARATOR);
+        if(sep==-1) {
+            throw new IndexOutOfBoundsException("Geohash coordinates format is invalid: "+geohash);
+        }
+        return sep;
+    }
+
+    public static SpatialBoxRequest expandRequestSpatialBoxByTier(SpatialBoxRequest request, int tier) {
+        int exponent = Math.max(0, 2-tier);
+        double scale = Math.pow(10, exponent);
+        double latAnchor = Math.round((request.getMinLat()+request.getMaxLat())/2.0d*scale)/scale;
+        double lonAnchor = Math.round((request.getMinLon()+request.getMaxLon())/2.0d*scale)/scale;
+        double halfSpan = 1.0d/scale;
+        double newMinLat = latAnchor-halfSpan;
+        double newMaxLat = latAnchor+halfSpan;
+        double newMinLon = Math.min(lonAnchor-halfSpan, lonAnchor+halfSpan);
+        double newMaxLon = Math.max(lonAnchor-halfSpan, lonAnchor+halfSpan);
+        return SpatialBoxRequest.newBuilder()
+                .setTimestampBucket(request.getTimestampBucket())
+                .setTimeIntervalInMinutes(request.getTimeIntervalInMinutes())
+                .setMinLat(newMinLat)
+                .setMaxLat(newMaxLat)
+                .setMinLon(newMinLon)
+                .setMaxLon(newMaxLon)
+                .build();
     }
 }

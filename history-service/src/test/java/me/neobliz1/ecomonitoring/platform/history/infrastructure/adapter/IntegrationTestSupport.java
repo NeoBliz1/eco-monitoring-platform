@@ -4,8 +4,8 @@ import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstan
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.DEV_PROFILE;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.LOCAL_PROFILE;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.TX_CHAIN_CONFIRMATION_PROFILE;
-import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.BUCKETS_REGION;
-import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.QUERIES_REGION;
+import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.BUCKETS_GLOBAL_REGION;
+import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.QUERIES_GLOBAL_REGION;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.INTERVAL_MINUTES;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.getProducerConf;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.getTestKafkaAdminConf;
@@ -31,6 +31,7 @@ import me.neobliz1.ecomonitoring.platform.history.domain.port.outbound.Historica
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalPersistenceRepositoryAdapter;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherGridCellJpaRepository;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherMapJpaRepository;
+import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherTelemetryDltJpaRepository;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherTelemetryTxIdsJpaRepository;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 import org.apache.kafka.clients.admin.AdminClient;
@@ -142,18 +143,22 @@ public abstract class IntegrationTestSupport {
     protected Producer<String, WeatherMap> testProducer;
     @PersistenceContext
     protected EntityManager entityManager;
-    @Value("${spring.kafka.topic.weather-history}")
-    String kafkaHistoryTopic;
     @Autowired
-    HistoricalQueryRepository queryRepositoryAdapter;
+    HistoryServiceGrpc.HistoryServiceBlockingStub historyRemoteClientStub;
+    @Autowired
+    HistoricalWeatherTelemetryTxIdsJpaRepository txIdsRepository;
+    @Autowired
+    HistoricalWeatherTelemetryDltJpaRepository dltJpaRepository;
     @Autowired
     HistoricalWeatherMapJpaRepository queryJpaRepositoryAdapter;
     @Autowired
     HistoricalWeatherGridCellJpaRepository metricsJpaRepository;
     @Autowired
-    HistoricalWeatherTelemetryTxIdsJpaRepository txIdsRepository;
+    HistoricalWeatherMapJpaRepository bucketJpaRepository;
+    @Value("${spring.kafka.topic.weather-history}")
+    String kafkaHistoryTopic;
     @Autowired
-    HistoryServiceGrpc.HistoryServiceBlockingStub historyRemoteClientStub;
+    HistoricalQueryRepository queryRepositoryAdapter;
     @Autowired
     WebTestClient webTestClient;
     @Autowired
@@ -165,6 +170,30 @@ public abstract class IntegrationTestSupport {
     @Autowired
     private KafkaProperties kafkaProperties;
 
+    @BeforeEach
+    public void setupEcosystem() {
+        setupKafkaProducer();
+        cleanDb();
+    }
+
+    @AfterEach
+    public void teardownEcosystem() throws Exception {
+        clearKafkaTopics();
+        if(testProducer!=null) testProducer.close();
+        cleanDb();
+        var bucketCache = springL1CacheManager.getCache(BUCKETS_GLOBAL_REGION);
+        var queryCache = springL1CacheManager.getCache(QUERIES_GLOBAL_REGION);
+        if(bucketCache!=null) bucketCache.clear();
+        if(queryCache!=null) queryCache.clear();
+    }
+
+    void cleanDb() {
+        metricsJpaRepository.deleteAllInBatch();
+        bucketJpaRepository.deleteAllInBatch();
+        queryJpaRepositoryAdapter.deleteAllInBatch();
+        txIdsRepository.deleteAllInBatch();
+    }
+
     static @NonNull SpatialBoxRequest getSpatialBoxRequest(long currentBucket, double minLat, double maxLat, double minLon, double maxLon) {
         return SpatialBoxRequest.newBuilder()
                 .setTimestampBucket(currentBucket)
@@ -174,19 +203,6 @@ public abstract class IntegrationTestSupport {
                 .setMinLon(minLon)
                 .setMaxLon(maxLon)
                 .build();
-    }
-
-    @AfterEach
-    public void teardownEcosystem() throws Exception {
-        clearKafkaTopics();
-        if(testProducer!=null) testProducer.close();
-        metricsJpaRepository.deleteAllInBatch();
-        queryJpaRepositoryAdapter.deleteAllInBatch();
-        txIdsRepository.deleteAllInBatch();
-        var bucketCache = springL1CacheManager.getCache(BUCKETS_REGION);
-        var queryCache = springL1CacheManager.getCache(QUERIES_REGION);
-        if(bucketCache!=null) bucketCache.clear();
-        if(queryCache!=null) queryCache.clear();
     }
 
     private void setupKafkaProducer() {
@@ -237,8 +253,12 @@ public abstract class IntegrationTestSupport {
         try {
             EntityGraph<WeatherMapBucket> graph = entityManager.createEntityGraph(WeatherMapBucket.class);
             graph.addSubgraph("gridCells");
+            SpatialBoxRequest spatialBoxRequest = SpatialBoxRequest.newBuilder()
+                    .setTimestampBucket(timestampBucket)
+                    .setTimeIntervalInMinutes(INTERVAL_MINUTES)
+                    .build();
             Optional<WeatherMapBucket> shallowBucket = queryRepositoryAdapter
-                    .findByTimestampBucketAndIntervalMinutes(timestampBucket, INTERVAL_MINUTES);
+                    .findByTimestampBucketAndIntervalMinutes(spatialBoxRequest);
             assertTrue(shallowBucket.isPresent());
             UUID bucketId = shallowBucket.get().getId();
             return entityManager.find(
@@ -249,13 +269,5 @@ public abstract class IntegrationTestSupport {
         } finally {
             entityManager.clear();
         }
-    }
-
-    @BeforeEach
-    public void setupEcosystem() {
-        setupKafkaProducer();
-        metricsJpaRepository.deleteAllInBatch();
-        queryJpaRepositoryAdapter.deleteAllInBatch();
-        txIdsRepository.deleteAllInBatch();
     }
 }

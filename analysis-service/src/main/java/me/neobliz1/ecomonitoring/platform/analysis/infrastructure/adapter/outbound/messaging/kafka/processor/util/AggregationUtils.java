@@ -1,5 +1,6 @@
 package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.util;
 
+import static me.neobliz1.ecomonitoring.platform.analysis.domain.service.AnalysisUtils.convertSecondsToMillis;
 import static me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.record.ParsedStorageKey.parseSpatialKey;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.GEOHASH_SEPARATOR;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.TRACE_PARENT_FORMAT;
@@ -9,6 +10,7 @@ import io.opentelemetry.api.trace.SpanContext;
 import lombok.experimental.UtilityClass;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryAnalysisAccumulator;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.record.ParsedStorageKey;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.config.AnalysisInfrastructureProperties;
 import me.neobliz1.ecomonitoring.platform.common.util.PlatformContractsUtils;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.SensorReading;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
@@ -32,11 +34,10 @@ public class AggregationUtils {
         for(WeatherPacket packet : packetsList) {
             String uniqueTxId = PlatformContractsUtils.getUniqueTxId(packet);
             weatherMapBuilder.addTelemetryTransactionsId(uniqueTxId);
-            addTelemetryTraceParent(packet, weatherMapBuilder);
         }
     }
 
-    public static void addTelemetryTraceParentId(WeatherMap.Builder weatherMapBuilder) {
+    public static void addTelemetryTraceParentId(List<WeatherPacket> packetsList, WeatherMap.Builder weatherMapBuilder) {
         SpanContext currentSpanContext = Span.current().getSpanContext();
         if(currentSpanContext.isValid()) {
             String traceParentStr = String.format(TRACE_PARENT_FORMAT,
@@ -45,6 +46,9 @@ public class AggregationUtils {
                     currentSpanContext.getTraceFlags().asHex()
             );
             weatherMapBuilder.setTraceParent(traceParentStr);
+        }
+        for(WeatherPacket packet : packetsList) {
+            addTelemetryTraceParent(packet, weatherMapBuilder);
         }
     }
 
@@ -80,5 +84,23 @@ public class AggregationUtils {
 
     public static @NonNull String getGeohash(double latGrid, double lonGrid) {
         return latGrid+GEOHASH_SEPARATOR+lonGrid;
+    }
+
+    public static long getRedisCacheMillisTtlInterval(AnalysisInfrastructureProperties props) {
+        Integer redisCacheHoursTtlInterval = getRedisCacheHoursTtlInterval(props);
+        return Duration.ofHours(redisCacheHoursTtlInterval).toMillis();
+    }
+
+    public static Integer getRedisCacheHoursTtlInterval(AnalysisInfrastructureProperties props) {
+        return props.getRedis().getRecords().getTtl();
+    }
+
+    public static long getAggregationMillisPerInterval(AnalysisInfrastructureProperties props) {
+        Integer aggregationSecondsPerInterval = getAggregationSecondsPerInterval(props);
+        return convertSecondsToMillis(aggregationSecondsPerInterval);
+    }
+
+    public static Integer getAggregationSecondsPerInterval(AnalysisInfrastructureProperties props) {
+        return props.getKafka().getStreams().getPipeline().getName().getAggregationProcessor().getInterval();
     }
 }

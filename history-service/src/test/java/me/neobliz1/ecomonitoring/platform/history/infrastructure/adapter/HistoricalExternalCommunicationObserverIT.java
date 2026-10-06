@@ -1,7 +1,7 @@
 package me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter;
 
-import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.BUCKETS_REGION;
-import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.QUERIES_REGION;
+import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.BUCKETS_GLOBAL_REGION;
+import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.QUERIES_GLOBAL_REGION;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.INTERVAL_MINUTES;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -49,8 +49,10 @@ class HistoricalExternalCommunicationObserverIT extends IntegrationTestSupport {
                 .atMost(Duration.ofMinutes(1))
                 .pollInterval(Duration.ofMillis(500))
                 .untilAsserted(() -> {
-                    boolean currWeatherMapIsPresent = queryRepositoryAdapter.findByTimestampBucketAndIntervalMinutes(currentBucket, INTERVAL_MINUTES).isPresent();
-                    boolean pastWeatherMapIsPresent = queryRepositoryAdapter.findByTimestampBucketAndIntervalMinutes(pastBucket, INTERVAL_MINUTES).isPresent();
+                    boolean currWeatherMapIsPresent = queryRepositoryAdapter
+                            .findByTimestampBucketAndIntervalMinutes(currentRequest).isPresent();
+                    boolean pastWeatherMapIsPresent = queryRepositoryAdapter
+                            .findByTimestampBucketAndIntervalMinutes(pastRequest).isPresent();
                     assertTrue(currWeatherMapIsPresent);
                     assertTrue(pastWeatherMapIsPresent);
                 });
@@ -81,17 +83,21 @@ class HistoricalExternalCommunicationObserverIT extends IntegrationTestSupport {
         WeatherMap futurePacket = WeatherTestUtils.getCustomWeatherMap(futureBucket, targetedGeohash, 19.5f);
         sendPacket(pastBucket, pastPacket);
         sendPacket(futureBucket, futurePacket);
+        SpatialBoxRequest pastProbeRequest = getSpatialBoxRequest(pastBucket, MIN_LAT, MAX_LAT, MIN_LON, MAX_LON);
+        SpatialBoxRequest futureProbeRequest = getSpatialBoxRequest(futureBucket, MIN_LAT, MAX_LAT, MIN_LON, MAX_LON);
         Awaitility.await()
                 .atMost(Duration.ofMinutes(1))
                 .pollInterval(Duration.ofMillis(500))
                 .untilAsserted(() -> {
-                    boolean pastWeatherMapIsPresent = queryRepositoryAdapter.findByTimestampBucketAndIntervalMinutes(pastBucket, INTERVAL_MINUTES).isPresent();
-                    boolean futureWeatherMapIsPresent = queryRepositoryAdapter.findByTimestampBucketAndIntervalMinutes(futureBucket, INTERVAL_MINUTES).isPresent();
+                    boolean pastWeatherMapIsPresent = queryRepositoryAdapter
+                            .findByTimestampBucketAndIntervalMinutes(pastProbeRequest).isPresent();
+                    boolean futureWeatherMapIsPresent = queryRepositoryAdapter
+                            .findByTimestampBucketAndIntervalMinutes(futureProbeRequest).isPresent();
                     assertTrue(pastWeatherMapIsPresent);
                     assertTrue(futureWeatherMapIsPresent);
                 });
-        Objects.requireNonNull(springL1CacheManager.getCache(BUCKETS_REGION)).clear();
-        Objects.requireNonNull(springL1CacheManager.getCache(QUERIES_REGION)).clear();
+        Objects.requireNonNull(springL1CacheManager.getCache(BUCKETS_GLOBAL_REGION)).clear();
+        Objects.requireNonNull(springL1CacheManager.getCache(QUERIES_GLOBAL_REGION)).clear();
         SpatialBoxRequest fallbackRequest = getSpatialBoxRequest(currentBucket, MIN_LAT, MAX_LAT, MIN_LON, MAX_LON);
 
         WeatherMap response = historyRemoteClientStub.findFilteredGridDataBySpatialBox(fallbackRequest);
@@ -104,11 +110,36 @@ class HistoricalExternalCommunicationObserverIT extends IntegrationTestSupport {
     }
 
     @Test
+    void shouldFindGridCellViaExpandedSpatialBox_whenTightRequestMissesIt() throws Exception {
+        String nearbyGeohash = "50.05#30.05";
+        long nowSeconds = Instant.now().getEpochSecond();
+        long currentBucket = (nowSeconds/900)*900;
+        WeatherMap packet = WeatherTestUtils.getCustomWeatherMap(currentBucket, nearbyGeohash, 21.0f);
+        sendPacket(currentBucket, packet);
+        SpatialBoxRequest probe = getSpatialBoxRequest(currentBucket, 50.0, 50.02, 30.0, 30.02);
+        Awaitility.await()
+                .atMost(Duration.ofMinutes(1))
+                .pollInterval(Duration.ofMillis(500))
+                .untilAsserted(() -> assertTrue(queryRepositoryAdapter
+                        .findByTimestampBucketAndIntervalMinutes(probe).isPresent()));
+        Objects.requireNonNull(springL1CacheManager.getCache(BUCKETS_GLOBAL_REGION)).clear();
+        Objects.requireNonNull(springL1CacheManager.getCache(QUERIES_GLOBAL_REGION)).clear();
+        SpatialBoxRequest tightRequest = getSpatialBoxRequest(currentBucket, 50.0, 50.02, 30.0, 30.02);
+
+        WeatherMap response = historyRemoteClientStub.findFilteredGridDataBySpatialBox(tightRequest);
+
+        assertNotNull(response);
+        assertEquals(currentBucket, response.getTimestampBucket());
+        assertEquals(1, response.getGridCellsCount());
+        assertTrue(response.containsGridCells(nearbyGeohash));
+    }
+
+    @Test
     void shouldThrowStatusRuntimeException_whenAllHistoricalBucketsAreCompletelyExhausted() {
         long nowSeconds = Instant.now().getEpochSecond();
         long emptyCurrentBucket = (nowSeconds/900)*900;
-        Objects.requireNonNull(springL1CacheManager.getCache(BUCKETS_REGION)).clear();
-        Objects.requireNonNull(springL1CacheManager.getCache(QUERIES_REGION)).clear();
+        Objects.requireNonNull(springL1CacheManager.getCache(BUCKETS_GLOBAL_REGION)).clear();
+        Objects.requireNonNull(springL1CacheManager.getCache(QUERIES_GLOBAL_REGION)).clear();
         SpatialBoxRequest exhaustiveRequest = getSpatialBoxRequest(emptyCurrentBucket, MIN_LAT, MAX_LAT, MIN_LON, MAX_LON);
 
         StatusRuntimeException exception = assertThrows(

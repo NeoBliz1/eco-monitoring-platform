@@ -5,6 +5,8 @@ import static me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter
 import static me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.util.AggregationUtils.getGeohash;
 import static me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.util.AggregationUtils.getGridCellsByteArray;
 import static me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.util.AggregationUtils.getWeatherMapBuilder;
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.TRACE_PROFILE;
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.TX_CHAIN_CONFIRMATION_PROFILE;
 
 import lombok.RequiredArgsConstructor;
 import lombok.val;
@@ -12,8 +14,10 @@ import me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstant
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryPersistenceRepository;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryPersistentService;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.record.WeatherMapRecord;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.config.AnalysisInfrastructureProperties;
 import me.neobliz1.ecomonitoring.platform.model.exception.ProtocolBufferTranslationException;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,7 +27,12 @@ import java.util.Map;
 public class TelemetryStatePersister implements TelemetryPersistentService {
 
     private final TelemetryPersistenceRepository telemetryRepository;
-    private final Integer aggregationSecondsPerInterval;
+    private final AnalysisInfrastructureProperties props;
+
+    @Value("#{environment.acceptsProfiles('"+TRACE_PROFILE+"')}")
+    private boolean isTraceProfileActive;
+    @Value("#{environment.acceptsProfiles('"+TX_CHAIN_CONFIRMATION_PROFILE+"')}")
+    private boolean isTxChainCongProfileActive;
 
     @Override
     public void updateRealTimeSlidingWindow(WeatherPacket packet, double latGrid, double lonGrid) {
@@ -36,15 +45,17 @@ public class TelemetryStatePersister implements TelemetryPersistentService {
     @Override
     public List<WeatherMapRecord> processAndComputeAggregatedHistory(Map<Long, Map<String, List<WeatherPacket>>> extractionMatrix) {
         List<WeatherMapRecord> generatedRecords = new ArrayList<>();
-
+        Integer aggregationSecondsPerInterval = props.getKafka().getStreams().getPipeline().getName().getAggregationProcessor().getInterval();
         extractionMatrix.forEach((bucketTime, spatialMap) ->
                 spatialMap.forEach((spatialKey, packetsList) -> {
-
                     val weatherMapBuilder = getWeatherMapBuilder(bucketTime, aggregationSecondsPerInterval);
-                    addTelemetryTransactionIds(packetsList, weatherMapBuilder);
-                    addTelemetryTraceParentId(weatherMapBuilder);
+                    if(isTxChainCongProfileActive) {
+                        addTelemetryTransactionIds(packetsList, weatherMapBuilder);
+                    }
+                    if(isTraceProfileActive) {
+                        addTelemetryTraceParentId(packetsList, weatherMapBuilder);
+                    }
                     byte[] gridCellsByteArray = getGridCellsByteArray(spatialKey, packetsList, weatherMapBuilder);
-
                     try {
                         telemetryRepository.saveHistoricalGridCell(
                                 spatialKey,
@@ -53,10 +64,8 @@ public class TelemetryStatePersister implements TelemetryPersistentService {
                     } catch(Exception e) {
                         throw new ProtocolBufferTranslationException("Domain aggregation encoding sequence failed", e);
                     }
-
                     generatedRecords.add(new WeatherMapRecord(spatialKey, weatherMapBuilder.build()));
                 }));
-
         return generatedRecords;
     }
 }

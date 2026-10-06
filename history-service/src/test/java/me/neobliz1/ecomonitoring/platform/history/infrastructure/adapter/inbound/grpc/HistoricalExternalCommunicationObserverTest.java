@@ -4,9 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -24,7 +24,7 @@ import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.testing.GrpcCleanupRule;
 import me.neobliz1.ecomonitoring.platform.common.advice.GlobalPlatformGrpcAdviceEngine;
-import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherGridCellMetric;
+import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherGridCellLayer;
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherMapBucket;
 import me.neobliz1.ecomonitoring.platform.history.domain.port.inbound.HistoricalDataConvertService;
 import me.neobliz1.ecomonitoring.platform.history.domain.port.outbound.HistoricalQueryRepository;
@@ -83,7 +83,7 @@ public class HistoricalExternalCommunicationObserverTest {
                 ),
                 new InvalidRequestTestCase(
                         SpatialBoxRequest.newBuilder().setTimestampBucket(100).setTimeIntervalInMinutes(0),
-                        "time_interval_in_minutes: must be greater than 0" // 👈 FIX THIS FIELD STRING
+                        "time_interval_in_minutes: must be greater than 0"
                 ),
                 new InvalidRequestTestCase(
                         SpatialBoxRequest.newBuilder().setTimestampBucket(100).setTimeIntervalInMinutes(15).setMinLat(-90.1),
@@ -139,11 +139,11 @@ public class HistoricalExternalCommunicationObserverTest {
         UUID targetBucketId = UUID.randomUUID();
         WeatherMapBucket mockBucket = mock(WeatherMapBucket.class);
         when(mockBucket.getId()).thenReturn(targetBucketId);
-        when(historicalQueryRepository.findByTimestampBucketAndIntervalMinutes(1710000000L, 15))
+        when(historicalQueryRepository.findByTimestampBucketAndIntervalMinutes(any(SpatialBoxRequest.class)))
                 .thenReturn(Optional.of(mockBucket));
-        WeatherGridCellMetric metric = mock(WeatherGridCellMetric.class);
+        WeatherGridCellLayer metric = mock(WeatherGridCellLayer.class);
         when(metric.getGeohash()).thenReturn("v123");
-        when(historicalQueryRepository.findByBucketIdAndSpatialBox(targetBucketId, 45.0, 46.0, 12.0, 13.0))
+        when(historicalQueryRepository.findByBucketIdAndSpatialBox(eq(targetBucketId), any(SpatialBoxRequest.class)))
                 .thenReturn(List.of(metric));
         GridCellLayers layers = GridCellLayers.newBuilder().setReadingCount(5).build();
         when(weatherMapConverter.convertWeatherGridCellsToWeatherMap(metric)).thenReturn(layers);
@@ -161,7 +161,8 @@ public class HistoricalExternalCommunicationObserverTest {
     void shouldReturn400InvalidArgument_whenConstraintsAreViolated(InvalidRequestTestCase testCase) {
         SpatialBoxRequest invalidRequest = testCase.requestBuilder.build();
 
-        StatusRuntimeException exception = assertThrows(StatusRuntimeException.class, () -> blockingStub.findFilteredGridDataBySpatialBox(invalidRequest));
+        StatusRuntimeException exception = assertThrows(StatusRuntimeException.class,
+                () -> blockingStub.findFilteredGridDataBySpatialBox(invalidRequest));
 
         assertNotNull(exception);
         assertEquals(Status.Code.INVALID_ARGUMENT, exception.getStatus().getCode());
@@ -176,24 +177,34 @@ public class HistoricalExternalCommunicationObserverTest {
 
     @Test
     void shouldThrowNotFoundException_whenNoWeatherMapBucketExistsInDatabase() {
-        SpatialBoxRequest missingBucketRequest = createValidBase().setTimestampBucket(1810000000L).setTimeIntervalInMinutes(30).build();
-        when(historicalQueryRepository.findByTimestampBucketAndIntervalMinutes(1810000000L, 30)).thenReturn(Optional.empty());
+        SpatialBoxRequest missingBucketRequest = createValidBase()
+                .setTimestampBucket(1810000000L)
+                .setTimeIntervalInMinutes(30)
+                .build();
+        when(historicalQueryRepository.findByTimestampBucketAndIntervalMinutes(any(SpatialBoxRequest.class)))
+                .thenReturn(Optional.empty());
 
-        StatusRuntimeException exception = assertThrows(StatusRuntimeException.class, () -> blockingStub.findFilteredGridDataBySpatialBox(missingBucketRequest));
+        StatusRuntimeException exception = assertThrows(StatusRuntimeException.class,
+                () -> blockingStub.findFilteredGridDataBySpatialBox(missingBucketRequest));
 
         assertEquals(Status.Code.NOT_FOUND, exception.getStatus().getCode());
     }
 
     @Test
     void shouldThrowNotFoundException_whenMetricsCollectionIsEmpty() {
-        SpatialBoxRequest emptyMetricsRequest = createValidBase().setMinLat(10.0).setMaxLat(20.0).setMinLon(30.0).setMaxLon(40.0).build();
+        SpatialBoxRequest emptyMetricsRequest = createValidBase()
+                .setMinLat(10.0).setMaxLat(20.0).setMinLon(30.0).setMaxLon(40.0)
+                .build();
         UUID emptyBucketId = UUID.randomUUID();
         WeatherMapBucket mockBucket = mock(WeatherMapBucket.class);
         when(mockBucket.getId()).thenReturn(emptyBucketId);
-        when(historicalQueryRepository.findByTimestampBucketAndIntervalMinutes(1710000000L, 15)).thenReturn(Optional.of(mockBucket));
-        when(historicalQueryRepository.findByBucketIdAndSpatialBox(emptyBucketId, 10.0, 20.0, 30.0, 40.0)).thenReturn(Collections.emptyList());
+        when(historicalQueryRepository.findByTimestampBucketAndIntervalMinutes(any(SpatialBoxRequest.class)))
+                .thenReturn(Optional.of(mockBucket));
+        when(historicalQueryRepository.findByBucketIdAndSpatialBox(eq(emptyBucketId), any(SpatialBoxRequest.class)))
+                .thenReturn(Collections.emptyList());
 
-        StatusRuntimeException exception = assertThrows(StatusRuntimeException.class, () -> blockingStub.findFilteredGridDataBySpatialBox(emptyMetricsRequest));
+        StatusRuntimeException exception = assertThrows(StatusRuntimeException.class,
+                () -> blockingStub.findFilteredGridDataBySpatialBox(emptyMetricsRequest));
 
         assertEquals(Status.Code.NOT_FOUND, exception.getStatus().getCode());
     }
@@ -201,9 +212,11 @@ public class HistoricalExternalCommunicationObserverTest {
     @Test
     void shouldThrowInternalException_whenDatabaseThrowsUnexpectedRuntimeException() {
         SpatialBoxRequest crashingRequest = createValidBase().build();
-        when(historicalQueryRepository.findByTimestampBucketAndIntervalMinutes(1710000000L, 15)).thenThrow(new RuntimeException("Database connectivity lost"));
+        when(historicalQueryRepository.findByTimestampBucketAndIntervalMinutes(any(SpatialBoxRequest.class)))
+                .thenThrow(new RuntimeException("Database connectivity lost"));
 
-        StatusRuntimeException exception = assertThrows(StatusRuntimeException.class, () -> blockingStub.findFilteredGridDataBySpatialBox(crashingRequest));
+        StatusRuntimeException exception = assertThrows(StatusRuntimeException.class,
+                () -> blockingStub.findFilteredGridDataBySpatialBox(crashingRequest));
 
         assertEquals(Status.Code.INTERNAL, exception.getStatus().getCode());
     }
@@ -214,7 +227,10 @@ public class HistoricalExternalCommunicationObserverTest {
             public Map<String, Object> getAnnotatedBeans() {
                 Map<String, Object> unmarshalledBeans = new HashMap<>();
                 super.getAnnotatedBeans().forEach((name, bean) ->
-                        unmarshalledBeans.put(name, AopProxyUtils.getSingletonTarget(bean)!=null?AopProxyUtils.getSingletonTarget(bean):bean)
+                        unmarshalledBeans.put(name,
+                                AopProxyUtils.getSingletonTarget(bean)!=null
+                                        ?AopProxyUtils.getSingletonTarget(bean)
+                                        :bean)
                 );
                 return unmarshalledBeans;
             }
@@ -238,7 +254,10 @@ public class HistoricalExternalCommunicationObserverTest {
                         } catch(Throwable ex) {
                             StatusException statusException = adviceHandler.handleException(ex);
                             if(statusException!=null) {
-                                call.close(statusException.getStatus(), statusException.getTrailers()!=null?statusException.getTrailers():new Metadata());
+                                call.close(statusException.getStatus(),
+                                        statusException.getTrailers()!=null
+                                                ?statusException.getTrailers()
+                                                :new Metadata());
                             } else {
                                 call.close(Status.INTERNAL.withCause(ex), new Metadata());
                             }
@@ -252,8 +271,12 @@ public class HistoricalExternalCommunicationObserverTest {
     private void mockDefaultDatabaseBehavior() {
         WeatherMapBucket defaultMockBucket = mock(WeatherMapBucket.class);
         when(defaultMockBucket.getId()).thenReturn(UUID.randomUUID());
-        when(historicalQueryRepository.findByTimestampBucketAndIntervalMinutes(anyLong(), anyInt()))
+        when(historicalQueryRepository.findByTimestampBucketAndIntervalMinutes(any(SpatialBoxRequest.class)))
                 .thenReturn(Optional.of(defaultMockBucket));
+        when(historicalQueryRepository.findByBucketIdAndSpatialBox(any(UUID.class), any(SpatialBoxRequest.class)))
+                .thenReturn(Collections.emptyList());
+        when(historicalQueryRepository.findAllPastBuckets(any(SpatialBoxRequest.class)))
+                .thenReturn(Collections.emptyList());
     }
 
     private SpatialBoxRequest.Builder createValidBase() {
@@ -281,9 +304,10 @@ public class HistoricalExternalCommunicationObserverTest {
         }
 
         @Bean
-        public HistoricalExternalCommunicationObserver historicalExternalCommunicationObserver(HistoricalQueryRepository queryRepo,
-                                                                                               HistoricalDataConvertService converter,
-                                                                                               CacheManager springL1CacheManager) {
+        public HistoricalExternalCommunicationObserver historicalExternalCommunicationObserver(
+                HistoricalQueryRepository queryRepo,
+                HistoricalDataConvertService converter,
+                CacheManager springL1CacheManager) {
             return new HistoricalExternalCommunicationObserver(queryRepo, converter, springL1CacheManager);
         }
 

@@ -9,12 +9,10 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import lombok.NonNull;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.model.dto.WeatherMapAnalysisRequestQuery;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.inbound.TelemetryQueryService;
-import me.neobliz1.ecomonitoring.platform.analysis.domain.service.SpatialRequestValidator;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.inbound.web.doc.WeatherMapResponse;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.record.WeatherMapRecord;
 import me.neobliz1.ecomonitoring.platform.model.dto.ErrorEnvelopeDto;
@@ -25,7 +23,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @Validated
@@ -39,28 +36,20 @@ public class TelemetryAnalysisController {
 
     @Operation(summary = "Query weather map matrix")
     @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "OK", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = WeatherMapResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Bad request", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = ErrorEnvelopeDto.class))),
-            @ApiResponse(responseCode = "404", description = "Not found", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = ErrorEnvelopeDto.class)))
+            @ApiResponse(responseCode = "200", description = "OK", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                    schema = @Schema(implementation = WeatherMapResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Bad request", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                    schema = @Schema(implementation = ErrorEnvelopeDto.class))),
+            @ApiResponse(responseCode = "404", description = "Not found", content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                    schema = @Schema(implementation = ErrorEnvelopeDto.class)))
     })
     @GetMapping(value = WEATHER_MAP_ENDPOINT, produces = MediaType.APPLICATION_JSON_VALUE)
     @Cacheable(
             value = "weatherMaps",
-            key = "#targetTimestamp + '#' + #minLat + ',' + #maxLat + ',' + #minLon + ',' + #maxLon"
+            key = "#query.targetTimestamp + '#' + #query.minLat + ',' + #query.maxLat + ',' + #query.minLon + ',' + #query.maxLon"
     )
-    public ResponseEntity<WeatherMap> getWeatherMapByTimeAndCoordinatesSquare(
-            @RequestParam(name = "targetTimestamp")
-            @Min(value = 0L, message = "Timestamp cannot be negative")
-            @Max(value = 4102444800000L, message = "Timestamp cannot be unreasonably far in the future (Max: Year 2100)")
-            long targetTimestamp,
-            @NonNull @RequestParam(name = "min-lat") Double minLat,
-            @NonNull @RequestParam(name = "max-lat") Double maxLat,
-            @NonNull @RequestParam(name = "min-lon") Double minLon,
-            @NonNull @RequestParam(name = "max-lon") Double maxLon
-    ) {
-        SpatialRequestValidator.validateCoordinatesBox(minLat, maxLat, minLon, maxLon);
-        WeatherMapRecord mapRecordByCoordinates = queryService.getLatestTimeIntervalWeatherMapByCoordinates(targetTimestamp, minLat,
-                maxLat, minLon, maxLon);
+    public ResponseEntity<WeatherMap> getWeatherMapByTimeAndCoordinatesSquare(@Valid WeatherMapAnalysisRequestQuery query) {
+        WeatherMapRecord mapRecordByCoordinates = queryService.getLatestTimeIntervalWeatherMapByCoordinates(query);
         WeatherMap payload = mapRecordByCoordinates.payload();
         return ResponseEntity.ok(payload);
     }

@@ -14,10 +14,10 @@ import java.util.UUID;
 
 @Getter
 @Setter
-@NoArgsConstructor
 @Entity
-@Table(name = WeatherTelemetryDltRecord.TABLE_NAME)
-public class WeatherTelemetryDltRecord {
+@NoArgsConstructor
+@Table(name = WeatherTelemetryDlqRecord.TABLE_NAME)
+public class WeatherTelemetryDlqRecord {
 
     public static final String TABLE_NAME = "weather_telemetry_dlt_records";
 
@@ -47,7 +47,7 @@ public class WeatherTelemetryDltRecord {
     @Column(name = "exiled_at", nullable = false, updatable = false)
     private OffsetDateTime exiledAt;
 
-    public WeatherTelemetryDltRecord(UUID id, String originalTopic, int partitionId, long originalOffset,
+    public WeatherTelemetryDlqRecord(UUID id, String originalTopic, int partitionId, long originalOffset,
                                      String exceptionMessage, String exceptionStacktrace, byte[] rawPayloadBytes) {
         this.id = id;
         this.originalTopic = originalTopic;

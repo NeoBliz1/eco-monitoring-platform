@@ -3,8 +3,8 @@ package me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.COMMON_PROFILE;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.DEV_PROFILE;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.LOCAL_PROFILE;
-import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.BUCKETS_REGION;
-import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.METRICS_REGION;
+import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.BUCKETS_GLOBAL_REGION;
+import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.GRID_CELL_LAYERS_L2_REGION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -67,6 +67,13 @@ public class HistoricalL2CacheLifecycleIT extends IntegrationTestSupport {
     @Autowired
     private RedissonClient redissonClient;
 
+    @BeforeEach
+    void setUp() {
+        super.setupEcosystem();
+        entityManagerFactory.getCache().evictAll();
+        sessionFactory.getStatistics().clear();
+    }
+
     private static @NonNull List<WeatherMap> getWeatherMaps() {
         long baseTimestamp = System.currentTimeMillis();
         WeatherMap weatherMapOne = WeatherMap.newBuilder()
@@ -108,13 +115,6 @@ public class HistoricalL2CacheLifecycleIT extends IntegrationTestSupport {
         return weatherMapList;
     }
 
-    @BeforeEach
-    void setUp() {
-        super.setupEcosystem();
-        entityManagerFactory.getCache().evictAll();
-        sessionFactory.getStatistics().clear();
-    }
-
     @Test
     void shouldExtractThreeHibernateCacheKeysAndRetrieveRawPayloadsFromRedisTemplate_whenThreeRecordsArePersisted() {
         List<WeatherMap> weatherMapList = getWeatherMaps();
@@ -122,10 +122,10 @@ public class HistoricalL2CacheLifecycleIT extends IntegrationTestSupport {
         adapter.persistTelemetryRecord(weatherMapList.get(0));
         adapter.persistTelemetryRecord(weatherMapList.get(1));
         adapter.persistTelemetryRecord(weatherMapList.get(2));
-        byte[] rawHashRegionKey = BUCKETS_REGION.getBytes(StandardCharsets.UTF_8);
+        byte[] rawHashRegionKey = BUCKETS_GLOBAL_REGION.getBytes(StandardCharsets.UTF_8);
         Map<Object, Object> allRedisCacheEntries = redisTemplate.opsForHash().entries(rawHashRegionKey);
         SessionFactoryImplementor sfi = sessionFactory.unwrap(SessionFactoryImplementor.class);
-        CacheRegionStatistics regionStats = sfi.getStatistics().getDomainDataRegionStatistics(BUCKETS_REGION);
+        CacheRegionStatistics regionStats = sfi.getStatistics().getDomainDataRegionStatistics(BUCKETS_GLOBAL_REGION);
 
         assertEquals(3, allRedisCacheEntries.size());
         assertNotNull(regionStats);
@@ -139,10 +139,10 @@ public class HistoricalL2CacheLifecycleIT extends IntegrationTestSupport {
         adapter.persistTelemetryRecord(weatherMapList.get(0));
         adapter.persistTelemetryRecord(weatherMapList.get(1));
         adapter.persistTelemetryRecord(weatherMapList.get(2));
-        byte[] metricsRegionKey = METRICS_REGION.getBytes(StandardCharsets.UTF_8);
+        byte[] metricsRegionKey = GRID_CELL_LAYERS_L2_REGION.getBytes(StandardCharsets.UTF_8);
         Map<Object, Object> allRedisMetricsEntries = redisTemplate.opsForHash().entries(metricsRegionKey);
         SessionFactoryImplementor sfi = sessionFactory.unwrap(SessionFactoryImplementor.class);
-        CacheRegionStatistics metricsRegionStats = sfi.getStatistics().getDomainDataRegionStatistics(METRICS_REGION);
+        CacheRegionStatistics metricsRegionStats = sfi.getStatistics().getDomainDataRegionStatistics(GRID_CELL_LAYERS_L2_REGION);
 
         assertEquals(3, allRedisMetricsEntries.size());
         assertNotNull(metricsRegionStats);
@@ -156,7 +156,7 @@ public class HistoricalL2CacheLifecycleIT extends IntegrationTestSupport {
         for(WeatherMap weatherMap : weatherMapList) {
             adapter.persistTelemetryRecord(weatherMap);
         }
-        RMapCache<Object, Object> bucketsRegionCache = redissonClient.getMapCache(BUCKETS_REGION);
+        RMapCache<Object, Object> bucketsRegionCache = redissonClient.getMapCache(BUCKETS_GLOBAL_REGION);
 
         Awaitility.await()
                 .atMost(Duration.ofSeconds(10))
@@ -184,7 +184,7 @@ public class HistoricalL2CacheLifecycleIT extends IntegrationTestSupport {
                 (SharedSessionContractImplementor) entityManager.getDelegate();
         Object oldestCacheKey = cacheAccess.generateCacheKey(
                 oldestBucketId, persister, sfi, sessionImplementor.getTenantIdentifier());
-        RMapCache<Object, Object> bucketsRegionCache = redissonClient.getMapCache(BUCKETS_REGION);
+        RMapCache<Object, Object> bucketsRegionCache = redissonClient.getMapCache(BUCKETS_GLOBAL_REGION);
 
         Awaitility.await()
                 .atMost(Duration.ofSeconds(10))
@@ -204,7 +204,7 @@ public class HistoricalL2CacheLifecycleIT extends IntegrationTestSupport {
         EntityDataAccess cacheAccess = persister.getCacheAccessStrategy();
         SharedSessionContractImplementor sessionImplementor = (SharedSessionContractImplementor) entityManager.getDelegate();
         Object cacheKey = cacheAccess.generateCacheKey(targetId, persister, sfi, sessionImplementor.getTenantIdentifier());
-        RMapCache<Object, Object> redissonMapCache = redissonClient.getMapCache(BUCKETS_REGION);
+        RMapCache<Object, Object> redissonMapCache = redissonClient.getMapCache(BUCKETS_GLOBAL_REGION);
 
         assertNotNull(redissonMapCache.get(cacheKey));
 

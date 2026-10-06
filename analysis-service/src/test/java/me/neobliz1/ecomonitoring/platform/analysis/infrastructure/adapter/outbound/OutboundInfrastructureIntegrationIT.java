@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import lombok.extern.slf4j.Slf4j;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.model.dto.WeatherMapAnalysisRequestQuery;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.record.WeatherMapRecord;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.support.IntegrationTestSupport;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
@@ -405,10 +406,11 @@ public class OutboundInfrastructureIntegrationIT extends IntegrationTestSupport 
         }
         sendFlushPackage(stationId, currentWindowTimeFloor, lat, lon);
         WeatherMap actualWeatherMapFromHistoryTopic = findWeatherMapByGridCellAnBucketFloor(expectedGridCellFieldKey, currentWindowTimeFloor);
-        WeatherMapRecord actualWeatherMapRecordFromRedis = telemetryQueryService.getLatestTimeIntervalWeatherMapByCoordinates(currentWindowTimeFloor,
-                lat-5, lat+5, lon-5, lon+5);
+        WeatherMapRecord actualWeatherMapRecordFromRedis = telemetryQueryService.getLatestTimeIntervalWeatherMapByCoordinates(
+                new WeatherMapAnalysisRequestQuery(currentWindowTimeFloor, lat-2, lat+2, lon-2, lon+2));
         Map<Object, Object> liveRedisHotWindowMatrix = redisTemplate.opsForHash().entries(expectedHotWindowRedisKey);
         WeatherMap actualWeatherMapFromRedis = actualWeatherMapRecordFromRedis.payload();
+
         assertNotNull(rawRecord);
         assertEquals(stationId, rawRecord.value().getStationId());
         assertNotNull(actualWeatherMapFromHistoryTopic);

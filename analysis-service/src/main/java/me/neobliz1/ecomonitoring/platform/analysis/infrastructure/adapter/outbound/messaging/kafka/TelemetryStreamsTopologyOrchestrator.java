@@ -2,21 +2,19 @@ package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbo
 
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.DEDUPLICATE_ROCKS_DB;
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.ZERO_LOSS_ACCUMULATION_STORE;
-import static me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryUtils.clampLatitude;
-import static me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryUtils.clampLongitude;
+import static me.neobliz1.ecomonitoring.platform.analysis.domain.service.AnalysisUtils.clampLatitude;
+import static me.neobliz1.ecomonitoring.platform.analysis.domain.service.AnalysisUtils.clampLongitude;
 import static me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.util.AggregationUtils.getGeohash;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.SCHEMA_REGISTRY_URL;
 
 import io.confluent.kafka.streams.serdes.protobuf.KafkaProtobufSerde;
-import io.opentelemetry.api.GlobalOpenTelemetry;
-import io.opentelemetry.api.trace.Tracer;
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import lombok.val;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.inbound.TelemetryAnalysisService;
-import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryPersistentService;
-import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.TelemetryAggregationProcessor;
-import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.TelemetryDeduplicationProcessor;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.WeatherPacketStreamAggregationProcessor;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.WeatherPacketStreamDeduplicationProcessor;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.config.AnalysisInfrastructureProperties;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.Location;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
@@ -27,11 +25,13 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Repartitioned;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 
 import java.time.Duration;
@@ -39,22 +39,12 @@ import java.util.Map;
 
 @Slf4j
 @RequiredArgsConstructor
-public class TelemetryTopologyOrchestrator implements TelemetryAnalysisService {
+public class TelemetryStreamsTopologyOrchestrator implements TelemetryAnalysisService {
 
-    private final TelemetryPersistentService persistentService;
-    private final Tracer tracer = GlobalOpenTelemetry.getTracer("weather-analysis-topology");
+    private final ObjectProvider<WeatherPacketStreamDeduplicationProcessor> deduplicationProcessorProvider;
+    private final ObjectProvider<WeatherPacketStreamAggregationProcessor> aggregationProcessorProvider;
+    private final AnalysisInfrastructureProperties props;
 
-    @Value("${spring.kafka.topic.weather-live}")
-    private String kafkaIngestionLiveTopic;
-    @Value("${spring.kafka.topic.weather-raw}")
-    private String kafkaAnalysisRawTopic;
-    @Value("${spring.kafka.topic.weather-history}")
-    private String kafkaAnalysisHistoryTopic;
-    @Getter
-    @Value("${spring.kafka.streams.pipeline.name.aggregation-processor.interval}")
-    private Integer aggregationSecondsPerInterval;
-    @Value("${spring.kafka.streams.pipeline.name.deduplication-processor.interval}")
-    private Long deduplicationInterval;
     @Value("${spring.kafka.streams.properties.schema.registry.url}")
     private String schemaRegistryUrl;
     private Serde<WeatherPacket> weatherPacketSerde;
@@ -76,6 +66,7 @@ public class TelemetryTopologyOrchestrator implements TelemetryAnalysisService {
     }
 
     private void registerDeduplicationStore(StreamsBuilder streamsBuilder) {
+        Long deduplicationInterval = props.getKafka().getStreams().getPipeline().getName().getDeduplicationProcessor().getInterval();
         StoreBuilder<WindowStore<String, String>> dedupStoreBuilder = Stores.windowStoreBuilder(
                 Stores.persistentWindowStore(
                         DEDUPLICATE_ROCKS_DB,
@@ -97,14 +88,17 @@ public class TelemetryTopologyOrchestrator implements TelemetryAnalysisService {
     }
 
     private @NonNull KStream<String, WeatherPacket> runTransactionalDeduplicationPipeline(StreamsBuilder streamsBuilder) {
+        val topic = props.getKafka().getTopic();
+        String kafkaIngestionLiveTopic = topic.getWeatherLive();
         KStream<String, WeatherPacket> rawInputStream = streamsBuilder.stream(
                 kafkaIngestionLiveTopic,
                 Consumed.with(Serdes.String(), weatherPacketSerde)
         );
         KStream<String, WeatherPacket> deduplicatedStream = rawInputStream.process(
-                () -> new TelemetryDeduplicationProcessor(deduplicationInterval, tracer),
+                deduplicationProcessorProvider::getObject,
                 DEDUPLICATE_ROCKS_DB
         );
+        String kafkaAnalysisRawTopic = topic.getWeatherRaw();
         deduplicatedStream.to(
                 kafkaAnalysisRawTopic,
                 Produced.with(Serdes.String(), weatherPacketSerde)
@@ -121,14 +115,25 @@ public class TelemetryTopologyOrchestrator implements TelemetryAnalysisService {
             return getGeohash(latGrid, lonGrid);
         }).repartition(Repartitioned.with(Serdes.String(), weatherPacketSerde).withName("spatial-repartition-stream"));
         KStream<String, WeatherMap> historyStream = repartitionedByLocationStream.process(
-                () -> new TelemetryAggregationProcessor(persistentService, aggregationSecondsPerInterval, tracer),
+                getStringWeatherPacketStringWeatherMapProcessorSupplier(),
                 ZERO_LOSS_ACCUMULATION_STORE
         );
         Serde<WeatherMap> weatherMapSerde = new KafkaProtobufSerde<>(WeatherMap.class);
         weatherMapSerde.configure(serdeConfig, false);
+        val kafkaAnalysisHistoryTopic = props.getKafka().getTopic().getWeatherHistory();
         historyStream.to(
                 kafkaAnalysisHistoryTopic,
                 Produced.with(Serdes.String(), weatherMapSerde)
         );
+    }
+
+    private @NonNull ProcessorSupplier<String, WeatherPacket, String, WeatherMap> getStringWeatherPacketStringWeatherMapProcessorSupplier() {
+        return this::getAggregationProcessorPrototypeWithSelfInjection;
+    }
+
+    private @NonNull WeatherPacketStreamAggregationProcessor getAggregationProcessorPrototypeWithSelfInjection() {
+        WeatherPacketStreamAggregationProcessor processorProxy = aggregationProcessorProvider.getObject();
+        processorProxy.setSelf(processorProxy);
+        return processorProxy;
     }
 }

@@ -10,14 +10,18 @@ public class PlatformConstants {
     public final static String LOCAL_PROFILE = "local";
     public final static String DEV_PROFILE = "dev";
     public final static String COMMON_PROFILE = "common";
+    public final static String TRACE_PROFILE = "trace";
 
     // Platform traces span
-    public static final String HISTORICAL_WEATHER_MAP_KAFKA_LISTENER_SPAN = "Historical_WeatherMap_Kafka_Listener";
-    public static final String KAFKA_STREAMS_FLUSH_AGGREGATION_WINDOW_SPAN = "KafkaStreams_Flush_Aggregation_Window";
-    public static final String KAFKA_STREAMS_AGGREGATE_SPAN = "KafkaStreams_Aggregate_Record";
-    public static final String KAFKA_STREAMS_DEDUPLICATE_SPAN = "KafkaStreams_Deduplicate_Record";
-    public static final String HISTORY_WEATHER_PACKET_TRACE_SPAN = "WeatherMapConverter_MergeTelemetryInBatch";
+    public static final String ANALYSIS_WEATHER_TOPOLOGY_TRACER = "Analysis_Weather_Topology";
+    public static final String ANALYSIS_FLUSH_AGGREGATION_WINDOW_SPAN = "Analysis_Flush_Aggregation_Window";
+    public static final String ANALYSIS_AGGREGATE_SPAN = "Analysis_Aggregate_Record";
+    public static final String ANALYSIS_DEDUPLICATE_SPAN = "Analysis_Deduplicate_Record";
+    public static final String HISTORICAL_KAFKA_LISTENER_TRACER = "Historical_WeatherMap_Kafka_Listener_Tracer";
+    public static final String HISTORICAL_WEATHER_MAP_CONVERTER_TRACER = "Historical_WeatherMap_Converter_Tracer";
+    public static final String HISTORICAL_WEATHER_PACKET_MAP_CONVERTER_TRACE_SPAN = "Historical_Weather_MapConverter_Merge_Telemetry";
 
+    // Common constants
     public final static String SCHEMA_REGISTRY = "schema-registry";
     public final static String SCHEMA_REGISTRY_URL = "schema.registry.url";
     public static final String SPRING_SCHEMA_REGISTRY_URL_PROP_NAME = "spring.kafka.streams.properties.schema.registry.url";

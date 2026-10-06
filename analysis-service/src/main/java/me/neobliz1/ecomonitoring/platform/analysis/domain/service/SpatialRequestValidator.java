@@ -1,6 +1,7 @@
 package me.neobliz1.ecomonitoring.platform.analysis.domain.service;
 
 import lombok.experimental.UtilityClass;
+import me.neobliz1.ecomonitoring.platform.analysis.domain.model.dto.WeatherMapAnalysisRequestQuery;
 import me.neobliz1.ecomonitoring.platform.model.exception.CoordinatesSquareTooLargeException;
 import me.neobliz1.ecomonitoring.platform.model.exception.InvalidCoordinatesBoundariesException;
 import me.neobliz1.ecomonitoring.platform.model.exception.InvalidCoordinatesSquareException;
@@ -8,7 +9,11 @@ import me.neobliz1.ecomonitoring.platform.model.exception.InvalidCoordinatesSqua
 @UtilityClass
 public class SpatialRequestValidator {
 
-    public static void validateCoordinatesBox(Double minLat, Double maxLat, Double minLon, Double maxLon) {
+    public static void validateCoordinatesBox(WeatherMapAnalysisRequestQuery query) {
+        Double minLat = query.minLat();
+        Double maxLat = query.maxLat();
+        Double minLon = query.minLon();
+        Double maxLon = query.maxLon();
         if(minLat<-90.0 || maxLat>90.0 || minLon<-180.0 || maxLon>180.0)
             throw new InvalidCoordinatesBoundariesException();
         if(!(maxLat>minLat && maxLon>minLon)) throw new InvalidCoordinatesSquareException();

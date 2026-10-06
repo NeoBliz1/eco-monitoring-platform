@@ -3,8 +3,8 @@ package me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.COMMON_PROFILE;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.DEV_PROFILE;
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.LOCAL_PROFILE;
-import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.BUCKETS_REGION;
-import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.METRICS_REGION;
+import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.BUCKETS_GLOBAL_REGION;
+import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.GRID_CELL_LAYERS_L2_REGION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -36,7 +36,7 @@ import java.util.UUID;
         value = { DEV_PROFILE, COMMON_PROFILE, LOCAL_PROFILE },
         inheritProfiles = false
 )
-public class HistoricalL2QueryCountLifecycleIT extends IntegrationTestSupport {
+public class HistoricalQueryCountLifecycleIT extends IntegrationTestSupport {
 
     @Autowired
     private SessionFactory sessionFactory;
@@ -56,20 +56,19 @@ public class HistoricalL2QueryCountLifecycleIT extends IntegrationTestSupport {
     }
 
     @Test
-    void shouldMakeExactlyThreeDatabasePreparedStatements_whenL1AndL2CachesAreCompletelyCold() {
-        WeatherMap weatherMap = WeatherTestUtils.getWeatherMap();
+    void shouldMakeExactlyFourDatabasePreparedStatements_whenL1AndL2CachesAreCompletelyColdAndBucketHasMultipleLayers() {
+        WeatherMap weatherMap = WeatherTestUtils.getWeatherMapWithNLayers(100);
         UUID calculatedId = HistoricalPersistenceRepositoryAdapter.getBucketId(weatherMap);
-        Cache springCache = springL1CacheManager.getCache(BUCKETS_REGION);
+        Cache springCache = springL1CacheManager.getCache(BUCKETS_GLOBAL_REGION);
         assertNotNull(springCache);
         springCache.evict(calculatedId);
-        RMapCache<Object, Object> bucketsRegionCache = redissonClient.getMapCache(BUCKETS_REGION);
+        RMapCache<Object, Object> bucketsRegionCache = redissonClient.getMapCache(BUCKETS_GLOBAL_REGION);
         bucketsRegionCache.clear();
 
         adapter.persistTelemetryRecord(weatherMap);
 
-        assertEquals(1, stats.getPrepareStatementCount()-stats.getEntityInsertCount());
-        assertEquals(2, stats.getEntityInsertCount());
-        assertEquals(3, stats.getPrepareStatementCount());
+        assertEquals(101, stats.getEntityInsertCount());
+        assertEquals(4, stats.getPrepareStatementCount());
     }
 
     @Test
@@ -82,7 +81,6 @@ public class HistoricalL2QueryCountLifecycleIT extends IntegrationTestSupport {
             bucket.setId(calculatedId);
             bucket.setTimestampBucket(weatherMap.getTimestampBucket());
             bucket.setIntervalMinutes(weatherMap.getIntervalMinutes());
-            bucket.setVersion(0);
             queryJpaRepositoryAdapter.saveAndFlush(bucket);
         });
         stats.clear();
@@ -101,11 +99,11 @@ public class HistoricalL2QueryCountLifecycleIT extends IntegrationTestSupport {
 
         adapter.persistTelemetryRecord(weatherMap);
 
-        Cache springCache = springL1CacheManager.getCache(BUCKETS_REGION);
+        Cache springCache = springL1CacheManager.getCache(BUCKETS_GLOBAL_REGION);
         assertNotNull(springCache);
         springCache.evict(calculatedId);
         assertNull(springCache.get(calculatedId));
-        RMapCache<Object, Object> bucketsRegionCache = redissonClient.getMapCache(BUCKETS_REGION);
+        RMapCache<Object, Object> bucketsRegionCache = redissonClient.getMapCache(BUCKETS_GLOBAL_REGION);
         assertEquals(1, bucketsRegionCache.size());
         stats.clear();
 
@@ -120,12 +118,12 @@ public class HistoricalL2QueryCountLifecycleIT extends IntegrationTestSupport {
     void shouldPopulateBucketsRegionInL2Cache_whenBucketIsPersisted() {
         WeatherMap weatherMap = WeatherTestUtils.getWeatherMap();
         UUID calculatedId = HistoricalPersistenceRepositoryAdapter.getBucketId(weatherMap);
-        Cache springCache = springL1CacheManager.getCache(BUCKETS_REGION);
+        Cache springCache = springL1CacheManager.getCache(BUCKETS_GLOBAL_REGION);
         assertNotNull(springCache);
         assertNull(springCache.get(calculatedId));
 
         adapter.persistTelemetryRecord(weatherMap);
-        RMapCache<Object, Object> bucketsRegionCache = redissonClient.getMapCache(BUCKETS_REGION);
+        RMapCache<Object, Object> bucketsRegionCache = redissonClient.getMapCache(BUCKETS_GLOBAL_REGION);
 
         assertEquals(1, bucketsRegionCache.size());
     }
@@ -134,12 +132,12 @@ public class HistoricalL2QueryCountLifecycleIT extends IntegrationTestSupport {
     void shouldPopulateMetricsRegionInL2Cache_whenBucketIsPersisted() {
         WeatherMap weatherMap = WeatherTestUtils.getWeatherMap();
         UUID calculatedId = HistoricalPersistenceRepositoryAdapter.getBucketId(weatherMap);
-        Cache springCache = springL1CacheManager.getCache(BUCKETS_REGION);
+        Cache springCache = springL1CacheManager.getCache(BUCKETS_GLOBAL_REGION);
         assertNotNull(springCache);
         assertNull(springCache.get(calculatedId));
 
         adapter.persistTelemetryRecord(weatherMap);
-        RMapCache<Object, Object> metricsRegionCache = redissonClient.getMapCache(METRICS_REGION);
+        RMapCache<Object, Object> metricsRegionCache = redissonClient.getMapCache(GRID_CELL_LAYERS_L2_REGION);
 
         assertEquals(1, metricsRegionCache.size());
     }
@@ -158,9 +156,9 @@ public class HistoricalL2QueryCountLifecycleIT extends IntegrationTestSupport {
                 (SharedSessionContractImplementor) entityManager.getDelegate();
         Object cacheKey = cacheAccess.generateCacheKey(
                 calculatedId, persister, sfi, sessionImplementor.getTenantIdentifier());
-        RMapCache<Object, Object> bucketsRegionCache = redissonClient.getMapCache(BUCKETS_REGION);
+        RMapCache<Object, Object> bucketsRegionCache = redissonClient.getMapCache(BUCKETS_GLOBAL_REGION);
         assertNotNull(bucketsRegionCache.get(cacheKey));
-        Cache springCache = springL1CacheManager.getCache(BUCKETS_REGION);
+        Cache springCache = springL1CacheManager.getCache(BUCKETS_GLOBAL_REGION);
         assertNotNull(springCache);
         springCache.evict(calculatedId);
         assertNull(springCache.get(calculatedId));

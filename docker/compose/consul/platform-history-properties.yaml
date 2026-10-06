@@ -7,10 +7,10 @@ spring:
   datasource:
     data-pool:
       name: "EcoHistoryTelemetry-HikariPool"
-      max-pool-size: 24
-      min-idle: 5
-      idle-timeout: 30 # seconds
-      connection-timeout: 10 # seconds
+      max-pool-size: 60
+      min-idle: 15
+      idle-timeout: 60 # seconds
+      connection-timeout: 15 # seconds
   data:
     hibernate:
       cache:

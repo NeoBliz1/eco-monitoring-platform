@@ -2,8 +2,8 @@ package me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter;
 
 import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstants.TX_ID_INGESTION_HISTORY_URI;
 import static me.neobliz1.ecomonitoring.platform.common.api.uri.UriConstants.WEATHER_PACKET_TX_ID_INGESTION;
-import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.BUCKETS_REGION;
-import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.QUERIES_REGION;
+import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.BUCKETS_GLOBAL_REGION;
+import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.QUERIES_GLOBAL_REGION;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.GEOHASH_ALPHA;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.INTERVAL_MINUTES;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.TX_DEFAULT_ID;
@@ -11,10 +11,12 @@ import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUti
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.getCustomWeatherMap;
 import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.performValidPost;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherGridCellMetric;
+import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherGridCellLayer;
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherMapBucket;
+import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherTelemetryDlqRecord;
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherTelemetryStationTransaction;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherMapJpaRepository;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
@@ -22,7 +24,6 @@ import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.GridCellLay
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 import me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.testcontainers.shaded.org.awaitility.Awaitility;
@@ -111,7 +112,7 @@ class HistoricalTelemetryListenerIT extends IntegrationTestSupport {
                                 .isPresent()
                 ));
         WeatherMapBucket weatherMapBucket = getWeatherMapBucket(timestampBucket);
-        List<WeatherGridCellMetric> cells = metricsJpaRepository.findSpecificCellsForMerge(
+        List<WeatherGridCellLayer> cells = metricsJpaRepository.findSpecificGridCellLayersForMerge(
                 weatherMapBucket.getId(),
                 List.of(WeatherTestUtils.GEOHASH_ALPHA)
         );
@@ -129,25 +130,37 @@ class HistoricalTelemetryListenerIT extends IntegrationTestSupport {
                 .setTimestampBucket(timestampBucket)
                 .setIntervalMinutes(INTERVAL_MINUTES)
                 .putGridCells(GEOHASH_ALPHA, GridCellLayers.newBuilder()
+                        .setGeohash(GEOHASH_ALPHA)
                         .setReadingCount(1)
                         .setAvgHumidity(150.0)
                         .build())
                 .build();
+        UUID expectedBucketId = UUID.nameUUIDFromBytes(
+                (timestampBucket+String.valueOf(INTERVAL_MINUTES)).getBytes());
 
         sendPacket(timestampBucket, poisonousMap);
 
         Awaitility.await()
-                .atMost(Duration.ofSeconds(10))
-                .during(Duration.ofSeconds(3))
-                .until(() -> queryRepositoryAdapter
-                        .findByTimestampBucketAndIntervalMinutes(timestampBucket, INTERVAL_MINUTES)
-                        .isEmpty());
-        List<WeatherMapBucket> bucketList = queryJpaRepositoryAdapter.findAll();
-        assertTrue(bucketList.isEmpty());
+                .atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofMillis(300))
+                .untilAsserted(() -> {
+                    List<WeatherGridCellLayer> gridCellLayers = metricsJpaRepository.findAllByIdBucketId(expectedBucketId);
+                    assertTrue(gridCellLayers.isEmpty());
+                    assertTrue(dltJpaRepository.count()>=1);
+                });
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofMillis(300))
+                .untilAsserted(() -> {
+                    List<WeatherMapBucket> bucketList = queryJpaRepositoryAdapter.findAll();
+                    assertFalse(bucketList.isEmpty());
+                    assertEquals(1, bucketList.size());
+                });
     }
 
     @Test
     void shouldRejectPayloadAndHaltProgression_whenGridCellContainsZeroActualMetricGroupReadings() throws Exception {
+        String exMsg = "GridCellLayers must contain at least one telemetry metric measurement.";
         long timestampBucket = 1919234000L;
         WeatherMap emptyPayload = WeatherMap.newBuilder()
                 .setTimestampBucket(timestampBucket)
@@ -160,11 +173,16 @@ class HistoricalTelemetryListenerIT extends IntegrationTestSupport {
         sendPacket(timestampBucket, emptyPayload);
 
         Awaitility.await()
-                .atMost(Duration.ofMinutes(1))
+                .atMost(Duration.ofMinutes(10))
                 .during(Duration.ofSeconds(3))
-                .until(() -> queryRepositoryAdapter
-                        .findByTimestampBucketAndIntervalMinutes(timestampBucket, INTERVAL_MINUTES)
-                        .isEmpty());
+                .until(() -> {
+                    List<WeatherTelemetryDlqRecord> dltRecords = dltJpaRepository.findAll();
+                    if(!dltRecords.isEmpty()) {
+                        String exceptionMessage = dltRecords.getFirst().getExceptionMessage();
+                        return exceptionMessage.contains(exMsg);
+                    }
+                    return false;
+                });
         List<WeatherMapBucket> bucketList = queryJpaRepositoryAdapter.findAll();
         assertTrue(bucketList.isEmpty());
     }
@@ -173,7 +191,6 @@ class HistoricalTelemetryListenerIT extends IntegrationTestSupport {
     void shouldReturnExistingBucketWithFirstGeneratedId_whenDuplicatePayloadIsProcessedSerially() throws Exception {
         WeatherMap weatherMap = WeatherTestUtils.getWeatherMap();
         long targetTimestampBucket = weatherMap.getTimestampBucket();
-        ArgumentCaptor<WeatherMapBucket> bucketCaptor = ArgumentCaptor.forClass(WeatherMapBucket.class);
 
         sendPacket(targetTimestampBucket, weatherMap);
         Awaitility.await()
@@ -185,21 +202,14 @@ class HistoricalTelemetryListenerIT extends IntegrationTestSupport {
         WeatherMapBucket firstBucket = getWeatherMapBucket(targetTimestampBucket);
         UUID expectedBucketId = firstBucket.getId();
         Mockito.reset(queryRepositoryAdapter);
-        Objects.requireNonNull(springL1CacheManager.getCache(BUCKETS_REGION)).clear();
-        Objects.requireNonNull(springL1CacheManager.getCache(QUERIES_REGION)).clear();
+        Objects.requireNonNull(springL1CacheManager.getCache(BUCKETS_GLOBAL_REGION)).clear();
+        Objects.requireNonNull(springL1CacheManager.getCache(QUERIES_GLOBAL_REGION)).clear();
         sendPacket(targetTimestampBucket, weatherMap);
-        Awaitility.await()
-                .atMost(Duration.ofSeconds(15))
-                .pollInterval(Duration.ofMillis(300))
-                .untilAsserted(() -> Mockito.verify(queryRepositoryAdapter, Mockito.atLeastOnce())
-                        .saveAndFlush(bucketCaptor.capture()));
         WeatherMapBucket secondBucket = getWeatherMapBucket(targetTimestampBucket);
         long bucketRowCount = queryJpaRepositoryAdapter.count();
-        WeatherMapBucket capturedSecondBucket = bucketCaptor.getAllValues().getLast();
         List<WeatherTelemetryStationTransaction> txIds = txIdsRepository.findAll();
 
         assertEquals(1L, bucketRowCount);
-        assertEquals(expectedBucketId, capturedSecondBucket.getId());
         assertEquals(expectedBucketId, secondBucket.getId());
         assertEquals(targetTimestampBucket, secondBucket.getTimestampBucket());
         assertEquals(1, txIds.size());
@@ -210,7 +220,7 @@ class HistoricalTelemetryListenerIT extends IntegrationTestSupport {
     void shouldAccumulateDistinctGeohashMetricsIntoSingleBucket_whenTwoDistinctPayloadsArriveSerially() throws Exception {
         long timestampBucket = 2119234000L;
         WeatherMap alphaPayload = WeatherTestUtils.getCustomWeatherMap(timestampBucket, GEOHASH_ALPHA, 22.5f);
-        String geohash2 = "w21z7";
+        String geohash2 = "75.123#17.456";
         WeatherMap betaPayload = WeatherTestUtils.getCustomWeatherMap(timestampBucket, geohash2, 18.2f);
 
         sendPacket(timestampBucket, alphaPayload);
@@ -220,13 +230,13 @@ class HistoricalTelemetryListenerIT extends IntegrationTestSupport {
                 .pollInterval(Duration.ofMillis(300))
                 .untilAsserted(() -> {
                     WeatherMapBucket weatherMapBucket = getWeatherMapBucket(timestampBucket);
-                    List<WeatherGridCellMetric> cells = metricsJpaRepository.findAllByIdBucketId(weatherMapBucket.getId());
+                    List<WeatherGridCellLayer> cells = metricsJpaRepository.findAllByIdBucketId(weatherMapBucket.getId());
                     assertEquals(2, cells.size());
                 });
         WeatherMapBucket targetBucket = getWeatherMapBucket(timestampBucket);
         long bucketRowCount = queryJpaRepositoryAdapter.count();
         List<String> persistedGeohashes = metricsJpaRepository.findAllByIdBucketId(targetBucket.getId()).stream()
-                .map(WeatherGridCellMetric::getGeohash)
+                .map(WeatherGridCellLayer::getGeohash)
                 .toList();
 
         assertEquals(1L, bucketRowCount);

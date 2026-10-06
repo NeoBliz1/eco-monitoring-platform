@@ -5,6 +5,7 @@ import static me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import lombok.val;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.inbound.TelemetryAnalysisService;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.inbound.TelemetryQueryService;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryPersistenceRepository;
@@ -14,7 +15,9 @@ import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.Telemetr
 import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryStatePersister;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryStateQueryResolver;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.history.grpc.TelemetryQueryGrpcAdapter;
-import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.TelemetryTopologyOrchestrator;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.TelemetryStreamsTopologyOrchestrator;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.WeatherPacketStreamAggregationProcessor;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.WeatherPacketStreamDeduplicationProcessor;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.persistence.redis.TelemetryPersistenceRepositoryAdapter;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.persistence.redis.TelemetryQueryRepositoryAdapter;
 import me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils;
@@ -23,12 +26,13 @@ import me.neobliz1.ecomonitoring.platform.model.record.ServiceAddressRecord;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
-import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.kafka.autoconfigure.KafkaProperties;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Scope;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.io.ClassPathResource;
@@ -56,23 +60,16 @@ import java.util.Map;
 @ImportGrpcClients(target = "history-service", types = HistoryServiceGrpc.HistoryServiceBlockingStub.class)
 public class AnalysisServiceConfig {
 
+    public static final String SCOPE_PROTOTYPE_NAME = "prototype";
+
     private final DiscoveryClient discoveryClient;
     private final KafkaProperties kafkaProperties;
     private final ConfigurableEnvironment environment;
-
-    @Value("${spring.kafka.service-name}")
-    String kafkaServiceName;
-    @Value("${spring.grpc.client.channel.history-service.service-name}")
-    String historyServiceName;
-    @Value("${spring.grpc.client.channel.history-service.service-port}")
-    String historyServiceGrpcPort;
-    @Value("${spring.kafka.streams.pipeline.name.aggregation-processor.interval}")
-    Integer aggregationSecondsPerInterval;
-
+    private final AnalysisInfrastructureProperties props;
 
     @Bean
     public TelemetryPersistentService telemetryPersistentService(TelemetryPersistenceRepository telemetryRepository) {
-        return new TelemetryStatePersister(telemetryRepository, aggregationSecondsPerInterval);
+        return new TelemetryStatePersister(telemetryRepository, props);
     }
 
     @Bean
@@ -89,31 +86,47 @@ public class AnalysisServiceConfig {
     @Bean
     public TelemetryPersistenceRepository telemetryPersistenceRepository(ReactiveStringRedisTemplate reactiveStringRedisTemplate,
                                                                          RedisTemplate<String, byte[]> protobufRedisTemplate,
-                                                                         RedisScript<String> saveHistoricalGridScript,
-                                                                         @NonNull @Value("${spring.redis.records.ttl}") Long redisCacheTtlInterval) {
-        return new TelemetryPersistenceRepositoryAdapter(reactiveStringRedisTemplate, protobufRedisTemplate, saveHistoricalGridScript, redisCacheTtlInterval);
+                                                                         RedisScript<String> saveHistoricalGridScript) {
+        return new TelemetryPersistenceRepositoryAdapter(reactiveStringRedisTemplate, protobufRedisTemplate,
+                saveHistoricalGridScript, props);
     }
 
     @Bean
     public TelemetryQueryRepository telemetryQueryRepository(RedisTemplate<String, byte[]> protobufRedisTemplate,
                                                              TelemetryQueryArchive telemetryQueryArchive,
-                                                             RedisScript<List<byte[]>> queryHistoricalGridScript) {
-        return new TelemetryQueryRepositoryAdapter(queryHistoricalGridScript, protobufRedisTemplate, telemetryQueryArchive, aggregationSecondsPerInterval);
+                                                             RedisScript<List<byte[]>> queryHistoricalGridScript,
+                                                             TelemetryPersistenceRepository telemetryPersistenceRepository) {
+        return new TelemetryQueryRepositoryAdapter(telemetryPersistenceRepository, protobufRedisTemplate, queryHistoricalGridScript,
+                telemetryQueryArchive, props);
     }
 
     @Bean
     public TelemetryQueryArchive telemetryQueryArchive(HistoryServiceGrpc.HistoryServiceBlockingStub historyServiceStub) {
-        return new TelemetryQueryGrpcAdapter(historyServiceStub, aggregationSecondsPerInterval);
+        return new TelemetryQueryGrpcAdapter(historyServiceStub, props);
+    }
+
+    @Bean
+    @Scope(SCOPE_PROTOTYPE_NAME)
+    public WeatherPacketStreamDeduplicationProcessor telemetryDeduplicationProcessor(
+            @Value("${spring.kafka.streams.pipeline.name.deduplication-processor.interval}") Long deduplicationInterval) {
+        return new WeatherPacketStreamDeduplicationProcessor(deduplicationInterval);
+    }
+
+    @Bean
+    @Scope(SCOPE_PROTOTYPE_NAME)
+    public WeatherPacketStreamAggregationProcessor telemetryAggregationProcessor(TelemetryPersistentService persistentService) {
+        return new WeatherPacketStreamAggregationProcessor(props, persistentService);
+    }
+
+    @Bean
+    public TelemetryAnalysisService telemetryAnalysisService(ObjectProvider<WeatherPacketStreamDeduplicationProcessor> dedupProvider,
+                                                             ObjectProvider<WeatherPacketStreamAggregationProcessor> aggProvider) {
+        return new TelemetryStreamsTopologyOrchestrator(dedupProvider, aggProvider, props);
     }
 
     @Bean
     public TelemetryQueryService telemetryQueryService(TelemetryQueryRepository telemetryQueryRepository) {
-        return new TelemetryStateQueryResolver(telemetryQueryRepository, aggregationSecondsPerInterval);
-    }
-
-    @Bean
-    public TelemetryAnalysisService telemetryAnalysisService(TelemetryPersistentService persistentService) {
-        return new TelemetryTopologyOrchestrator(persistentService);
+        return new TelemetryStateQueryResolver(telemetryQueryRepository);
     }
 
     @Bean(name = "kafkaStream")
@@ -171,6 +184,7 @@ public class AnalysisServiceConfig {
     }
 
     private void resolveKafkaBootstrapServers() {
+        String kafkaServiceName = props.getKafka().getServiceName();
         List<String> serviceAddress = PlatformCommonUtils.discoverServiceAddressesFromConsulServerByName(discoveryClient,
                 environment, kafkaServiceName);
         kafkaProperties.setBootstrapServers(serviceAddress);
@@ -178,9 +192,10 @@ public class AnalysisServiceConfig {
     }
 
     private void resolveHistoryGrpcServer() {
+        val historyService = props.getGrpc().getClient().getChannel().getHistoryService();
         ServiceAddressRecord registryRecord = PlatformCommonUtils.discoverServiceAddressFromConsulServerByName(
-                discoveryClient, environment, historyServiceName);
-        String staticGrpcTargetUri = "static://"+registryRecord.resolvedHost()+":"+historyServiceGrpcPort;
+                discoveryClient, environment, historyService.getServiceName());
+        String staticGrpcTargetUri = "static://"+registryRecord.resolvedHost()+":"+historyService.getServicePort();
         Map<String, Object> grpcDynamicProperties = Map.of("spring.grpc.client.channel.history-service.target", staticGrpcTargetUri);
         MapPropertySource dynamicSource = new MapPropertySource("grpcConsulDynamicOverrides", grpcDynamicProperties);
         environment.getPropertySources().addFirst(dynamicSource);

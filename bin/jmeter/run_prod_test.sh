@@ -11,7 +11,7 @@ PROJECT_ROOT="$(pwd)"
 
 CONTRACTS_VERSION="1.0.0-SNAPSHOT"
 
-INPUT_JMX="${1:-eco_extreme_stress.jmx}"
+INPUT_JMX="${1:-eco_production_simulation.jmx}"
 if [[ "$INPUT_JMX" = /* ]]; then
     JMX_FILE="$INPUT_JMX"
 else
@@ -45,7 +45,7 @@ ulimit -n 65535 2>/dev/null || echo "⚠️  Could not raise ulimit file descrip
 
 echo "🚀 [JVM Tuning] Initializing performance heap structure..."
 export HEAP="-Xms4g -Xmx4g -XX:MaxMetaspaceSize=512m"
-export JVM_ARGS="-XX:+UseG1GC -XX:MaxGCPauseMillis=100 -Dlog4j2.formatMsgNoLookups=true -Dhttp.maxConnections=1000 -Dhttp.keepAlive=false"
+export JVM_ARGS="-XX:+UseG1GC -XX:MaxGCPauseMillis=100 -Dlog4j2.formatMsgNoLookups=true -Dhttp.maxConnections=5000 -Dhttp.keepAlive=false"
 
 echo "📦 [Classpath Discovery] Building full transitive runtime dependency list..."
 DEPENDENCY_DIR="$PROJECT_ROOT/platform-common-contracts/target/jmeter-runtime-deps"
