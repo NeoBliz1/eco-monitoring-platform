@@ -1,6 +1,7 @@
 package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka;
 
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.DEDUPLICATE_ROCKS_DB;
+import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.SPATIAL_REPARTITION_STREAM;
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.ZERO_LOSS_ACCUMULATION_STORE;
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.service.AnalysisUtils.clampLatitude;
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.service.AnalysisUtils.clampLongitude;
@@ -51,13 +52,19 @@ public class TelemetryStreamsTopologyOrchestrator implements TelemetryAnalysisSe
 
     @Override
     public KStream<String, WeatherPacket> buildTopology(StreamsBuilder streamsBuilder) {
+        configureKafkaProtobufSerde();
+        registerTransactionalStateStores(streamsBuilder);
+        KStream<String, WeatherPacket> deduplicatedStream = runTransactionalDeduplicationPipeline(streamsBuilder);
+        KStream<String, WeatherPacket> repartitionedByLocationStream = repartitionStreamByExtractedLocation(deduplicatedStream);
+        KStream<String, WeatherMap> weatherMapStream = runTransactionalAggregationPipeline(repartitionedByLocationStream);
+        runHistoryPipelineWithNewWeatherMapSerdeConfig(weatherMapStream);
+        return deduplicatedStream;
+    }
+
+    private void configureKafkaProtobufSerde() {
         Map<String, String> serdeConfig = Map.of(SCHEMA_REGISTRY_URL, schemaRegistryUrl);
         weatherPacketSerde = new KafkaProtobufSerde<>(WeatherPacket.class);
         weatherPacketSerde.configure(serdeConfig, false);
-        registerTransactionalStateStores(streamsBuilder);
-        KStream<String, WeatherPacket> deduplicatedStream = runTransactionalDeduplicationPipeline(streamsBuilder);
-        runTransactionalAggregationStream(deduplicatedStream, serdeConfig);
-        return deduplicatedStream;
     }
 
     private void registerTransactionalStateStores(StreamsBuilder streamsBuilder) {
@@ -106,22 +113,28 @@ public class TelemetryStreamsTopologyOrchestrator implements TelemetryAnalysisSe
         return deduplicatedStream;
     }
 
-    private void runTransactionalAggregationStream(KStream<String, WeatherPacket> upstreamStream,
-                                                   Map<String, String> serdeConfig) {
-        KStream<String, WeatherPacket> repartitionedByLocationStream = upstreamStream.selectKey((key, packet) -> {
+    private KStream<String, WeatherPacket> repartitionStreamByExtractedLocation(KStream<String, WeatherPacket> upstreamStream) {
+        return upstreamStream.selectKey((key, packet) -> {
             Location location = packet.getLocation();
             double latGrid = clampLatitude(location.getLatitude());
             double lonGrid = clampLongitude(location.getLongitude());
             return getGeohash(latGrid, lonGrid);
-        }).repartition(Repartitioned.with(Serdes.String(), weatherPacketSerde).withName("spatial-repartition-stream"));
-        KStream<String, WeatherMap> historyStream = repartitionedByLocationStream.process(
+        }).repartition(Repartitioned.with(Serdes.String(), weatherPacketSerde).withName(SPATIAL_REPARTITION_STREAM));
+    }
+
+    private KStream<String, WeatherMap> runTransactionalAggregationPipeline(KStream<String, WeatherPacket> upstreamStream) {
+        return upstreamStream.process(
                 getStringWeatherPacketStringWeatherMapProcessorSupplier(),
                 ZERO_LOSS_ACCUMULATION_STORE
         );
+    }
+
+    private void runHistoryPipelineWithNewWeatherMapSerdeConfig(KStream<String, WeatherMap> upstreamStream) {
         Serde<WeatherMap> weatherMapSerde = new KafkaProtobufSerde<>(WeatherMap.class);
+        Map<String, String> serdeConfig = Map.of(SCHEMA_REGISTRY_URL, schemaRegistryUrl);
         weatherMapSerde.configure(serdeConfig, false);
         val kafkaAnalysisHistoryTopic = props.getKafka().getTopic().getWeatherHistory();
-        historyStream.to(
+        upstreamStream.to(
                 kafkaAnalysisHistoryTopic,
                 Produced.with(Serdes.String(), weatherMapSerde)
         );

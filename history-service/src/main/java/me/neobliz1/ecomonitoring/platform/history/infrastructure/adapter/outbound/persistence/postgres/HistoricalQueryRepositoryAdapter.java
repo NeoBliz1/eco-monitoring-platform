@@ -20,18 +20,19 @@ public class HistoricalQueryRepositoryAdapter implements HistoricalQueryReposito
     private final HistoricalWeatherGridCellJpaRepository weatherGridCellJpaRepository;
 
     @Override
-    public Optional<WeatherMapBucket> findByTimestampBucketAndIntervalMinutes(@NonNull SpatialBoxRequest request) {
+    public Optional<WeatherMapBucket> findWeatherBucketByTimestampAndIntervalMinutes(@NonNull SpatialBoxRequest request) {
         return weatherMapJpaRepository.findByTimestampBucketAndIntervalMinutes(request.getTimestampBucket(), request.getTimeIntervalInMinutes());
     }
 
     @Override
-    public List<WeatherGridCellLayer> findByBucketIdAndSpatialBox(UUID bucketId, @NonNull SpatialBoxRequest request) {
+    public List<WeatherGridCellLayer> findGridCellLayersByBucketIdAndSpatialBox(UUID bucketId, @NonNull SpatialBoxRequest request) {
         return weatherGridCellJpaRepository.findByBucketIdAndSpatialBox(bucketId, request.getMinLat(), request.getMaxLat(),
                 request.getMinLon(), request.getMaxLon());
     }
 
     @Override
     public List<WeatherMapBucket> findAllPastBuckets(@NonNull SpatialBoxRequest request) {
-        return weatherMapJpaRepository.findByTimestampBucketLessThanAndIntervalMinutesOrderByTimestampBucketDesc(request.getTimestampBucket(), request.getTimeIntervalInMinutes());
+        return weatherMapJpaRepository.findByTimestampBucketLessThanAndIntervalMinutesOrderByTimestampBucketDesc(request.getTimestampBucket(),
+                request.getTimeIntervalInMinutes());
     }
 }

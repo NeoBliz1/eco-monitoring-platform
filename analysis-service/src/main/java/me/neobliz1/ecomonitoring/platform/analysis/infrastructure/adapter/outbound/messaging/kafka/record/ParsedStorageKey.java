@@ -23,7 +23,9 @@ public record ParsedStorageKey(
         int sep = getGeohashSepPos(geohash);
         String computedLat = geohash.substring(0, sep);
         String computedLon = geohash.substring(sep+1);
-        validateComputedValues(spatialKey, lat, lon, computedSpatialKey, computedLat, computedLon);
+        validateComputedSpatialKey(spatialKey, computedSpatialKey);
+        validateComputedLat(lat, computedLat);
+        validateComputedLon(lon, computedLon);
         this.bucketTime = bucketTime;
         this.geohash = geohash;
         this.txId = txId;
@@ -32,15 +34,21 @@ public record ParsedStorageKey(
         this.lon = computedLon;
     }
 
-    private static void validateComputedValues(String spatialKey, String lat, String lon, String computedSpatialKey, String computedLat, String computedLon) {
-        if(spatialKey!=null && !spatialKey.equals(computedSpatialKey)) {
-            throw new IllegalArgumentException("Provided spatialKey does not match computed value");
+    private static void validateComputedLon(String lon, String computedLon) {
+        if(lon!=null && !lon.equals(computedLon)) {
+            throw new IllegalArgumentException("Provided lon does not match computed value");
         }
+    }
+
+    private static void validateComputedLat(String lat, String computedLat) {
         if(lat!=null && !lat.equals(computedLat)) {
             throw new IllegalArgumentException("Provided lat does not match computed value");
         }
-        if(lon!=null && !lon.equals(computedLon)) {
-            throw new IllegalArgumentException("Provided lon does not match computed value");
+    }
+
+    private static void validateComputedSpatialKey(String spatialKey, String computedSpatialKey) {
+        if(spatialKey!=null && !spatialKey.equals(computedSpatialKey)) {
+            throw new IllegalArgumentException("Provided spatialKey does not match computed value");
         }
     }
 

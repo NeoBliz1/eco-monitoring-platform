@@ -2,6 +2,8 @@ package me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter;
 
 import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.BUCKETS_GLOBAL_REGION;
 import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.QUERIES_GLOBAL_REGION;
+import static me.neobliz1.ecomonitoring.platform.history.domain.port.service.HistoricalUtils.getBucketIdFromWeatherMap;
+import static me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils.getWeatherMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -10,7 +12,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import me.neobliz1.ecomonitoring.platform.history.domain.model.dto.WeatherMapBucketCacheDto;
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherGridCellLayer;
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherMapBucket;
-import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalPersistenceRepositoryAdapter;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 import me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils;
 import org.junit.jupiter.api.RepeatedTest;
@@ -32,8 +33,8 @@ class HistoricalL1CacheLifecycleIT extends IntegrationTestSupport {
 
     @Test
     void shouldPersistDataInPostgresAndPopulateL1Cache_whenCacheAndDatabaseAreCompletelyCold() {
-        WeatherMap weatherMap = WeatherTestUtils.getWeatherMap();
-        UUID calculatedId = HistoricalPersistenceRepositoryAdapter.getBucketId(weatherMap);
+        WeatherMap weatherMap = getWeatherMap();
+        UUID calculatedId = getBucketIdFromWeatherMap(weatherMap);
         Cache springCache = springL1CacheManager.getCache(BUCKETS_GLOBAL_REGION);
         assertNotNull(springCache);
 
@@ -53,8 +54,8 @@ class HistoricalL1CacheLifecycleIT extends IntegrationTestSupport {
 
     @Test
     void shouldReadDirectlyFromL1CacheAndSkipDatabaseBucketFetch_whenCacheHitOccurs() {
-        WeatherMap weatherMap = WeatherTestUtils.getWeatherMap();
-        UUID calculatedId = HistoricalPersistenceRepositoryAdapter.getBucketId(weatherMap);
+        WeatherMap weatherMap = getWeatherMap();
+        UUID calculatedId = getBucketIdFromWeatherMap(weatherMap);
         WeatherMapBucket bucket = new WeatherMapBucket();
         bucket.setId(calculatedId);
         bucket.setTimestampBucket(weatherMap.getTimestampBucket());
@@ -62,7 +63,8 @@ class HistoricalL1CacheLifecycleIT extends IntegrationTestSupport {
         queryJpaRepositoryAdapter.saveAndFlush(bucket);
         Cache springCache = springL1CacheManager.getCache(BUCKETS_GLOBAL_REGION);
         assertNotNull(springCache);
-        WeatherMapBucketCacheDto directDto = new WeatherMapBucketCacheDto(calculatedId, weatherMap.getTimestampBucket(), weatherMap.getIntervalMinutes(), 0);
+        WeatherMapBucketCacheDto directDto = new WeatherMapBucketCacheDto(calculatedId, weatherMap.getTimestampBucket(),
+                weatherMap.getIntervalMinutes(), 0);
         springCache.put(calculatedId, directDto);
 
         adapter.persistTelemetryRecord(weatherMap);
@@ -74,8 +76,8 @@ class HistoricalL1CacheLifecycleIT extends IntegrationTestSupport {
 
     @Test
     void shouldClearQueriesCacheRegion_whenIncomingTelemetryModifiesAnExistingBucketRecord() {
-        WeatherMap weatherMap = WeatherTestUtils.getWeatherMap();
-        UUID calculatedId = HistoricalPersistenceRepositoryAdapter.getBucketId(weatherMap);
+        WeatherMap weatherMap = getWeatherMap();
+        UUID calculatedId = getBucketIdFromWeatherMap(weatherMap);
         WeatherMapBucket bucket = new WeatherMapBucket();
         bucket.setId(calculatedId);
         bucket.setTimestampBucket(weatherMap.getTimestampBucket());
@@ -95,7 +97,7 @@ class HistoricalL1CacheLifecycleIT extends IntegrationTestSupport {
         int threadCount = 6;
         long sharedTimestampBucket = Instant.now().toEpochMilli();
         int intervalMinutes = 10;
-        UUID expectedBucketId = HistoricalPersistenceRepositoryAdapter.getBucketId(
+        UUID expectedBucketId = getBucketIdFromWeatherMap(
                 WeatherTestUtils.getCustomWeatherMap(sharedTimestampBucket, intervalMinutes, "0.0#0.0", 20.0f)
         );
         List<Future<?>> futures;

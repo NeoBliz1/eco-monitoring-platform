@@ -218,7 +218,7 @@ public class TelemetryQueryRepositoryAdapter implements TelemetryQueryRepository
             weatherMap.getGridCellsMap().forEach((geohash, gridCellLayers) -> {
                 try {
                     ParsedStorageKey parsedKey = new ParsedStorageKey(String.valueOf(weatherMap.getTimestampBucket()), geohash, null);
-                    telemetryPersistenceRepository.saveHistoricalGridCell(parsedKey.spatialKey(), gridCellLayers.toByteArray());
+                    telemetryPersistenceRepository.saveHistoricalGridCellLayer(parsedKey.spatialKey(), gridCellLayers.toByteArray());
                 } catch(Exception e) {
                     log.warn("Failed to repopulate Redis cache for geohash index [{}]: {}", geohash, e.getMessage());
                 }

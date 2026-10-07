@@ -11,9 +11,9 @@ import java.util.UUID;
 
 public interface HistoricalQueryRepository {
 
-    Optional<WeatherMapBucket> findByTimestampBucketAndIntervalMinutes(@NonNull SpatialBoxRequest request);
+    Optional<WeatherMapBucket> findWeatherBucketByTimestampAndIntervalMinutes(@NonNull SpatialBoxRequest request);
 
-    List<WeatherGridCellLayer> findByBucketIdAndSpatialBox(UUID bucketId, @NonNull SpatialBoxRequest request);
+    List<WeatherGridCellLayer> findGridCellLayersByBucketIdAndSpatialBox(UUID bucketId, @NonNull SpatialBoxRequest request);
 
     List<WeatherMapBucket> findAllPastBuckets(@NonNull SpatialBoxRequest request);
 }

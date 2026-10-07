@@ -5,6 +5,7 @@ import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstan
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.LOCAL_PROFILE;
 import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.BUCKETS_GLOBAL_REGION;
 import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.GRID_CELL_LAYERS_L2_REGION;
+import static me.neobliz1.ecomonitoring.platform.history.domain.port.service.HistoricalUtils.getBucketIdFromWeatherMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -12,7 +13,6 @@ import static org.springframework.transaction.TransactionDefinition.PROPAGATION_
 
 import jakarta.persistence.EntityManagerFactory;
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherMapBucket;
-import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalPersistenceRepositoryAdapter;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 import me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils;
 import org.hibernate.SessionFactory;
@@ -58,7 +58,7 @@ public class HistoricalQueryCountLifecycleIT extends IntegrationTestSupport {
     @Test
     void shouldMakeExactlyFourDatabasePreparedStatements_whenL1AndL2CachesAreCompletelyColdAndBucketHasMultipleLayers() {
         WeatherMap weatherMap = WeatherTestUtils.getWeatherMapWithNLayers(100);
-        UUID calculatedId = HistoricalPersistenceRepositoryAdapter.getBucketId(weatherMap);
+        UUID calculatedId = getBucketIdFromWeatherMap(weatherMap);
         Cache springCache = springL1CacheManager.getCache(BUCKETS_GLOBAL_REGION);
         assertNotNull(springCache);
         springCache.evict(calculatedId);
@@ -74,7 +74,7 @@ public class HistoricalQueryCountLifecycleIT extends IntegrationTestSupport {
     @Test
     void shouldMakeExactlyTwoDatabasePreparedStatements_whenL1CacheHitOnBucketButCellsMustBeLoadedFromDatabase() {
         WeatherMap weatherMap = WeatherTestUtils.getWeatherMap();
-        UUID calculatedId = HistoricalPersistenceRepositoryAdapter.getBucketId(weatherMap);
+        UUID calculatedId = getBucketIdFromWeatherMap(weatherMap);
         transactionTemplate.setPropagationBehavior(PROPAGATION_REQUIRES_NEW);
         transactionTemplate.executeWithoutResult(status -> {
             WeatherMapBucket bucket = new WeatherMapBucket();
@@ -95,7 +95,7 @@ public class HistoricalQueryCountLifecycleIT extends IntegrationTestSupport {
     @Test
     void shouldMakeExactlyTwoDatabasePreparedStatements_whenL2CacheHitOnBucketButCellsMustBeLoadedFromDatabase() {
         WeatherMap weatherMap = WeatherTestUtils.getWeatherMap();
-        UUID calculatedId = HistoricalPersistenceRepositoryAdapter.getBucketId(weatherMap);
+        UUID calculatedId = getBucketIdFromWeatherMap(weatherMap);
 
         adapter.persistTelemetryRecord(weatherMap);
 
@@ -117,7 +117,7 @@ public class HistoricalQueryCountLifecycleIT extends IntegrationTestSupport {
     @Test
     void shouldPopulateBucketsRegionInL2Cache_whenBucketIsPersisted() {
         WeatherMap weatherMap = WeatherTestUtils.getWeatherMap();
-        UUID calculatedId = HistoricalPersistenceRepositoryAdapter.getBucketId(weatherMap);
+        UUID calculatedId = getBucketIdFromWeatherMap(weatherMap);
         Cache springCache = springL1CacheManager.getCache(BUCKETS_GLOBAL_REGION);
         assertNotNull(springCache);
         assertNull(springCache.get(calculatedId));
@@ -131,7 +131,7 @@ public class HistoricalQueryCountLifecycleIT extends IntegrationTestSupport {
     @Test
     void shouldPopulateMetricsRegionInL2Cache_whenBucketIsPersisted() {
         WeatherMap weatherMap = WeatherTestUtils.getWeatherMap();
-        UUID calculatedId = HistoricalPersistenceRepositoryAdapter.getBucketId(weatherMap);
+        UUID calculatedId = getBucketIdFromWeatherMap(weatherMap);
         Cache springCache = springL1CacheManager.getCache(BUCKETS_GLOBAL_REGION);
         assertNotNull(springCache);
         assertNull(springCache.get(calculatedId));
@@ -145,7 +145,7 @@ public class HistoricalQueryCountLifecycleIT extends IntegrationTestSupport {
     @Test
     void shouldReturnNullFromL2Cache_whenBucketIsEvictedFromBothLevels() {
         WeatherMap weatherMap = WeatherTestUtils.getWeatherMap();
-        UUID calculatedId = HistoricalPersistenceRepositoryAdapter.getBucketId(weatherMap);
+        UUID calculatedId = getBucketIdFromWeatherMap(weatherMap);
         adapter.persistTelemetryRecord(weatherMap);
         SessionFactoryImplementor sfi = sessionFactory.unwrap(SessionFactoryImplementor.class);
         EntityPersister persister = sfi.getRuntimeMetamodels()

@@ -19,6 +19,7 @@ import me.neobliz1.ecomonitoring.platform.history.domain.model.dto.WeatherMapBuc
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherMapBucket;
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherTelemetryDlqRecord;
 import me.neobliz1.ecomonitoring.platform.history.domain.port.inbound.HistoricalDataConvertService;
+import me.neobliz1.ecomonitoring.platform.history.domain.port.service.HistoricalUtils;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherGridCellJpaRepository;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherMapJpaRepository;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherTelemetryDltJpaRepository;
@@ -47,7 +48,7 @@ class HistoricalPersistenceRepositoryAdapterTest {
     private static final UUID EXPECTED_BUCKET_ID =
             UUID.nameUUIDFromBytes((TEST_TIMESTAMP+String.valueOf(TEST_INTERVAL)).getBytes());
     @Mock
-    private WeatherMapBucketCreationService weatherMapBucketCreationService;
+    private WeatherMapBucketPersistenceAdapter weatherMapBucketPersistenceAdapter;
     @Mock
     private HistoricalWeatherTelemetryDltJpaRepository dltJpaRepository;
     @Mock
@@ -72,12 +73,12 @@ class HistoricalPersistenceRepositoryAdapterTest {
         WeatherMap weatherMap = createWeatherMapWithPartiallyMocks();
         setupCacheManagers();
         WeatherMapBucket savedBucket = createBaseBucket(0L);
-        doReturn(savedBucket).when(weatherMapBucketCreationService).saveWeatherMapBucket(any(WeatherMap.class));
+        doReturn(savedBucket).when(weatherMapBucketPersistenceAdapter).saveWeatherMapBucket(any(WeatherMap.class));
         ArgumentCaptor<WeatherMapBucketCacheDto> dtoCaptor = ArgumentCaptor.forClass(WeatherMapBucketCacheDto.class);
 
         adapter.persistTelemetryRecord(weatherMap);
 
-        verify(weatherMapBucketCreationService, times(1)).saveWeatherMapBucket(any(WeatherMap.class));
+        verify(weatherMapBucketPersistenceAdapter, times(1)).saveWeatherMapBucket(any(WeatherMap.class));
         verify(bucketsCache).put(eq(EXPECTED_BUCKET_ID), dtoCaptor.capture());
     }
 
@@ -86,11 +87,11 @@ class HistoricalPersistenceRepositoryAdapterTest {
         WeatherMap weatherMap = createWeatherMapWithPartiallyMocks();
         setupCacheManagers();
         WeatherMapBucket existingDbBucket = createBaseBucket(1L);
-        doReturn(existingDbBucket).when(weatherMapBucketCreationService).saveWeatherMapBucket(any(WeatherMap.class));
+        doReturn(existingDbBucket).when(weatherMapBucketPersistenceAdapter).saveWeatherMapBucket(any(WeatherMap.class));
 
         adapter.persistTelemetryRecord(weatherMap);
 
-        verify(weatherMapBucketCreationService, times(1)).saveWeatherMapBucket(any(WeatherMap.class));
+        verify(weatherMapBucketPersistenceAdapter, times(1)).saveWeatherMapBucket(any(WeatherMap.class));
         verify(weatherMapConverter).mergeTelemetryInBatch(weatherMap, existingDbBucket);
         verify(bucketsCache).put(eq(EXPECTED_BUCKET_ID), any(WeatherMapBucketCacheDto.class));
     }
@@ -131,7 +132,7 @@ class HistoricalPersistenceRepositoryAdapterTest {
         when(weatherMap.getTimestampBucket()).thenReturn(TEST_TIMESTAMP);
         when(weatherMap.getIntervalMinutes()).thenReturn(TEST_INTERVAL);
 
-        UUID generatedId = HistoricalPersistenceRepositoryAdapter.getBucketId(weatherMap);
+        UUID generatedId = HistoricalUtils.getBucketIdFromWeatherMap(weatherMap);
 
         assertNotNull(generatedId);
         assertEquals(UUID.nameUUIDFromBytes("170000000015".getBytes()), generatedId);

@@ -121,7 +121,7 @@ class TelemetryRedisAdaptersIT {
             TelemetryPersistenceRepositoryAdapter persistenceRepository = context.getBean(TelemetryPersistenceRepositoryAdapter.class);
             TelemetryQueryRepositoryAdapter queryRepository = context.getBean(TelemetryQueryRepositoryAdapter.class);
 
-            persistenceRepository.saveHistoricalGridCell(GEOHASH, EXPECTED_PAYLOAD);
+            persistenceRepository.saveHistoricalGridCellLayer(GEOHASH, EXPECTED_PAYLOAD);
             Map<String, byte[]> resultsMatrix = queryRepository.findFilteredGridDataBySpatialBoxInRedis(
                     getQuery(ACTIVE_BUCKET_FLOOR));
 
@@ -194,7 +194,7 @@ class TelemetryRedisAdaptersIT {
             TelemetryPersistenceRepositoryAdapter persistenceRepository = context.getBean(TelemetryPersistenceRepositoryAdapter.class);
             TelemetryQueryRepositoryAdapter queryRepository = context.getBean(TelemetryQueryRepositoryAdapter.class);
             RedisTemplate<String, byte[]> template = context.getBean("protobufRedisTemplate", RedisTemplate.class);
-            persistenceRepository.saveHistoricalGridCell(GEOHASH, EXPECTED_PAYLOAD);
+            persistenceRepository.saveHistoricalGridCellLayer(GEOHASH, EXPECTED_PAYLOAD);
             String spatialIndexKey = AnalysisUtils.addSpatialIndexPrefixToTargetFormattedTimestamp(ACTIVE_BUCKET_FLOOR);
             Long initialCellTtl = template.getExpire(GEOHASH);
             Long initialIndexTtl = template.getExpire(spatialIndexKey);
@@ -220,7 +220,7 @@ class TelemetryRedisAdaptersIT {
                 .run(context -> {
                     TelemetryPersistenceRepositoryAdapter persistenceRepository = context.getBean(TelemetryPersistenceRepositoryAdapter.class);
                     TelemetryQueryRepositoryAdapter queryRepository = context.getBean(TelemetryQueryRepositoryAdapter.class);
-                    persistenceRepository.saveHistoricalGridCell(GEOHASH, EXPECTED_PAYLOAD);
+                    persistenceRepository.saveHistoricalGridCellLayer(GEOHASH, EXPECTED_PAYLOAD);
 
                     Awaitility.await()
                             .atMost(Duration.ofSeconds(3))

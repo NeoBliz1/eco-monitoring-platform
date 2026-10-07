@@ -258,7 +258,7 @@ public abstract class IntegrationTestSupport {
                     .setTimeIntervalInMinutes(INTERVAL_MINUTES)
                     .build();
             Optional<WeatherMapBucket> shallowBucket = queryRepositoryAdapter
-                    .findByTimestampBucketAndIntervalMinutes(spatialBoxRequest);
+                    .findWeatherBucketByTimestampAndIntervalMinutes(spatialBoxRequest);
             assertTrue(shallowBucket.isPresent());
             UUID bucketId = shallowBucket.get().getId();
             return entityManager.find(

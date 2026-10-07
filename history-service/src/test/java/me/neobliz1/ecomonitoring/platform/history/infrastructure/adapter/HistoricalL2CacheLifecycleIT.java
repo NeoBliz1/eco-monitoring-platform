@@ -5,6 +5,7 @@ import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstan
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.LOCAL_PROFILE;
 import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.BUCKETS_GLOBAL_REGION;
 import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.GRID_CELL_LAYERS_L2_REGION;
+import static me.neobliz1.ecomonitoring.platform.history.domain.port.service.HistoricalUtils.getBucketIdFromWeatherMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -12,7 +13,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import jakarta.persistence.EntityManagerFactory;
 import me.neobliz1.ecomonitoring.platform.history.domain.model.entity.WeatherMapBucket;
-import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalPersistenceRepositoryAdapter;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.config.HistoryInfrastructureProperties;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.map.WeatherMap;
 import me.neobliz1.ecomonitoring.platform.test.common.util.WeatherTestUtils;
@@ -170,7 +170,7 @@ public class HistoricalL2CacheLifecycleIT extends IntegrationTestSupport {
     @Test
     void shouldEvictOldestBucketFromLru_whenMoreBucketsThanMaxArePersisted() {
         List<WeatherMap> weatherMapList = getWeatherMapsWithDistinctBuckets();
-        UUID oldestBucketId = HistoricalPersistenceRepositoryAdapter.getBucketId(weatherMapList.getFirst());
+        UUID oldestBucketId = getBucketIdFromWeatherMap(weatherMapList.getFirst());
 
         for(WeatherMap weatherMap : weatherMapList) {
             adapter.persistTelemetryRecord(weatherMap);
@@ -196,7 +196,7 @@ public class HistoricalL2CacheLifecycleIT extends IntegrationTestSupport {
     void shouldEvictL2CacheRecordNativelyFromRedis_whenBucketRecordExpiryThresholdIsReached() {
         List<WeatherMap> weatherMapList = getWeatherMaps();
         WeatherMap targetMap = weatherMapList.getFirst();
-        UUID targetId = HistoricalPersistenceRepositoryAdapter.getBucketId(targetMap);
+        UUID targetId = getBucketIdFromWeatherMap(targetMap);
 
         adapter.persistTelemetryRecord(targetMap);
         SessionFactoryImplementor sfi = sessionFactory.unwrap(SessionFactoryImplementor.class);

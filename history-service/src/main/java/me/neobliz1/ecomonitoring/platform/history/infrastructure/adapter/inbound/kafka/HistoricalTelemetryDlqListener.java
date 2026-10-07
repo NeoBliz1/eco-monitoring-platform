@@ -20,31 +20,6 @@ public class HistoricalTelemetryDlqListener {
 
     private final HistoricalPersistenceRepository historicalPersistenceRepository;
 
-    private static void logDlqRecordAsError(@NonNull ConsumerRecord<String, WeatherMap> record, @Nullable String exceptionMessage) {
-        long timestampBucket;
-        int gridCellsCount;
-        WeatherMap deadPayload = record.value();
-        if(deadPayload!=null) {
-            timestampBucket = deadPayload.getTimestampBucket();
-            gridCellsCount = deadPayload.getGridCellsCount();
-        } else {
-            timestampBucket = 0L;
-            gridCellsCount = 0;
-        }
-        String dlqStatMsg = String.format("Timestamp Bucket: %s, Grid Cells Count: %d", timestampBucket, gridCellsCount);
-        log.error("""
-                        Message exiled to Dead Letter Topic!
-                        Original Location -> Topic: {}, Partition: {}, Offset: {}
-                        Crash Cause       -> {}
-                        Payload Content   -> {}""",
-                record.topic(),
-                record.partition(),
-                record.offset(),
-                exceptionMessage,
-                dlqStatMsg
-        );
-    }
-
     @KafkaListener(
             topics = "${spring.kafka.topic.weather-history}.DLT",
             groupId = "${spring.kafka.consumer.group-id}-dlq-group"
@@ -63,6 +38,24 @@ public class HistoricalTelemetryDlqListener {
                 deadPayload==null?null:deadPayload.toByteArray()
         );
         tryToPersistDlqRecordToDb(dlqRecord);
+    }
+
+    private void logDlqRecordAsError(@NonNull ConsumerRecord<String, WeatherMap> record, @Nullable String exceptionMessage) {
+        WeatherMap deadPayload = record.value();
+        long timestampBucket = deadPayload==null?0L:deadPayload.getTimestampBucket();
+        int gridCellsCount = deadPayload==null?0:deadPayload.getGridCellsCount();
+        String dlqStatMsg = String.format("Timestamp Bucket: %s, Grid Cells Count: %d", timestampBucket, gridCellsCount);
+        log.error("""
+                        Message exiled to Dead Letter Topic!
+                        Original Location -> Topic: {}, Partition: {}, Offset: {}
+                        Crash Cause       -> {}
+                        Payload Content   -> {}""",
+                record.topic(),
+                record.partition(),
+                record.offset(),
+                exceptionMessage,
+                dlqStatMsg
+        );
     }
 
     private void tryToPersistDlqRecordToDb(@NonNull WeatherTelemetryDlqRecord dltRecord) {

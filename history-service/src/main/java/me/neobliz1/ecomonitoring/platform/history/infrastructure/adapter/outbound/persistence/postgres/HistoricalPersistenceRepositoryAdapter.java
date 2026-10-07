@@ -1,7 +1,8 @@
 package me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres;
 
-import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.BUCKETS_GLOBAL_REGION;
 import static me.neobliz1.ecomonitoring.platform.history.domain.model.constant.HistoricalCacheConstants.QUERIES_GLOBAL_REGION;
+import static me.neobliz1.ecomonitoring.platform.history.domain.port.service.HistoricalUtils.getBucketIdFromWeatherMap;
+import static me.neobliz1.ecomonitoring.platform.history.domain.port.service.HistoricalUtils.getL1BucketCache;
 import static org.springframework.transaction.annotation.Propagation.REQUIRES_NEW;
 
 import io.github.neobliz1.validproto.annotation.ValidProto;
@@ -33,7 +34,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class HistoricalPersistenceRepositoryAdapter implements HistoricalPersistenceRepository {
 
-    private final WeatherMapBucketCreationService weatherMapBucketCreationService;
+    private final WeatherMapBucketPersistenceAdapter weatherMapBucketPersistenceAdapter;
     private final HistoricalWeatherTelemetryDltJpaRepository dltJpaRepository;
     private final HistoricalDataConvertService weatherMapConverter;
     private final HistoricalWeatherMapJpaRepository jpaRepository;
@@ -41,17 +42,13 @@ public class HistoricalPersistenceRepositoryAdapter implements HistoricalPersist
     private final HistoricalTxIdRepositoryAdapter txIdAdapter;
     private final CacheManager springL1CacheManager;
 
-    public static @NonNull UUID getBucketId(@NonNull WeatherMap weatherMap) {
-        return UUID.nameUUIDFromBytes((String.valueOf(weatherMap.getTimestampBucket())+weatherMap.getIntervalMinutes()).getBytes());
-    }
-
     @Override
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public void persistTelemetryRecord(@NonNull @ValidProto WeatherMap weatherMap) {
         checkIfAtLeastOneGridCellLayerExists(weatherMap);
         WeatherMapBucket weatherMapBucket = getWeatherMapBucket(weatherMap).orElseGet(() -> persistWeatherMapBucket(weatherMap));
-        UUID bucketId = getBucketId(weatherMap);
-        WeatherMapBucketCacheDto cachedDto = getL1BucketCache().get(bucketId, WeatherMapBucketCacheDto.class);
+        UUID bucketId = getBucketIdFromWeatherMap(weatherMap);
+        WeatherMapBucketCacheDto cachedDto = getL1BucketCache(springL1CacheManager).get(bucketId, WeatherMapBucketCacheDto.class);
         if(cachedDto==null) {
             putSavedBucketToCacheByUuid(weatherMapBucket);
         }
@@ -70,9 +67,9 @@ public class HistoricalPersistenceRepositoryAdapter implements HistoricalPersist
     }
 
     private Optional<WeatherMapBucket> getWeatherMapBucket(@NonNull WeatherMap weatherMap) {
-        UUID bucketId = getBucketId(weatherMap);
+        UUID bucketId = getBucketIdFromWeatherMap(weatherMap);
         Optional<WeatherMapBucket> optionalBucket;
-        WeatherMapBucketCacheDto cachedDto = getL1BucketCache().get(bucketId, WeatherMapBucketCacheDto.class);
+        WeatherMapBucketCacheDto cachedDto = getL1BucketCache(springL1CacheManager).get(bucketId, WeatherMapBucketCacheDto.class);
         if(cachedDto==null) {
             optionalBucket = jpaRepository.findById(bucketId);
         } else {
@@ -82,9 +79,9 @@ public class HistoricalPersistenceRepositoryAdapter implements HistoricalPersist
     }
 
     private WeatherMapBucket persistWeatherMapBucket(@NonNull WeatherMap weatherMap) {
-        UUID bucketId = getBucketId(weatherMap);
+        UUID bucketId = getBucketIdFromWeatherMap(weatherMap);
         try {
-            return weatherMapBucketCreationService.saveWeatherMapBucket(weatherMap);
+            return weatherMapBucketPersistenceAdapter.saveWeatherMapBucket(weatherMap);
         } catch(DataIntegrityViolationException e) {
             if(log.isDebugEnabled()) {
                 log.debug("Collision hit during bucket creation for ID {}. Recovering from winner thread.", bucketId);
@@ -102,7 +99,7 @@ public class HistoricalPersistenceRepositoryAdapter implements HistoricalPersist
                 savedBucket.getIntervalMinutes(),
                 savedBucket.getVersion()
         );
-        getL1BucketCache().put(bucketUuid, dtoToCache);
+        getL1BucketCache(springL1CacheManager).put(bucketUuid, dtoToCache);
     }
 
     private @NonNull Cache getL1QueryCache() {
@@ -111,14 +108,6 @@ public class HistoricalPersistenceRepositoryAdapter implements HistoricalPersist
             throw new L1CacheNotAvailableException(QUERIES_GLOBAL_REGION);
         }
         return grpcQueryCache;
-    }
-
-    private @NonNull Cache getL1BucketCache() {
-        Cache springCache = springL1CacheManager.getCache(BUCKETS_GLOBAL_REGION);
-        if(springCache==null) {
-            throw new L1CacheNotAvailableException(BUCKETS_GLOBAL_REGION);
-        }
-        return springCache;
     }
 
     private void persistTelemetryTxId(@NonNull WeatherMap weatherMap) {

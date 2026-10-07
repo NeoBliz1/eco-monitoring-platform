@@ -17,6 +17,7 @@ import lombok.val;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.port.outbound.TelemetryPersistentService;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.model.ExtractionMatrix;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.record.ParsedStorageKey;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.record.PortWeatherPacket;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.config.AnalysisInfrastructureProperties;
 import me.neobliz1.ecomonitoring.platform.common.util.PlatformContractsUtils;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.Location;
@@ -53,28 +54,6 @@ public class WeatherPacketStreamAggregationProcessor implements Processor<String
     private ProcessorContext<String, WeatherMap> context;
     private long lastStreamTime = Instant.now().toEpochMilli();
 
-    private static @NonNull ExtractionMatrix createExtractionMatrixFromAccumStorePackets(
-            @NonNull KeyValueIterator<String, WeatherPacket> accumStorePacketsByStorageKey) {
-        ExtractionMatrix extractionMatrix = ExtractionMatrix.empty();
-        val spatialWeatherPacketsByTimestampContainer = extractionMatrix.spatialWeatherPacketsByTimestampContainer();
-        List<String> keysToRemove = extractionMatrix.keysToRemove();
-        while(accumStorePacketsByStorageKey.hasNext()) {
-            KeyValue<String, WeatherPacket> entry = accumStorePacketsByStorageKey.next();
-            String key = entry.key;
-            ParsedStorageKey storageKey = parseAggKey(key);
-            long bucketTime = Long.parseLong(storageKey.bucketTime());
-            String spatialKey = storageKey.spatialKey();
-            if(log.isDebugEnabled()) {
-                log.debug("Flushing spatialKey {}", spatialKey);
-            }
-            spatialWeatherPacketsByTimestampContainer.computeIfAbsent(bucketTime, k -> new HashMap<>())
-                    .computeIfAbsent(spatialKey, k -> new ArrayList<>())
-                    .add(entry.value);
-            keysToRemove.add(key);
-        }
-        return extractionMatrix;
-    }
-
     @PostConstruct
     public void postConstructInit() {
         this.secondsPerInterval = getAggregationSecondsPerInterval(props);
@@ -109,7 +88,8 @@ public class WeatherPacketStreamAggregationProcessor implements Processor<String
         Location location = packet.getLocation();
         double latGrid = clampLatitude(location.getLatitude());
         double lonGrid = clampLongitude(location.getLongitude());
-        persistentService.updateRealTimeSlidingWindow(packet, latGrid, lonGrid);
+        PortWeatherPacket portWeatherPacket = new PortWeatherPacket(packet, latGrid, lonGrid);
+        persistentService.updateRealTimeSlidingWindow(portWeatherPacket);
     }
 
     private void flushAccumulatedWindows(long currentStreamTimeInMillis) {
@@ -134,19 +114,42 @@ public class WeatherPacketStreamAggregationProcessor implements Processor<String
                     extractionMatrix.spatialWeatherPacketsByTimestampContainer();
             if(!spatialWeatherPacketsByTimestampContainer.isEmpty()) {
                 WeatherPacketStreamAggregationProcessor proxy = (this.self!=null)?this.self:this;
-                proxy.executeForwardingAndCleanup(spatialWeatherPacketsByTimestampContainer, extractionMatrix.keysToRemove(),
-                        currentWindowFloor);
+                proxy.executeForwardingAndCleanup(extractionMatrix, currentWindowFloor);
+                cleanUpAccumStore(extractionMatrix.keysToRemove());
             }
         } catch(Exception e) {
             log.error("Failed to flush aggregation window {}, : {}", currentWindowFloor, e.getMessage(), e);
         }
     }
 
-    public void executeForwardingAndCleanup(Map<Long, Map<String, List<WeatherPacket>>> spatialWeatherPacketsByTimestampContainer,
-                                            List<String> keysToRemove,
-                                            long currentWindowFloor) {
-        persistentService.processAndComputeAggregatedHistory(spatialWeatherPacketsByTimestampContainer)
+    private @NonNull ExtractionMatrix createExtractionMatrixFromAccumStorePackets(
+            @NonNull KeyValueIterator<String, WeatherPacket> accumStorePacketsByStorageKey) {
+        ExtractionMatrix extractionMatrix = ExtractionMatrix.empty();
+        val spatialWeatherPacketsByTimestampContainer = extractionMatrix.spatialWeatherPacketsByTimestampContainer();
+        List<String> keysToRemove = extractionMatrix.keysToRemove();
+        while(accumStorePacketsByStorageKey.hasNext()) {
+            KeyValue<String, WeatherPacket> entry = accumStorePacketsByStorageKey.next();
+            String key = entry.key;
+            ParsedStorageKey storageKey = parseAggKey(key);
+            long bucketTime = Long.parseLong(storageKey.bucketTime());
+            String spatialKey = storageKey.spatialKey();
+            if(log.isDebugEnabled()) {
+                log.debug("Flushing spatialKey {}", spatialKey);
+            }
+            spatialWeatherPacketsByTimestampContainer.computeIfAbsent(bucketTime, k -> new HashMap<>())
+                    .computeIfAbsent(spatialKey, k -> new ArrayList<>())
+                    .add(entry.value);
+            keysToRemove.add(key);
+        }
+        return extractionMatrix;
+    }
+
+    public void executeForwardingAndCleanup(ExtractionMatrix extractionMatrix, long currentWindowFloor) {
+        persistentService.processAndComputeAggregatedHistory(extractionMatrix)
                 .forEach(record -> context.forward(new Record<>(record.key(), record.payload(), currentWindowFloor)));
+    }
+
+    private void cleanUpAccumStore(List<String> keysToRemove) {
         keysToRemove.forEach(accumStore::delete);
     }
 }

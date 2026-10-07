@@ -17,7 +17,7 @@ import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.inbound
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalPersistenceRepositoryAdapter;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalQueryRepositoryAdapter;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.HistoricalTxIdRepositoryAdapter;
-import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.WeatherMapBucketCreationService;
+import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.WeatherMapBucketPersistenceAdapter;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherGridCellJpaRepository;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherMapJpaRepository;
 import me.neobliz1.ecomonitoring.platform.history.infrastructure.adapter.outbound.persistence.postgres.jpa.HistoricalWeatherTelemetryDltJpaRepository;
@@ -68,8 +68,8 @@ public class HistoryServiceConfig {
     }
 
     @Bean
-    public WeatherMapBucketCreationService weatherMapBucketCreationService(HistoricalWeatherMapJpaRepository weatherMapJpaRepository) {
-        return new WeatherMapBucketCreationService(weatherMapJpaRepository);
+    public WeatherMapBucketPersistenceAdapter weatherMapBucketCreationService(HistoricalWeatherMapJpaRepository weatherMapJpaRepository) {
+        return new WeatherMapBucketPersistenceAdapter(weatherMapJpaRepository);
     }
 
     @Bean
@@ -77,9 +77,9 @@ public class HistoryServiceConfig {
                                                                            HistoricalDataConvertService weatherMapConverter,
                                                                            HistoricalWeatherMapJpaRepository weatherMapJpaRepository,
                                                                            HistoricalWeatherTelemetryDltJpaRepository dltJpaRepository,
-                                                                           WeatherMapBucketCreationService weatherMapBucketCreationService,
+                                                                           WeatherMapBucketPersistenceAdapter weatherMapBucketPersistenceAdapter,
                                                                            @Autowired(required = false) HistoricalTxIdRepositoryAdapter txIdAdapter) {
-        return new HistoricalPersistenceRepositoryAdapter(weatherMapBucketCreationService, dltJpaRepository, weatherMapConverter, weatherMapJpaRepository,
+        return new HistoricalPersistenceRepositoryAdapter(weatherMapBucketPersistenceAdapter, dltJpaRepository, weatherMapConverter, weatherMapJpaRepository,
                 txIdAdapter, springL1CacheManager);
     }
 

@@ -57,7 +57,7 @@ public class TelemetryPersistenceRepositoryAdapter implements TelemetryPersisten
     }
 
     @Override
-    public void saveHistoricalGridCell(@NonNull String spatialKey, byte @NonNull [] serializedLayers) {
+    public void saveHistoricalGridCellLayer(@NonNull String spatialKey, byte @NonNull [] serializedLayers) {
         ParsedStorageKey parsedSpatialKey = parseSpatialKey(spatialKey);
         byte[][] scriptArgs = parseArgsForStoreInRedis(parsedSpatialKey.bucketTime(), parsedSpatialKey, serializedLayers);
         protobufRedisTemplate.execute(

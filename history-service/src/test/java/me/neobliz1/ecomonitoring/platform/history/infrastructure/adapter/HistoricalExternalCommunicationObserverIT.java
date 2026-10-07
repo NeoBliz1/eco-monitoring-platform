@@ -50,9 +50,9 @@ class HistoricalExternalCommunicationObserverIT extends IntegrationTestSupport {
                 .pollInterval(Duration.ofMillis(500))
                 .untilAsserted(() -> {
                     boolean currWeatherMapIsPresent = queryRepositoryAdapter
-                            .findByTimestampBucketAndIntervalMinutes(currentRequest).isPresent();
+                            .findWeatherBucketByTimestampAndIntervalMinutes(currentRequest).isPresent();
                     boolean pastWeatherMapIsPresent = queryRepositoryAdapter
-                            .findByTimestampBucketAndIntervalMinutes(pastRequest).isPresent();
+                            .findWeatherBucketByTimestampAndIntervalMinutes(pastRequest).isPresent();
                     assertTrue(currWeatherMapIsPresent);
                     assertTrue(pastWeatherMapIsPresent);
                 });
@@ -90,9 +90,9 @@ class HistoricalExternalCommunicationObserverIT extends IntegrationTestSupport {
                 .pollInterval(Duration.ofMillis(500))
                 .untilAsserted(() -> {
                     boolean pastWeatherMapIsPresent = queryRepositoryAdapter
-                            .findByTimestampBucketAndIntervalMinutes(pastProbeRequest).isPresent();
+                            .findWeatherBucketByTimestampAndIntervalMinutes(pastProbeRequest).isPresent();
                     boolean futureWeatherMapIsPresent = queryRepositoryAdapter
-                            .findByTimestampBucketAndIntervalMinutes(futureProbeRequest).isPresent();
+                            .findWeatherBucketByTimestampAndIntervalMinutes(futureProbeRequest).isPresent();
                     assertTrue(pastWeatherMapIsPresent);
                     assertTrue(futureWeatherMapIsPresent);
                 });
@@ -121,7 +121,7 @@ class HistoricalExternalCommunicationObserverIT extends IntegrationTestSupport {
                 .atMost(Duration.ofMinutes(1))
                 .pollInterval(Duration.ofMillis(500))
                 .untilAsserted(() -> assertTrue(queryRepositoryAdapter
-                        .findByTimestampBucketAndIntervalMinutes(probe).isPresent()));
+                        .findWeatherBucketByTimestampAndIntervalMinutes(probe).isPresent()));
         Objects.requireNonNull(springL1CacheManager.getCache(BUCKETS_GLOBAL_REGION)).clear();
         Objects.requireNonNull(springL1CacheManager.getCache(QUERIES_GLOBAL_REGION)).clear();
         SpatialBoxRequest tightRequest = getSpatialBoxRequest(currentBucket, 50.0, 50.02, 30.0, 30.02);

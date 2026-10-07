@@ -41,35 +41,45 @@ public class TelemetryPayloadMapper {
         );
     }
 
-    public PushEventsRequest toPushRequest(@NonNull WeatherPacket packet) {
+    public @NonNull PushEventsRequest toPushRequest(@NonNull WeatherPacket packet) {
         byte[] verifiedConfluentBytes = serializeToConfluentProtobuf(packet);
+        vector.Value byteValue = buildRawBytesValue(verifiedConfluentBytes);
+        ValueMap fieldsMap = buildFieldsMap(byteValue);
+        Log vectorLog = buildVectorLog(fieldsMap);
+        return buildPushEventsRequest(vectorLog);
+    }
 
-        vector.Value byteValue = vector.Value.newBuilder()
-                .setRawBytes(ByteString.copyFrom(verifiedConfluentBytes))
+    private @NonNull vector.Value buildRawBytesValue(byte @NonNull [] rawBytes) {
+        return vector.Value.newBuilder()
+                .setRawBytes(ByteString.copyFrom(rawBytes))
                 .build();
+    }
 
-        ValueMap fieldsMap = ValueMap.newBuilder()
+    private @NonNull ValueMap buildFieldsMap(@NonNull vector.Value byteValue) {
+        return ValueMap.newBuilder()
                 .putFields(RAW_PROTOBUF_PACKET, byteValue)
                 .build();
+    }
 
+    private @NonNull Log buildVectorLog(@NonNull ValueMap fieldsMap) {
         vector.Value logMapValue = vector.Value.newBuilder()
                 .setMap(fieldsMap)
                 .build();
-
-        Log vectorLog = Log.newBuilder()
+        return Log.newBuilder()
                 .setValue(logMapValue)
                 .build();
+    }
 
+    private @NonNull PushEventsRequest buildPushEventsRequest(@NonNull Log vectorLog) {
         EventWrapper eventWrapper = EventWrapper.newBuilder()
                 .setLog(vectorLog)
                 .build();
-
         return PushEventsRequest.newBuilder()
                 .addEvents(eventWrapper)
                 .build();
     }
 
-    private byte[] serializeToConfluentProtobuf(WeatherPacket packet) {
+    private byte @NonNull [] serializeToConfluentProtobuf(@NonNull WeatherPacket packet) {
         Map<String, Object> serializerConfig = new HashMap<>();
         serializerConfig.put(SCHEMA_REGISTRY_URL, schemaRegistryUrl);
         try(KafkaProtobufSerializer<WeatherPacket> serializer = new KafkaProtobufSerializer<>(schemaRegistryClient)) {

@@ -2,9 +2,11 @@ package me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbo
 
 import static me.neobliz1.ecomonitoring.platform.analysis.domain.model.AnalysisConstants.DEDUPLICATE_ROCKS_DB;
 
+import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.config.AnalysisInfrastructureProperties;
 import me.neobliz1.ecomonitoring.platform.common.util.PlatformContractsUtils;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import org.apache.kafka.streams.processor.api.Processor;
@@ -17,10 +19,17 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 @RequiredArgsConstructor
 public class WeatherPacketStreamDeduplicationProcessor implements Processor<String, WeatherPacket, String, WeatherPacket> {
 
+    private final AnalysisInfrastructureProperties props;
+
     @Getter
-    private final long deduplicationInterval;
+    private long deduplicationInterval;
     private WindowStore<String, String> deduplicateStore;
     private ProcessorContext<String, WeatherPacket> context;
+
+    @PostConstruct
+    public void postConstructInit() {
+        this.deduplicationInterval = props.getKafka().getStreams().getPipeline().getName().getDeduplicationProcessor().getInterval();
+    }
 
     @Override
     public void init(ProcessorContext<String, WeatherPacket> context) {

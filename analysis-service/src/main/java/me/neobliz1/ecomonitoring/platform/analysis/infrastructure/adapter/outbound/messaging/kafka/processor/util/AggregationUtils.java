@@ -9,6 +9,8 @@ import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanContext;
 import lombok.experimental.UtilityClass;
 import me.neobliz1.ecomonitoring.platform.analysis.domain.service.TelemetryAnalysisAccumulator;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.model.PortGridCellLayersBuilder;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.model.PortSensorReading;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.record.ParsedStorageKey;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.config.AnalysisInfrastructureProperties;
 import me.neobliz1.ecomonitoring.platform.common.util.PlatformContractsUtils;
@@ -58,7 +60,7 @@ public class AggregationUtils {
         }
     }
 
-    public static byte[] getGridCellsByteArray(String spatialKey, List<WeatherPacket> packetsList, WeatherMap.Builder weatherMapBuilder) {
+    public static byte[] getGridCellLayerByteArray(String spatialKey, List<WeatherPacket> packetsList, WeatherMap.Builder weatherMapBuilder) {
         GridCellLayers.Builder cellBuilder = aggregatePackets(packetsList);
         ParsedStorageKey parsed = parseSpatialKey(spatialKey);
         String geohash = parsed.geohash();
@@ -73,13 +75,15 @@ public class AggregationUtils {
                         TelemetryAnalysisAccumulator::new,
                         (container, packet) -> {
                             for(SensorReading reading : packet.getReadingsList()) {
-                                container.accumulate(reading);
+                                container.accumulate(new PortSensorReading(reading));
                             }
                         },
                         TelemetryAnalysisAccumulator::merge
                 );
 
-        return resultContainer.applyTo(GridCellLayers.newBuilder().setReadingCount(packets.size()));
+        GridCellLayers.Builder gridCellLayersBuilder = GridCellLayers.newBuilder().setReadingCount(packets.size());
+        PortGridCellLayersBuilder portGridCellLayersBuilder = new PortGridCellLayersBuilder(gridCellLayersBuilder);
+        return resultContainer.applyTo(portGridCellLayersBuilder).gridCellLayersBuilder();
     }
 
     public static @NonNull String getGeohash(double latGrid, double lonGrid) {

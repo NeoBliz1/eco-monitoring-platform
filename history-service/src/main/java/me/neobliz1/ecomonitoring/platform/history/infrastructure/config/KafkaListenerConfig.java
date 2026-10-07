@@ -47,52 +47,6 @@ public class KafkaListenerConfig {
 
     private final HistoryInfrastructureProperties infraProps;
 
-    private static void setRetryListeners(DefaultErrorHandler errorHandler) {
-        errorHandler.setRetryListeners((record, exception, deliveryAttempt) -> {
-            log.error("ING_CRASH [Attempt {}] - Topic: {} Partition: {} Offset: {}",
-                    deliveryAttempt, record.topic(), record.partition(), record.offset());
-            if(nonNull(exception)) {
-                log.error("Exception: {}", exception.getLocalizedMessage());
-                if(nonNull(exception.getCause())) {
-                    log.error("Inner Exception Cause: {}", exception.getCause().getLocalizedMessage());
-                }
-            }
-        });
-    }
-
-    private static void setCustomExDlqHeadersCreator(DeadLetterPublishingRecoverer recoverer) {
-        recoverer.setExceptionHeadersCreator((kafkaHeaders, exception, isKey, headerNames) -> {
-            Optional<MethodValidationException> validationException = recursiveGetMethodValidationException(exception);
-            String exceptionMessageValue = validationException.map(e -> e.getAllErrors().stream()
-                    .map(MessageSourceResolvable::getDefaultMessage)
-                    .collect(java.util.stream.Collectors.joining("; "))).orElseGet(exception::getMessage);
-            kafkaHeaders.add(new RecordHeader(
-                    headerNames.getExceptionInfo().getExceptionMessage(),
-                    exceptionMessageValue.getBytes(StandardCharsets.UTF_8)
-            ));
-            if(exception.getCause()!=null) {
-                StringWriter sw = new StringWriter();
-                exception.printStackTrace(new PrintWriter(sw));
-                kafkaHeaders.add(new RecordHeader(
-                        headerNames.getExceptionInfo().getExceptionStacktrace(),
-                        sw.toString().getBytes(StandardCharsets.UTF_8)
-                ));
-            }
-        });
-    }
-
-    private static Optional<MethodValidationException> recursiveGetMethodValidationException(@NonNull Throwable currentCause) {
-        Optional<MethodValidationException> validationEx = Optional.empty();
-        while(currentCause!=null) {
-            if(currentCause instanceof MethodValidationException ex) {
-                validationEx = Optional.of(ex);
-                break;
-            }
-            currentCause = currentCause.getCause();
-        }
-        return validationEx;
-    }
-
     @Bean
     public ConcurrentKafkaListenerContainerFactory<?, ?> kafkaListenerContainerFactory(ConsumerFactory<Object, Object> consumerFactory,
                                                                                        KafkaTemplate<String, WeatherMap> dlqKafkaTemplate) {
@@ -153,5 +107,51 @@ public class KafkaListenerConfig {
     @Bean
     public HistoricalTelemetryDlqListener historicalTelemetryDlqListener(HistoricalPersistenceRepository historicalPersistenceRepository) {
         return new HistoricalTelemetryDlqListener(historicalPersistenceRepository);
+    }
+
+    private void setRetryListeners(DefaultErrorHandler errorHandler) {
+        errorHandler.setRetryListeners((record, exception, deliveryAttempt) -> {
+            log.error("ING_CRASH [Attempt {}] - Topic: {} Partition: {} Offset: {}",
+                    deliveryAttempt, record.topic(), record.partition(), record.offset());
+            if(nonNull(exception)) {
+                log.error("Exception: {}", exception.getLocalizedMessage());
+                if(nonNull(exception.getCause())) {
+                    log.error("Inner Exception Cause: {}", exception.getCause().getLocalizedMessage());
+                }
+            }
+        });
+    }
+
+    private void setCustomExDlqHeadersCreator(DeadLetterPublishingRecoverer recoverer) {
+        recoverer.setExceptionHeadersCreator((kafkaHeaders, exception, isKey, headerNames) -> {
+            Optional<MethodValidationException> validationException = recursiveGetMethodValidationException(exception);
+            String exceptionMessageValue = validationException.map(e -> e.getAllErrors().stream()
+                    .map(MessageSourceResolvable::getDefaultMessage)
+                    .collect(java.util.stream.Collectors.joining("; "))).orElseGet(exception::getMessage);
+            kafkaHeaders.add(new RecordHeader(
+                    headerNames.getExceptionInfo().getExceptionMessage(),
+                    exceptionMessageValue.getBytes(StandardCharsets.UTF_8)
+            ));
+            if(exception.getCause()!=null) {
+                StringWriter sw = new StringWriter();
+                exception.printStackTrace(new PrintWriter(sw));
+                kafkaHeaders.add(new RecordHeader(
+                        headerNames.getExceptionInfo().getExceptionStacktrace(),
+                        sw.toString().getBytes(StandardCharsets.UTF_8)
+                ));
+            }
+        });
+    }
+
+    private Optional<MethodValidationException> recursiveGetMethodValidationException(@NonNull Throwable currentCause) {
+        Optional<MethodValidationException> validationEx = Optional.empty();
+        while(currentCause!=null) {
+            if(currentCause instanceof MethodValidationException ex) {
+                validationEx = Optional.of(ex);
+                break;
+            }
+            currentCause = currentCause.getCause();
+        }
+        return validationEx;
     }
 }

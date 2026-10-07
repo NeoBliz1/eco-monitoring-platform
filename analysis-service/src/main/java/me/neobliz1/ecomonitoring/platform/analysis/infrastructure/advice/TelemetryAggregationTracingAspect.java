@@ -35,33 +35,6 @@ public class TelemetryAggregationTracingAspect {
 
     private final Tracer tracer;
 
-    public static @NonNull Stream<WeatherPacket> getWeatherPacketStream(Map<Long, Map<String, List<WeatherPacket>>> extractionMatrix) {
-        return extractionMatrix.values().stream()
-                .flatMap(m -> m.values().stream())
-                .flatMap(List::stream);
-    }
-
-    private static void addLinkToTraceParentForEachMatrixPacket(Map<Long, Map<String, List<WeatherPacket>>> extractionMatrix, SpanBuilder flushSpanBuilder) {
-        getWeatherPacketStream(extractionMatrix)
-                .skip(1)
-                .forEach(packet -> {
-                    String tp = packet.getTraceParent();
-                    if(!tp.isEmpty()) {
-                        try {
-                            String[] parts = tp.split("-");
-                            if(parts.length>=4) {
-                                SpanContext pktSpanContext = SpanContext.create(parts[1], parts[2], TraceFlags.getSampled(),
-                                        TraceState.getDefault());
-                                if(pktSpanContext.isValid()) {
-                                    flushSpanBuilder.addLink(pktSpanContext);
-                                }
-                            }
-                        } catch(Exception ignored) {
-                        }
-                    }
-                });
-    }
-
     @Around("execution(public void me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.TelemetryAggregationProcessor.process(..)) && args(record)")
     public Object traceProcessExecution(ProceedingJoinPoint joinPoint, Record<String, WeatherPacket> record) throws Throwable {
         if(record==null || record.value()==null) {
@@ -116,5 +89,32 @@ public class TelemetryAggregationTracingAspect {
         } finally {
             flushSpan.end();
         }
+    }
+
+    public @NonNull Stream<WeatherPacket> getWeatherPacketStream(Map<Long, Map<String, List<WeatherPacket>>> extractionMatrix) {
+        return extractionMatrix.values().stream()
+                .flatMap(m -> m.values().stream())
+                .flatMap(List::stream);
+    }
+
+    private void addLinkToTraceParentForEachMatrixPacket(Map<Long, Map<String, List<WeatherPacket>>> extractionMatrix, SpanBuilder flushSpanBuilder) {
+        getWeatherPacketStream(extractionMatrix)
+                .skip(1)
+                .forEach(packet -> {
+                    String tp = packet.getTraceParent();
+                    if(!tp.isEmpty()) {
+                        try {
+                            String[] parts = tp.split("-");
+                            if(parts.length>=4) {
+                                SpanContext pktSpanContext = SpanContext.create(parts[1], parts[2], TraceFlags.getSampled(),
+                                        TraceState.getDefault());
+                                if(pktSpanContext.isValid()) {
+                                    flushSpanBuilder.addLink(pktSpanContext);
+                                }
+                            }
+                        } catch(Exception ignored) {
+                        }
+                    }
+                });
     }
 }

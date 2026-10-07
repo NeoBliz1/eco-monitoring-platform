@@ -41,19 +41,6 @@ public class DatabaseCacheDynamicConfig {
     private final ConfigurableEnvironment environment;
     private final HistoryInfrastructureProperties infraProps;
 
-    private static void putRegion(Map<String, Object> props, String region,
-                                  String maxEntries, String maxIdle, String ttl) {
-        if(maxEntries!=null) {
-            props.put(String.format("hibernate.cache.redisson.%s.eviction.max_entries", region), maxEntries);
-        }
-        if(maxIdle!=null) {
-            props.put(String.format("hibernate.cache.redisson.%s.expiration.max_idle_time", region), maxIdle);
-        }
-        if(ttl!=null) {
-            props.put(String.format("hibernate.cache.redisson.%s.expiration.time_to_live", region), ttl);
-        }
-    }
-
     @Bean
     public HibernatePropertiesCustomizer bindRedissonL2CacheToHibernate(RedissonClient redissonClient) {
         val region = infraProps.getData().getHibernate().getCache().getLevel2().getRegion();
@@ -111,6 +98,19 @@ public class DatabaseCacheDynamicConfig {
             config.setPassword(redisPassword);
         }
         return Redisson.create(config);
+    }
+
+    private void putRegion(@NonNull Map<String, Object> props, @NonNull String region,
+                           String maxEntries, String maxIdle, String ttl) {
+        if(maxEntries!=null) {
+            props.put(String.format("hibernate.cache.redisson.%s.eviction.max_entries", region), maxEntries);
+        }
+        if(maxIdle!=null) {
+            props.put(String.format("hibernate.cache.redisson.%s.expiration.max_idle_time", region), maxIdle);
+        }
+        if(ttl!=null) {
+            props.put(String.format("hibernate.cache.redisson.%s.expiration.time_to_live", region), ttl);
+        }
     }
 
     private @NonNull CaffeineCache createClusterAwareL1Cache(String cacheName, @NonNull RedissonClient redissonClient,
