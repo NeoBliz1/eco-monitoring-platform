@@ -25,7 +25,7 @@ public class TelemetryDeduplicationTracingAspect {
 
     private final Tracer tracer;
 
-    @Around("execution(public void me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.TelemetryDeduplicationProcessor.process(..)) && args(record)")
+    @Around("execution(public void me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.WeatherPacketStreamDeduplicationProcessor.process(..)) && args(record)")
     public Object traceDeduplicationExecution(ProceedingJoinPoint joinPoint, Record<String, WeatherPacket> record) throws Throwable {
         if(record==null || record.value()==null) {
             return joinPoint.proceed();

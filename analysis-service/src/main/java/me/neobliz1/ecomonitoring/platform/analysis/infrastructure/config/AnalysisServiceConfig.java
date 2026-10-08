@@ -17,17 +17,13 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
-import org.springframework.grpc.client.ImportGrpcClients;
-import org.springframework.kafka.annotation.EnableKafkaStreams;
 import weather.history.HistoryServiceGrpc;
 
 import java.util.List;
 
 @Slf4j
 @Configuration
-@EnableKafkaStreams
 @RequiredArgsConstructor
-@ImportGrpcClients(target = "history-service", types = HistoryServiceGrpc.HistoryServiceBlockingStub.class)
 public class AnalysisServiceConfig {
 
     private final AnalysisInfrastructureProperties props;

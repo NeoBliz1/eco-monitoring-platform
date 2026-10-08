@@ -1,7 +1,7 @@
 <component name="ProjectRunConfigurationManager">
     <configuration default="false" name="AnalysisBootEngine" type="SpringBootApplicationConfigurationType"
                    factoryName="Spring Boot" nameIsGenerated="true">
-        <option name="ACTIVE_PROFILES" value="dev,local,weather-packet-chain-confirmation"/>
+        <option name="ACTIVE_PROFILES" value="dev,local,weather-packet-chain-confirmation,trace"/>
         <envs>
             <env name="OTEL_SERVICE_NAME" value="eco-monitoring-analysis"/>
             <env name="OTEL_TRACES_EXPORTER" value="otlp"/>

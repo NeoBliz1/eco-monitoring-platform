@@ -1,7 +1,7 @@
 package me.neobliz1.ecomonitoring.platform.history.infrastructure.aspect;
 
 import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.HISTORICAL_KAFKA_LISTENER_TRACER;
-import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.HISTORICAL_WEATHER_PACKET_MAP_CONVERTER_TRACE_SPAN;
+import static me.neobliz1.ecomonitoring.platform.common.constant.PlatformConstants.HISTORICAL_WEATHER_MAP_CONSUMER_MERGE_TELEMETRY;
 import static me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils.addLinksToConsumerSpan;
 import static me.neobliz1.ecomonitoring.platform.common.util.PlatformCommonUtils.getHeadersTextMapGetter;
 
@@ -33,7 +33,7 @@ public class HistoryKafkaListenerTracingAspect {
         WeatherMap weatherMap = record.value();
         Context parentContext = GlobalOpenTelemetry.getPropagators().getTextMapPropagator()
                 .extract(Context.current(), weatherMap, getHeadersTextMapGetter());
-        SpanBuilder consumerSpanBuilder = tracer.spanBuilder(HISTORICAL_WEATHER_PACKET_MAP_CONVERTER_TRACE_SPAN)
+        SpanBuilder consumerSpanBuilder = tracer.spanBuilder(HISTORICAL_WEATHER_MAP_CONSUMER_MERGE_TELEMETRY)
                 .setParent(parentContext)
                 .setAttribute("weather.bucket.time", weatherMap.getTimestampBucket());
         addLinksToConsumerSpan(weatherMap, consumerSpanBuilder);

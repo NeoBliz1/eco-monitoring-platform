@@ -17,6 +17,7 @@ import io.opentelemetry.context.Scope;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.WeatherPacketStreamAggregationProcessor;
+import me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.model.ExtractionMatrix;
 import me.neobliz1.ecomonitoring.platform.shared.contracts.proto.WeatherPacket;
 import org.apache.kafka.streams.processor.api.Record;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -25,7 +26,6 @@ import org.aspectj.lang.annotation.Aspect;
 import org.jspecify.annotations.NonNull;
 
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Stream;
 
 @Slf4j
@@ -35,7 +35,7 @@ public class TelemetryAggregationTracingAspect {
 
     private final Tracer tracer;
 
-    @Around("execution(public void me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.TelemetryAggregationProcessor.process(..)) && args(record)")
+    @Around("execution(public void me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.WeatherPacketStreamAggregationProcessor.process(..)) && args(record)")
     public Object traceProcessExecution(ProceedingJoinPoint joinPoint, Record<String, WeatherPacket> record) throws Throwable {
         if(record==null || record.value()==null) {
             return joinPoint.proceed();
@@ -60,11 +60,10 @@ public class TelemetryAggregationTracingAspect {
         }
     }
 
-    @Around("execution(public void me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.TelemetryAggregationProcessor.executeForwardingAndCleanup(..)) && args(extractionMatrix, keysToRemove, currentWindowFloor)")
+    @Around("execution(public void me.neobliz1.ecomonitoring.platform.analysis.infrastructure.adapter.outbound.messaging.kafka.processor.WeatherPacketStreamAggregationProcessor.executeForwardingAndCleanup(..)) && args(extractionMatrix, currentWindowFloor)")
     public Object traceFlushExecution(
             ProceedingJoinPoint joinPoint,
-            Map<Long, Map<String, List<WeatherPacket>>> extractionMatrix,
-            List<String> keysToRemove,
+            ExtractionMatrix extractionMatrix,
             long currentWindowFloor) throws Throwable {
         WeatherPacket anchorPacket = getWeatherPacketStream(extractionMatrix)
                 .findFirst()
@@ -91,13 +90,7 @@ public class TelemetryAggregationTracingAspect {
         }
     }
 
-    public @NonNull Stream<WeatherPacket> getWeatherPacketStream(Map<Long, Map<String, List<WeatherPacket>>> extractionMatrix) {
-        return extractionMatrix.values().stream()
-                .flatMap(m -> m.values().stream())
-                .flatMap(List::stream);
-    }
-
-    private void addLinkToTraceParentForEachMatrixPacket(Map<Long, Map<String, List<WeatherPacket>>> extractionMatrix, SpanBuilder flushSpanBuilder) {
+    private void addLinkToTraceParentForEachMatrixPacket(ExtractionMatrix extractionMatrix, SpanBuilder flushSpanBuilder) {
         getWeatherPacketStream(extractionMatrix)
                 .skip(1)
                 .forEach(packet -> {
@@ -116,5 +109,11 @@ public class TelemetryAggregationTracingAspect {
                         }
                     }
                 });
+    }
+
+    public @NonNull Stream<WeatherPacket> getWeatherPacketStream(ExtractionMatrix extractionMatrix) {
+        return extractionMatrix.spatialWeatherPacketsByTimestampContainer().values().stream()
+                .flatMap(m -> m.values().stream())
+                .flatMap(List::stream);
     }
 }

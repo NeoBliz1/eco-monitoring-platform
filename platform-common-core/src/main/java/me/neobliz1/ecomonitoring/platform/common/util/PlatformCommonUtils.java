@@ -140,15 +140,12 @@ public class PlatformCommonUtils {
         if(parts.length>=4) {
             String traceId = parts[1];
             String spanId = parts[2];
-
-            SpanContext parsedContext =
-                    SpanContext.create(
+            SpanContext parsedContext = SpanContext.create(
                             traceId,
                             spanId,
                             TraceFlags.getSampled(),
                             TraceState.getDefault()
                     );
-
             if(parsedContext.isValid()) {
                 consumerSpan.addLink(parsedContext);
             }

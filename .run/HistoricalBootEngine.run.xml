@@ -1,7 +1,7 @@
 <component name="ProjectRunConfigurationManager">
     <configuration default="false" name="HistoricalBootEngine" type="SpringBootApplicationConfigurationType"
                    factoryName="Spring Boot" nameIsGenerated="true">
-        <option name="ACTIVE_PROFILES" value="dev,local,weather-packet-chain-confirmation"/>
+        <option name="ACTIVE_PROFILES" value="dev,local,weather-packet-chain-confirmation,trace"/>
         <envs>
             <env name="OTEL_BSP_MAX_EXPORT_BATCH_SIZE" value="2048"/>
             <env name="OTEL_BSP_MAX_QUEUE_SIZE" value="32768"/>

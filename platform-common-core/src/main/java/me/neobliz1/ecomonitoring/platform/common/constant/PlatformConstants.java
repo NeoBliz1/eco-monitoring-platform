@@ -19,7 +19,7 @@ public class PlatformConstants {
     public static final String ANALYSIS_DEDUPLICATE_SPAN = "Analysis_Deduplicate_Record";
     public static final String HISTORICAL_KAFKA_LISTENER_TRACER = "Historical_WeatherMap_Kafka_Listener_Tracer";
     public static final String HISTORICAL_WEATHER_MAP_CONVERTER_TRACER = "Historical_WeatherMap_Converter_Tracer";
-    public static final String HISTORICAL_WEATHER_PACKET_MAP_CONVERTER_TRACE_SPAN = "Historical_Weather_MapConverter_Merge_Telemetry";
+    public static final String HISTORICAL_WEATHER_MAP_CONSUMER_MERGE_TELEMETRY = "Historical_Weather_Map_Consumer_Merge_Telemetry";
 
     // Common constants
     public final static String SCHEMA_REGISTRY = "schema-registry";

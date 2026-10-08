@@ -20,18 +20,13 @@ import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.data.redis.serializer.RedisSerializer;
-import org.springframework.grpc.client.ImportGrpcClients;
-import org.springframework.kafka.annotation.EnableKafkaStreams;
-import weather.history.HistoryServiceGrpc;
 
 import java.time.Duration;
 import java.util.List;
 
 @Slf4j
 @Configuration
-@EnableKafkaStreams
 @RequiredArgsConstructor
-@ImportGrpcClients(target = "history-service", types = HistoryServiceGrpc.HistoryServiceBlockingStub.class)
 public class RedisConfig {
 
     private final ConfigurableEnvironment environment;

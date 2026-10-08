@@ -35,7 +35,10 @@ import java.util.Map;
 @Configuration
 @EnableKafkaStreams
 @RequiredArgsConstructor
-@ImportGrpcClients(target = "history-service", types = HistoryServiceGrpc.HistoryServiceBlockingStub.class)
+@ImportGrpcClients(
+        target = "history-service",
+        types = HistoryServiceGrpc.HistoryServiceBlockingStub.class
+)
 public class KafkaStreamsConfig {
 
     public static final String SCOPE_PROTOTYPE_NAME = "prototype";
