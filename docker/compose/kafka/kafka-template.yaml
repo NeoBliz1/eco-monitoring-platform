@@ -24,11 +24,6 @@ services:
     networks:
       - eco-net
     user: "1000:1000"
-    depends_on:
-      vault-server:
-        condition: service_healthy
-      vault-init:
-        condition: service_completed_successfully
     security_opt:
       - no-new-privileges:true
     cap_drop:

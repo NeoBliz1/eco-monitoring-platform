@@ -36,9 +36,6 @@ sasl.mechanism=SCRAM-SHA-512
 sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_ADMIN}" password="${KAFKA_ADMIN_PASSWORD}";
 EOF
 
-rm -f /run/secrets/kafka_server_jaas
-rm -f /run/secrets/kafka_scram_credentials.env
-
 echo "Waiting 5 seconds for KRaft node elections to finalize..."
 sleep 5
 
@@ -217,6 +214,13 @@ curl --request PUT \
       "Timeout": "5s"
     }
   }'
+
+rm -f /run/secrets/kafka_server_jaas
+rm -f /run/secrets/kafka_scram_credentials.env
+rm -f /run/secrets_2/kafka_server_jaas
+rm -f /run/secrets_2/kafka_scram_credentials.env
+rm -f /run/secrets_3/kafka_server_jaas
+rm -f /run/secrets_3/kafka_scram_credentials.env
 
 echo "✅ Infrastructure discovery sync sequence complete."
 exit 0
