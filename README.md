@@ -30,7 +30,7 @@ git clone https://github.com/NeoBliz1/eco-monitoring-platform.git
 cd eco-monitoring-platform
 
 # 1. Main root configurations
-cp .env.example .env
+cp .env.example .env (⚠️ Configure: SERVER_HOST=your_local_ip)
 
 # 2. Main docker environments (⚠️ Configure: HOST_IP=your_local_ip)
 cp docker/.env.example docker/.env
