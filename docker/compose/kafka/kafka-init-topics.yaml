@@ -16,6 +16,8 @@ services:
       - ../vault/config/kafka-agent.hcl:/etc/vault/agent.hcl:ro
       - vault_tokens:/tmp/vault_input:ro
       - ram_secrets_kafka_1:/run/secrets:rw
+      - ram_secrets_kafka_2:/run/secrets_2:rw
+      - ram_secrets_kafka_3:/run/secrets_3:rw
     environment:
       - KAFKA_ROLE_ID_FILE=/tmp/vault_input/kafka_topics_role_id
       - KAFKA_SECRET_ID_FILE=/tmp/vault_input/kafka_topics_secret_id
@@ -42,6 +44,8 @@ services:
     volumes:
       - ./init-kafka-topics.sh:/opt/kafka/bin/init-kafka-topics.sh:ro
       - ram_secrets_kafka_1:/run/secrets:rw
+      - ram_secrets_kafka_2:/run/secrets_2:rw
+      - ram_secrets_kafka_3:/run/secrets_3:rw
     environment:
       KAFKA_WEATHER_LIVE_TOPIC: environment.weather.telemetry.live
       KAFKA_WEATHER_RAW_TOPIC: environment.weather.telemetry.raw

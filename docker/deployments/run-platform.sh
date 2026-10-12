@@ -98,6 +98,14 @@ INFRA_PID=$!
 # ----------------------------------------------------
 echo "⚙️ [BACKGROUND] Launching Maven and Go compilation sequence..."
 (
+	cd "$PROJECT_ROOT"
+	LOCAL_MAVEN_ARGS=""
+	if [ "$SKIP_TESTS" = true ]; then
+		LOCAL_MAVEN_ARGS="-DskipTests"
+	fi
+	echo "📦 Installing shared platform contracts and core modules from project root..."
+	mvn clean install -pl platform-common-contracts,platform-common-core $LOCAL_MAVEN_ARGS
+	cd - > /dev/null
 	if [ "$DEPLOY_INGESTION" = true ]; then bash "$SCRIPT_DIR/service-java.sh" "ingestion-service" "$SKIP_TESTS"; fi
 	if [ "$DEPLOY_ANALYSIS" = true ]; then bash "$SCRIPT_DIR/service-java.sh" "analysis-service" "$SKIP_TESTS"; fi
 	if [ "$DEPLOY_HISTORY" = true ]; then bash "$SCRIPT_DIR/service-java.sh" "history-service" "$SKIP_TESTS"; fi
@@ -253,8 +261,17 @@ else
 	OTEL_AGENT_PATH="$HOME/.m2/repository/io/opentelemetry/javaagent/opentelemetry-javaagent/2.31.1/opentelemetry-javaagent-2.31.1.jar"
 
 	if [ ! -f "$OTEL_AGENT_PATH" ]; then
-		echo "❌ FATAL: Compiled opentelemetry-javaagent jar path $OTEL_AGENT_PATH does not exist."
-		exit 1
+			echo "⚠️ Agent missing. Attempting to download OpenTelemetry Java Agent via Maven..."
+			mvn dependency:get \
+					-Dartifact=io.opentelemetry.javaagent:opentelemetry-javaagent:2.31.1 \
+					-Dtransitive=false
+			if [ ! -f "$OTEL_AGENT_PATH" ]; then
+					echo "❌ FATAL: Compiled opentelemetry-javaagent jar path $OTEL_AGENT_PATH does not exist and Maven download failed."
+					exit 1
+			fi
+			echo "✅ Successfully downloaded OpenTelemetry Java Agent."
+	else
+			echo "✅ OpenTelemetry Java Agent is already present."
 	fi
 
 	# Chain both agents together side-by-side using sequential flags

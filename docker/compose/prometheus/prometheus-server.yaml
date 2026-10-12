@@ -24,11 +24,6 @@ services:
       - "9090:9090"
     networks:
       - eco-net
-    depends_on:
-      vault-server:
-        condition: service_healthy
-      vault-init:
-        condition: service_completed_successfully
     user: "65534:1000"
     security_opt:
       - no-new-privileges:true
