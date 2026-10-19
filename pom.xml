@@ -57,6 +57,14 @@
         <module>history-service</module>
     </modules>
 
+    <repositories>
+        <!-- Confluent Schema Registry serializers are not published to Maven Central -->
+        <repository>
+            <id>confluent</id>
+            <url>https://packages.confluent.io/maven/</url>
+        </repository>
+    </repositories>
+
     <dependencyManagement>
         <dependencies>
             <!--project modules-->

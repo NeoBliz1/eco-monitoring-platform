@@ -1,9 +1,12 @@
 # Eco Monitoring Platform
 
-[![License: MIT](https://shields.io)](https://opensource.org)
-[![Java](https://shields.io)](https://oracle.com)
-[![Go](https://shields.io)](https://go.dev)
-[![Docker](https://shields.io)](https://docker.com)
+[![CI](https://github.com/NeoBliz1/eco-monitoring-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/NeoBliz1/eco-monitoring-platform/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Java](https://img.shields.io/badge/Java-21-orange?logo=openjdk)](https://openjdk.org/projects/jdk/21/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4-6DB33F?logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)
+[![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![Kafka](https://img.shields.io/badge/Apache%20Kafka-Streams-231F20?logo=apachekafka)](https://kafka.apache.org)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 
 A high-performance, polyglot microservices platform designed for environmental and weather telemetry data ingestion,
 real-time analytics, and historical storage. It processes **10k+ RPM** of sensor readings from distributed weather
@@ -25,8 +28,8 @@ copying the files within their respective directories.
 > communication. You must configure your actual local network IP (e.g., `192.168.1.50`) where noted below.
 
 ```bash
-# Clone the repository
-git clone https://github.com/NeoBliz1/eco-monitoring-platform.git
+# Clone the repository (with the gateway-service submodule)
+git clone --recurse-submodules https://github.com/NeoBliz1/eco-monitoring-platform.git
 cd eco-monitoring-platform
 
 # 1. Main root configurations
@@ -38,7 +41,9 @@ cp docker/.env.example docker/.env
 # 3. Vault component environments
 cp docker/compose/vault/.env.example docker/compose/vault/.env
 
-# 4. Gateway network configurations (⚠️ Configure: SERVER_HOST=your_local_ip)
+# 4. Gateway bootstrap (only CONSUL_ADDRESS; the gateway detects its host IP automatically).
+#    Runtime settings (port, routes, tracing) are loaded into Consul KV from
+#    docker/compose/consul/platform-gateway-properties.yaml
 cp gateway-service/.env.example gateway-service/.env
 
 # [Optional] Only required if running or debugging individual modules directly from an IDE:
