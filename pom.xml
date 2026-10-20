@@ -11,6 +11,8 @@
     <properties>
         <java.version>21</java.version>
         <maven.compiler.release>21</maven.compiler.release>
+        <!-- Heap of the integration-test JVM; CI overrides it with -Dit.jvm.heap=... -->
+        <it.jvm.heap>2048m</it.jvm.heap>
         <maven-compiler-plugin-version>3.15.0</maven-compiler-plugin-version>
         <maven-exec-plugin-version>3.6.3</maven-exec-plugin-version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -320,7 +322,7 @@
                 <version>${maven-surefire-plugin.version}</version>
                 <configuration>
                     <!--suppress UnresolvedMavenProperty -->
-                    <argLine>${jacocoITArgLine} -Xmx2048m</argLine>
+                    <argLine>${jacocoITArgLine} -Xmx${it.jvm.heap}</argLine>
                     <classesDirectory>${project.build.outputDirectory}</classesDirectory>
                     <useModulePath>false</useModulePath>
                     <forkedProcessExitTimeoutInSeconds>180</forkedProcessExitTimeoutInSeconds>
