@@ -12,19 +12,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
 
       - name: Set up Java 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           java-version: '21'
           distribution: 'temurin'
           cache: maven
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: gateway-service/go.mod
           cache-dependency-path: gateway-service/go.sum
@@ -49,19 +49,47 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
 
       - name: Set up Java 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           java-version: '21'
           distribution: 'temurin'
           cache: maven
 
+      # Safety net: a memory spike slows the runner down instead of killing it
+      - name: Increase swap to 8 GB
+        run: |
+          sudo swapoff -a
+          sudo rm -f /mnt/swapfile
+          sudo fallocate -l 8G /mnt/swapfile
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+          free -h
+
       - name: Prepare local env files from examples
         run: .github/scripts/prepare-env.sh
 
       - name: Run all tests including integration tests
-        run: mvn -B verify
+        run: |
+          # Log CPU, memory and container usage every 60 s into this step's log,
+          # so it stays visible even if the runner dies. Search the log for "[resources]".
+          monitor() {
+            while true; do
+              {
+                echo "[resources] $(date -u +%H:%M:%S) load: $(cut -d' ' -f1-3 /proc/loadavg) | $(free -m | awk '/Mem/{print "mem used " $3 "/" $2 " MB"} /Swap/{print "swap used " $3 "/" $2 " MB"}' | paste -sd' ')"
+                ps -eo pcpu,rss,comm --sort=-pcpu | head -8 | sed 's/^/[resources]   /'
+                docker stats --no-stream --format '{{.Name}} cpu={{.CPUPerc}} mem={{.MemUsage}}' 2>/dev/null | sed 's/^/[resources]   /'
+              } || true
+              sleep 60
+            done
+          }
+          monitor &
+          MONITOR_PID=$!
+          trap 'kill $MONITOR_PID 2>/dev/null || true' EXIT
+
+          mvn -B verify -Dit.jvm.heap=1024m
