@@ -45,7 +45,8 @@ public class RedisConfig {
     @Bean
     public LettuceConnectionFactory redisConnectionFactory(DiscoveryClient discoveryClient,
                                                            @Value("${spring.data.redis.password:}") String redisPassword,
-                                                           @Value("${spring.data.redis.service-name}") String redisServiceName) {
+                                                           @Value("${spring.data.redis.service-name}") String redisServiceName,
+                                                           @Value("${eco.redis.command-timeout:200ms}") Duration commandTimeout) {
         ServiceAddressRecord serviceAddress = PlatformCommonUtils.discoverServiceAddressFromConsulServerByName(discoveryClient,
                 environment, redisServiceName);
         RedisStandaloneConfiguration config = new RedisStandaloneConfiguration();
@@ -57,7 +58,7 @@ public class RedisConfig {
             throw new RedisPasswordNotSetException();
         }
         LettuceClientConfiguration clientConfig = LettuceClientConfiguration.builder()
-                .commandTimeout(Duration.ofMillis(200))
+                .commandTimeout(commandTimeout)
                 .shutdownTimeout(Duration.ofMillis(100))
                 .build();
         return new LettuceConnectionFactory(config, clientConfig);

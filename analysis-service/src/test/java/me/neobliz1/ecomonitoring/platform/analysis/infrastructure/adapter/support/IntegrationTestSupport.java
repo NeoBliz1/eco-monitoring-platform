@@ -117,6 +117,7 @@ public abstract class IntegrationTestSupport extends AssertionTestSupport {
                 () -> "eco-analysis-topology-test-"+java.util.UUID.randomUUID());
         registry.add("spring.grpc.client.channel.history-service.service-name",
                 () -> "redis-cache");
+        registry.add("eco.redis.command-timeout", () -> "2s");
     }
 
     protected Producer<String, WeatherPacket> testProducer;
